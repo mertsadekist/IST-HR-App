@@ -5,9 +5,13 @@
 
 # ---------- Stage 1: build the React client ----------
 FROM node:20-alpine AS client
+# Build the client with dev dependencies (vite, etc.) regardless of any injected
+# NODE_ENV. `npm install` (not `npm ci`) tolerates lockfile drift and the
+# platform-specific optional deps (rollup/esbuild) that differ on alpine/musl.
+ENV NODE_ENV=development
 WORKDIR /app/client
 COPY client/package*.json ./
-RUN npm ci
+RUN npm install --include=dev --no-audit --no-fund
 COPY client/ ./
 RUN npm run build          # → /app/client/dist
 
@@ -19,9 +23,10 @@ ENV NODE_ENV=production \
     CLIENT_DIST=/app/client/dist
 
 WORKDIR /app/server
-# Install production dependencies only
+# Install production dependencies only. `npm install` (not `npm ci`) so the build
+# is resilient to lockfile drift / platform-specific optional deps.
 COPY server/package*.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+RUN npm install --omit=dev --no-audit --no-fund && npm cache clean --force
 
 # App source
 COPY server/ ./
