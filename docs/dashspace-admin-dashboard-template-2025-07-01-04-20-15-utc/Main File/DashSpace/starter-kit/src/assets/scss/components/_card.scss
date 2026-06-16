@@ -1,0 +1,27 @@
+.card {
+  @apply rounded-lg bg-white dark:bg-gray-800    shadow-card;
+}
+
+.card-title {
+  @apply font-medium  capitalize   text-base  text-gray-900 dark:text-white;
+}
+.card-subtitle {
+  @apply text-sm   text-gray-400 dark:text-gray-300 mt-1;
+}
+
+.card-header {
+  @apply flex items-center justify-between px-5 pt-4;
+}
+.card-header:not(.no-border) {
+  @apply border-b border-indigo-50 dark:border-gray-700 pb-4;
+}
+
+.card-footer {
+  @apply flex items-center justify-between px-6 pt-6 border-t border-gray-200 dark:border-gray-700 pb-4;
+}
+
+.card-height-auto {
+  .card {
+    @apply h-min;
+  }
+}

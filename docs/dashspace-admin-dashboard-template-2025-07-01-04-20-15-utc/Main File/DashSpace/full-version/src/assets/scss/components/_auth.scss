@@ -1,0 +1,17 @@
+.auth-wrapper {
+  @apply w-full overflow-hidden;
+  min-height: 100vh;
+  min-height: calc(var(--vh, 1vh) * 100);
+  height: 100vh;
+  flex-basis: 100%;
+
+  .auth-page-height {
+    height: 100vh;
+    height: calc(var(--vh, 1vh) * 100);
+    @apply overflow-y-auto w-full;
+  }
+}
+
+.auth-box {
+  @apply rounded-lg bg-white dark:bg-gray-800  shadow-base;
+}

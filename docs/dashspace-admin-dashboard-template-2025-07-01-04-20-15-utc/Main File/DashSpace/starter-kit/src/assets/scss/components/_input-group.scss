@@ -1,0 +1,111 @@
+.input-group-control {
+  @apply bg-white dark:bg-transparent dark:placeholder:text-gray-400 transition 
+  duration-300 ease-in-out border border-gray-10 dark:border-gray-700 
+  focus:ring-0  focus:outline-none  
+  rounded placeholder:text-gray-400 text-gray-900 text-sm px-3 
+   placeholder:font-light focus:border-indigo-600  dark:focus:border-indigo-600 dark:text-white;
+}
+
+.textfiled-wrapper2 {
+  &.is-error {
+    .input-group-control {
+      @apply border-red-600;
+    }
+  }
+  &.is-valid {
+    .input-group-control {
+      @apply border-green-600;
+    }
+  }
+}
+
+.input-group-control[disabled] {
+  @apply cursor-not-allowed  bg-gray-100 bg-opacity-70  text-gray-400 placeholder:text-opacity-60 dark:bg-gray-600;
+}
+
+.input-group-text {
+  @apply bg-white dark:bg-transparent transition duration-300 ease-in-out  flex items-center justify-center px-3 border
+   border-gray-10 dark:border-gray-700 ltr:rounded-tl rtl:rounded-tr rtl:rounded-br ltr:rounded-bl text-gray-400 text-base font-light;
+}
+.inputGroup.has-prepend {
+  .input-group-control {
+    @apply ltr:border-l-0 rtl:border-r-0 ltr:rounded-tl-[0] rtl:rounded-tr-[0] ltr:rounded-bl-[0] rtl:rounded-br-[0];
+  }
+}
+.inputGroup {
+  &.has-prepend-slot {
+    .input-group-control {
+      @apply ltr:border-l-0 rtl:border-r-0 ltr:rounded-tl-[0] rtl:rounded-tr-[0] ltr:rounded-bl-[0] rtl:rounded-br-[0] focus:ring-0 focus:border-indigo-600 dark:focus:border-gray-700;
+    }
+  }
+  &.has-append-slot {
+    .input-group-control {
+      @apply ltr:border-r-0 rtl:border-l-0 ltr:rounded-tr-[0] rtl:rounded-tl-[0] ltr:rounded-br-[0] rtl:rounded-bl-[0] focus:ring-0 focus:border-indigo-600 dark:focus:border-gray-700;
+    }
+  }
+}
+.inputGroup.has-append {
+  .input-group-control {
+    @apply ltr:border-r-0 rtl:border-l-0 ltr:rounded-tr-[0] rtl:rounded-tl-[0] rounded-br-[0] rtl:rounded-bl-[0];
+  }
+  .input-group-addon.right {
+    .input-group-text {
+      @apply ltr:rounded-tl-[0] ltr:rounded-bl-[0] ltr:rounded-tr ltr:rounded-br rtl:rounded-tl  rtl:rounded-bl rtl:rounded-tr-[0] rtl:rounded-br-[0];
+    }
+  }
+}
+
+.inputGroup:focus-within .input-group-text {
+  @apply border-indigo-600 dark:border-indigo-600;
+}
+/* .merged .inputGroup:focus-within .input-group-text {
+} */
+.inputGroup {
+  &.is-invalid {
+    .input-group-text {
+      @apply border-red-600;
+    }
+    &:focus-within .input-group-text {
+      @apply ring-red-600;
+    }
+  }
+  &.is-valid {
+    .input-group-text {
+      @apply border-green-600;
+    }
+    &:focus-within .input-group-text {
+      @apply ring-green-600;
+    }
+  }
+}
+.prepend-slot,
+.append-slot {
+  .btn {
+    @apply pt-0 pb-0 h-full items-center hover:ring-0 rounded-tr-[0] rounded-br-[0] -mx-3;
+  }
+  > div,
+  button {
+    @apply h-full;
+  }
+}
+.input-group-addon {
+  &.right {
+    .append-slot {
+      .btn {
+        @apply rounded-tl-[0] rounded-bl-[0] rounded-tr rounded-br  -mx-3;
+      }
+    }
+  }
+}
+.merged {
+  .input-group-addon {
+    .input-group-text {
+      @apply ltr:border-r-0  ltr:pr-0 rtl:border-l-0 rtl:pl-0;
+    }
+    &.right {
+      .input-group-text {
+        @apply ltr:border-l-0 rtl:border-r-0 ltr:border-r rtl:border-l ltr:pr-3 rtl:pl-3 ltr:pl-0 rtl:pr-0;
+      }
+    }
+  }
+}

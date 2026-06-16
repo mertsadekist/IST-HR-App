@@ -1,0 +1,42 @@
+# ============================================================================
+# IST HR System — Coolify / docker-compose deployment.
+#
+# Persistent uploads: the named volume `ist_uploads` is mounted at /data/uploads
+# and SURVIVES image rebuilds / redeploys from GitHub — official documents, CVs,
+# signed offers, etc. are never lost. (The database is a separate remote MySQL,
+# so it persists independently.)
+#
+# Secrets (DB_*, JWT_SECRET, ENCRYPTION_KEY, DEEPSEEK_*) must be provided as
+# environment variables in the Coolify UI — do NOT commit them.
+# ============================================================================
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      UPLOADS_DIR: /data/uploads
+      CLIENT_DIST: /app/client/dist
+      # ---- set these in the Coolify environment-variables panel ----
+      # DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
+      # JWT_SECRET, JWT_EXPIRES_IN, ENCRYPTION_KEY
+      # DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL
+      # CLIENT_URL  (your public domain, used for CORS)
+    volumes:
+      - ist_uploads:/data/uploads
+    ports:
+      - "3001:3001"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3001/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  ist_uploads:
+    # Named volume — persisted by Docker/Coolify across deploys.
+    driver: local

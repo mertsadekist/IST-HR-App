@@ -1,0 +1,52 @@
+.main-menu {
+  > ul {
+    > li {
+      @apply inline-block relative;
+      > a {
+        @apply relative flex capitalize items-start text-sm font-medium leading-6 text-gray-600 dark:text-gray-300 2xl:px-6 xl:px-5 py-6  transition-all duration-150;
+        .icon-box {
+          @apply text-gray-500 dark:text-gray-300 transition-all duration-150 text-lg;
+        }
+      }
+      &:hover {
+        > a {
+          @apply text-indigo-700;
+          .icon-box {
+            @apply text-indigo-700;
+          }
+        }
+      }
+      &.has-megamenu {
+        @apply static;
+      }
+    }
+  }
+}
+
+.main-menu > ul > li.menu-item-has-children > ul.sub-menu,
+.main-menu > ul > li.menu-item-has-children > .rt-mega-menu {
+  @apply absolute  left-0 min-w-[178px] w-max top-[110%]   bg-white  
+  rounded-[4px] dark:bg-gray-800 z-[999] invisible opacity-0 transition-all duration-150
+  shadow-base;
+}
+.main-menu > ul > li.menu-item-has-children > .rt-mega-menu {
+  @apply left-1/2  -translate-x-1/2;
+}
+.main-menu > ul > li.menu-item-has-children > .rt-mega-menu {
+  @apply w-full;
+}
+.main-menu > ul > li.menu-item-has-children:hover > ul.sub-menu,
+.main-menu > ul > li.menu-item-has-children:hover > .rt-mega-menu {
+  @apply top-[105%] visible opacity-100;
+}
+.main-menu > ul > li.menu-item-has-children > ul.sub-menu li {
+  @apply relative;
+}
+.main-menu > ul > li.menu-item-has-children > ul.sub-menu li a {
+  @apply text-sm  font-normal    capitalize;
+}
+.rt-mega-menu {
+  a {
+    @apply dark:text-gray-300 dark:hover:text-indigo-700 text-sm   block;
+  }
+}

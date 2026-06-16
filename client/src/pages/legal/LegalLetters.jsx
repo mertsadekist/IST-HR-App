@@ -1,0 +1,393 @@
+import { useState, useEffect } from 'react';
+import { useSelector } from 'react-redux';
+import * as legalApi from '@api/legalApi';
+import * as employeesApi from '@api/employeesApi';
+import Card from '@components/ui/Card';
+import Button from '@components/ui/Button';
+import Badge from '@components/ui/Badge';
+import Modal from '@components/ui/Modal';
+import Input from '@components/ui/Input';
+import Select from '@components/ui/Select';
+import EmptyState from '@components/ui/EmptyState';
+import { confirmDelete } from '@utils/confirm';
+import { toast } from 'react-toastify';
+import { FileText, Plus, Sparkles, Printer, Trash2, Eye, ScrollText } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import dayjs from 'dayjs';
+import EmailButton from '@components/email/EmailButton';
+
+const DEFAULT_FIELD_CONFIGS = {
+  'Warning Letter': [
+    { name: 'incident_date', label: 'Incident Date', type: 'date' },
+    { name: 'violation', label: 'Violation Details', type: 'textarea' },
+    { name: 'corrective_action', label: 'Corrective Action', type: 'textarea' }
+  ],
+  'Termination Letter': [
+    { name: 'last_working_day', label: 'Last Working Day', type: 'date' },
+    { name: 'notice_period', label: 'Notice Period (Days)', type: 'number' },
+    { name: 'reason', label: 'Reason', type: 'textarea' }
+  ],
+  'Experience Certificate': [
+    { name: 'responsibilities', label: 'Key Responsibilities', type: 'textarea' }
+  ],
+  'NOC': [
+    { name: 'addressed_to', label: 'Addressed To (Optional)', type: 'text' },
+    { name: 'travel_destination', label: 'Traveling To', type: 'text' },
+    { name: 'travel_dates', label: 'Travel Dates', type: 'text' }
+  ],
+  'Salary Certificate': [
+    { name: 'addressed_to', label: 'Addressed To', type: 'text' }
+  ],
+  'Show Cause Notice': [
+    { name: 'incident_date', label: 'Incident Date', type: 'date' },
+    { name: 'allegation', label: 'Allegation Details', type: 'textarea' },
+    { name: 'response_deadline', label: 'Response Deadline', type: 'date' }
+  ]
+};
+
+const letterTypeIcons = {
+  'Salary Certificate': '💰', 'Experience Certificate': '📋', 'NOC': '✅',
+  'Employment Confirmation': '🏢', 'Warning Letter': '⚠️', 'Termination Letter': '🔴',
+  'Show Cause Notice': '⚖️', 'Offer Confirmation': '🤝'
+};
+
+export default function LegalLetters() {
+  const { t } = useTranslation();
+  const { items: companies } = useSelector((s) => s.companies);
+  const { currentCompanyId } = useSelector((s) => s.entity);
+  const [templates, setTemplates] = useState([]);
+  const [letters, setLetters] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [employees, setEmployees] = useState([]);
+
+  // Generate modal
+  const [genModal, setGenModal] = useState(false);
+  const [genForm, setGenForm] = useState({ template_id: '', employee_id: '', company_id: '', fields_data: {} });
+  const [generating, setGenerating] = useState(false);
+
+  // View modal
+  const [viewLetter, setViewLetter] = useState(null);
+
+  // Inline employee creation
+  const [inlineEmp, setInlineEmp] = useState({ first_name: '', last_name: '', email: '', phone: '', company_id: '' });
+  const [addingEmp, setAddingEmp] = useState(false);
+
+  // Template modal
+  const [tplModal, setTplModal] = useState(false);
+  const [tplForm, setTplForm] = useState({ name: '', description: '', fields_config: '[]' });
+  const [savingTpl, setSavingTpl] = useState(false);
+
+  useEffect(() => { loadAll(); }, [currentCompanyId]);
+
+  const loadAll = async () => {
+    setLoading(true);
+    try {
+      const [tplRes, letRes] = await Promise.all([
+        legalApi.getTemplates(),
+        legalApi.getLetters(currentCompanyId ? { company_id: currentCompanyId } : {}),
+      ]);
+      setTemplates(tplRes.data);
+      setLetters(letRes.data);
+    } catch { toast.error('Failed to load'); }
+    finally { setLoading(false); }
+  };
+
+  const openGenerate = async (template) => {
+    try {
+      const params = currentCompanyId ? { company_id: currentCompanyId, limit: 200 } : { limit: 200 };
+      const { data } = await employeesApi.getEmployees(params);
+      setEmployees(data.data || []);
+    } catch { /* ignore */ }
+    setGenForm({ 
+      template_id: template ? String(template.id) : '', 
+      employee_id: '', 
+      company_id: currentCompanyId ? String(currentCompanyId) : '',
+      fields_data: {} 
+    });
+    setInlineEmp({ first_name: '', last_name: '', email: '', phone: '', company_id: currentCompanyId ? String(currentCompanyId) : '' });
+    setGenModal(true);
+  };
+
+  const handleAddInlineEmployee = async () => {
+    if (!inlineEmp.first_name || !inlineEmp.last_name || !inlineEmp.company_id) {
+      toast.error(t('legal.fill_employee_fields', 'Please fill first name, last name and company'));
+      return;
+    }
+    setAddingEmp(true);
+    try {
+      const { data } = await employeesApi.createEmployee(inlineEmp);
+      toast.success(t('legal.employee_added', 'Employee added successfully'));
+      // Reload employees and auto-select the new one
+      const params = currentCompanyId ? { company_id: currentCompanyId, limit: 200 } : { limit: 200 };
+      const empRes = await employeesApi.getEmployees(params);
+      setEmployees(empRes.data.data || []);
+      setGenForm(p => ({ ...p, employee_id: String(data.id) }));
+    } catch { toast.error(t('common.error', 'Failed')); }
+    finally { setAddingEmp(false); }
+  };
+
+  const handleGenerate = async (e) => {
+    e.preventDefault();
+    if (!genForm.template_id || !genForm.employee_id) { toast.error('Template and employee required'); return; }
+    setGenerating(true);
+    try {
+      const { data } = await legalApi.generateLetter({
+        template_id: parseInt(genForm.template_id),
+        employee_id: parseInt(genForm.employee_id),
+        company_id: genForm.company_id ? parseInt(genForm.company_id) : null,
+        fields_data: genForm.fields_data,
+      });
+      toast.success('Letter generated with AI');
+      setGenModal(false);
+      setViewLetter(data);
+      loadAll();
+    } catch { toast.error('Failed to generate'); }
+    finally { setGenerating(false); }
+  };
+
+  const handleSaveTemplate = async (e) => {
+    e.preventDefault();
+    if (!tplForm.name) { toast.error('Name required'); return; }
+    setSavingTpl(true);
+    try {
+      const config = DEFAULT_FIELD_CONFIGS[tplForm.name] || [];
+      await legalApi.createTemplate({ ...tplForm, fields_config: JSON.stringify(config) });
+      toast.success('Template created');
+      setTplModal(false); loadAll();
+    } catch { toast.error('Failed'); }
+    finally { setSavingTpl(false); }
+  };
+
+  const handleDeleteLetter = async (letter) => {
+    const r = await confirmDelete(`letter "${letter.template_name}"`);
+    if (r.isConfirmed) { try { await legalApi.deleteLetter(letter.id); toast.success('Deleted'); loadAll(); } catch { toast.error('Failed'); } }
+  };
+
+  const handlePrint = (content) => {
+    const printWin = window.open('', '_blank');
+    printWin.document.write(`
+      <html>
+        <head>
+          <title>Letter Print Preview</title>
+          <style>
+            body { font-family: 'Times New Roman', serif; padding: 40px; line-height: 1.6; max-width: 800px; margin: 0 auto; color: #000; }
+            .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 20px; margin-bottom: 40px; }
+            .header img { max-height: 80px; }
+            .footer { margin-top: 60px; font-size: 12px; text-align: center; color: #666; border-top: 1px solid #ccc; padding-top: 10px; }
+            pre { white-space: pre-wrap; font-family: inherit; font-size: 14px; margin: 0; }
+            @media print { body { padding: 0; } }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1 style="margin:0;font-size:24px;">IST HR Management</h1>
+            <p style="margin:5px 0 0;font-size:14px;color:#555;">Official Document</p>
+          </div>
+          <pre>${content}</pre>
+          <div class="footer">
+            <p>Generated by IST HR System on ${new Date().toLocaleDateString()}</p>
+            <p>This is a system generated document.</p>
+          </div>
+          <script>window.onload = function() { window.print(); }</script>
+        </body>
+      </html>
+    `);
+    printWin.document.close();
+  };
+
+  const activeTemplate = templates.find(t => String(t.id) === genForm.template_id);
+  let activeFields = [];
+  if (activeTemplate) {
+    try {
+      activeFields = JSON.parse(activeTemplate.fields_config || '[]');
+    } catch { /* ignore */ }
+    if (activeFields.length === 0 && DEFAULT_FIELD_CONFIGS[activeTemplate.name]) {
+      activeFields = DEFAULT_FIELD_CONFIGS[activeTemplate.name];
+    }
+  }
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <div className="flex items-center justify-between">
+        <div><h1 className="text-2xl font-bold text-surface-900">{t('legal.title')}</h1>
+          <p className="text-surface-500 mt-0.5 text-sm">{t('legal.subtitle')}</p></div>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => { setTplForm({ name: '', description: '', fields_config: '[]' }); setTplModal(true); }}><Plus size={14} /> {t('legal.add_template')}</Button>
+          <Button onClick={() => openGenerate(null)}><Sparkles size={16} /> {t('legal.generate')}</Button>
+        </div>
+      </div>
+
+      {/* Templates Grid */}
+      <div>
+        <h2 className="font-semibold text-surface-700 mb-3">{t('legal.templates')}</h2>
+        {loading ? (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">{[1,2,3,4].map(i => <div key={i} className="card p-4 animate-pulse"><div className="h-8 bg-surface-200 rounded mb-2" /><div className="h-3 bg-surface-100 rounded w-2/3" /></div>)}</div>
+        ) : templates.length === 0 ? (
+          <Card><EmptyState icon={<ScrollText className="w-6 h-6 text-surface-400" />} title={t('legal.no_templates')} description="Create letter templates to start generating"
+            action={<Button onClick={() => setTplModal(true)}><Plus size={16} /> {t('legal.add_template')}</Button>} /></Card>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {templates.map(t => (
+              <Card key={t.id} hover className="!p-4 cursor-pointer text-center group" onClick={() => openGenerate(t)}>
+                <div className="text-3xl mb-2">{letterTypeIcons[t.name] || '📄'}</div>
+                <h3 className="font-semibold text-surface-800 text-sm">{t.name}</h3>
+                {t.description && <p className="text-[10px] text-surface-400 mt-1 line-clamp-2">{t.description}</p>}
+                <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <span className="text-[10px] text-brand-600 font-medium">Click to generate →</span>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Generated Letters */}
+      <div>
+        <h2 className="font-semibold text-surface-700 mb-3">{t('legal.recent_letters')} <Badge variant="brand" className="ml-2">{letters.length}</Badge></h2>
+        {letters.length === 0 ? (
+          <Card className="!p-6"><p className="text-sm text-surface-400 text-center">No letters generated yet</p></Card>
+        ) : (
+          <Card className="!p-0 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead><tr className="border-b border-surface-100 bg-surface-50/60">
+                  <th className="text-left px-5 py-3 font-medium text-surface-500">Template</th>
+                  <th className="text-left px-5 py-3 font-medium text-surface-500">Recipient</th>
+                  <th className="text-left px-5 py-3 font-medium text-surface-500">Company</th>
+                  <th className="text-left px-5 py-3 font-medium text-surface-500">Date</th>
+                  <th className="text-right px-5 py-3 font-medium text-surface-500">Actions</th>
+                </tr></thead>
+                <tbody>
+                  {letters.map(l => (
+                    <tr key={l.id} className="border-b border-surface-50 hover:bg-surface-50/50 transition-colors group">
+                      <td className="px-5 py-3 font-medium text-surface-800"><FileText size={14} className="inline mr-2 text-brand-500" />{l.template_name}</td>
+                      <td className="px-5 py-3 text-surface-600">{l.recipient_name}</td>
+                      <td className="px-5 py-3">{l.short_code && <span className="px-2 py-0.5 rounded text-[10px] font-medium text-white" style={{ backgroundColor: l.color_primary || '#6D28D9' }}>{l.short_code}</span>}</td>
+                      <td className="px-5 py-3 text-surface-400 text-xs">{dayjs(l.generated_at).format('MMM D, YYYY h:mm A')}</td>
+                      <td className="px-5 py-3 text-right">
+                        <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => setViewLetter(l)} className="p-1.5 text-surface-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"><Eye size={14} /></button>
+                          <button onClick={() => handlePrint(l.rendered_html)} className="p-1.5 text-surface-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"><Printer size={14} /></button>
+                          {l.recipient_email && (
+                            <EmailButton
+                              variant="icon"
+                              size="sm"
+                              to={l.recipient_email}
+                              toName={l.recipient_name}
+                              templateType="legal_letter_sent"
+                              templateData={{ letter_type: l.template_name }}
+                              relatedModule="legal_letters"
+                              relatedId={l.id}
+                              companyId={l.company_id}
+                            />
+                          )}
+                          <button onClick={() => handleDeleteLetter(l)} className="p-1.5 text-surface-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={14} /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )}
+      </div>
+
+      {/* Generate Modal */}
+      <Modal open={genModal} onClose={() => setGenModal(false)} title={t('legal.generate_letter', 'Generate Letter')} size="md">
+        <form onSubmit={handleGenerate} className="space-y-4 max-h-[80vh] overflow-y-auto p-1">
+          <Select label={t('legal.letter_template', 'Letter Template')} required value={genForm.template_id} onChange={(e) => setGenForm(p => ({ ...p, template_id: e.target.value, fields_data: {} }))}
+            options={templates.map(t => ({ value: String(t.id), label: t.name }))} placeholder={t('legal.select_template', 'Select template...')} />
+          
+          {employees.length > 0 ? (
+            <Select label={t('legal.employee', 'Employee')} required value={genForm.employee_id} onChange={(e) => setGenForm(p => ({ ...p, employee_id: e.target.value }))}
+              options={employees.map(em => ({ value: String(em.id), label: `${em.first_name} ${em.last_name}` }))} placeholder={t('legal.select_employee', 'Select employee...')} />
+          ) : (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
+              <p className="text-sm text-amber-800 font-medium">⚠️ {t('legal.no_employees', 'No employees found. Add an employee first or hire a candidate via the recruitment pipeline.')}</p>
+              <div className="grid grid-cols-2 gap-2">
+                <Input label={t('common.first_name', 'First Name')} required value={inlineEmp.first_name} onChange={(e) => setInlineEmp(p => ({ ...p, first_name: e.target.value }))} />
+                <Input label={t('common.last_name', 'Last Name')} required value={inlineEmp.last_name} onChange={(e) => setInlineEmp(p => ({ ...p, last_name: e.target.value }))} />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Input label={t('common.email', 'Email')} type="email" value={inlineEmp.email} onChange={(e) => setInlineEmp(p => ({ ...p, email: e.target.value }))} />
+                <Input label={t('common.phone', 'Phone')} value={inlineEmp.phone} onChange={(e) => setInlineEmp(p => ({ ...p, phone: e.target.value }))} />
+              </div>
+              <Select label={t('common.company', 'Company')} required value={inlineEmp.company_id} onChange={(e) => setInlineEmp(p => ({ ...p, company_id: e.target.value }))}
+                options={companies.map(c => ({ value: String(c.id), label: c.name }))} placeholder={t('common.select', 'Select...')} />
+              <Button type="button" size="sm" onClick={handleAddInlineEmployee} loading={addingEmp}>
+                <Plus size={14} /> {t('legal.add_employee_quick', 'Add Employee & Continue')}
+              </Button>
+            </div>
+          )}
+
+          <Select label={t('common.company', 'Company')} value={genForm.company_id} onChange={(e) => setGenForm(p => ({ ...p, company_id: e.target.value }))}
+            options={companies.map(c => ({ value: String(c.id), label: c.name }))} placeholder={t('common.select', 'Select...')} />
+          
+          {activeFields.length > 0 && (
+            <div className="bg-surface-50 p-4 rounded-xl border border-surface-200 space-y-3 mt-4">
+              <h4 className="font-semibold text-surface-800 text-sm">{t('legal.template_fields', 'Template Fields')}</h4>
+              {activeFields.map(f => (
+                <div key={f.name}>
+                  {f.type === 'textarea' ? (
+                    <div>
+                      <label className="block text-xs font-medium text-surface-700 mb-1">{f.label}</label>
+                      <textarea className="w-full px-3 py-2 text-sm bg-white border border-surface-200 rounded-lg" rows={3}
+                        value={genForm.fields_data[f.name] || ''}
+                        onChange={(e) => setGenForm(p => ({ ...p, fields_data: { ...p.fields_data, [f.name]: e.target.value } }))}
+                      />
+                    </div>
+                  ) : (
+                    <Input label={f.label} type={f.type} value={genForm.fields_data[f.name] || ''}
+                      onChange={(e) => setGenForm(p => ({ ...p, fields_data: { ...p.fields_data, [f.name]: e.target.value } }))} />
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="p-3 bg-brand-50 border border-brand-200 rounded-xl text-xs text-brand-700">
+            {t('legal.ai_generate_info', '✨ AI will auto-generate the letter content using employee data and the provided fields.')}
+          </div>
+          <div className="flex justify-end gap-3 pt-2 sticky bottom-0 bg-white py-2">
+            <Button type="button" variant="secondary" onClick={() => setGenModal(false)}>{t('common.cancel', 'Cancel')}</Button>
+            <Button type="submit" loading={generating}><Sparkles size={14} /> {t('legal.generate_with_ai', 'Generate with AI')}</Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* View Letter Modal */}
+      <Modal open={!!viewLetter} onClose={() => setViewLetter(null)} title={viewLetter?.template_name || 'Letter'} size="lg">
+        {viewLetter && (
+          <div className="space-y-4">
+            <div className="flex gap-3 text-xs text-surface-400 bg-surface-50 p-2 rounded">
+              <span>For: <b className="text-surface-700">{viewLetter.recipient_name}</b></span>
+              <span>Generated: {dayjs(viewLetter.generated_at).format('MMM D, YYYY')}</span>
+            </div>
+            <div className="bg-white border border-surface-200 rounded-xl p-8 font-serif leading-relaxed text-sm whitespace-pre-wrap max-h-[60vh] overflow-y-auto shadow-sm">
+              {viewLetter.rendered_html || viewLetter.content}
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="secondary" onClick={() => handlePrint(viewLetter.rendered_html || viewLetter.content)}><Printer size={14} /> Print Document</Button>
+              <Button onClick={() => setViewLetter(null)}>Close</Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Template Modal */}
+      <Modal open={tplModal} onClose={() => setTplModal(false)} title={t('legal.create_template', 'Create Letter Template')} size="sm">
+        <form onSubmit={handleSaveTemplate} className="space-y-4">
+          <Input label={t('legal.template_name', 'Template Name')} required placeholder={t('legal.eg_salary_certificate', 'e.g. Salary Certificate')} value={tplForm.name} onChange={(e) => setTplForm(p => ({ ...p, name: e.target.value }))} />
+          <div><label className="block text-sm font-medium text-surface-700 mb-1.5">{t('common.description', 'Description')}</label>
+            <textarea placeholder={t('legal.describe_type', 'Describe this letter type...')} value={tplForm.description} onChange={(e) => setTplForm(p => ({ ...p, description: e.target.value }))} rows={3}
+              className="w-full px-3 py-2.5 text-sm bg-white border border-surface-200 rounded-xl input-focus transition-all resize-none" /></div>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button type="button" variant="secondary" onClick={() => setTplModal(false)}>{t('common.cancel', 'Cancel')}</Button>
+            <Button type="submit" loading={savingTpl}>{t('common.create', 'Create')}</Button>
+          </div>
+        </form>
+      </Modal>
+    </div>
+  );
+}

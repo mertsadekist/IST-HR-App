@@ -1,0 +1,81 @@
+.alert {
+  @apply px-4 py-4 sm:px-5 font-normal text-sm rounded-lg;
+}
+.alert-primary {
+  @apply bg-indigo-500 text-white;
+  &.light {
+    @apply bg-opacity-10 text-indigo-500;
+  }
+}
+.alert-secondary {
+  @apply bg-fuchsia-500 text-white;
+
+  &.light {
+    @apply bg-opacity-10 text-fuchsia-500;
+  }
+}
+.alert-success {
+  @apply bg-green-500 text-white;
+
+  &.light {
+    @apply bg-opacity-10 text-green-500;
+  }
+}
+.alert-danger {
+  @apply bg-red-500 text-white;
+  &.light {
+    @apply bg-opacity-10 text-red-500;
+  }
+}
+.alert-warning {
+  @apply bg-yellow-500 text-white;
+  &.light {
+    @apply bg-opacity-10 text-yellow-500;
+  }
+}
+.alert-info {
+  @apply bg-cyan-500 text-white;
+  &.light {
+    @apply bg-opacity-10 text-cyan-500;
+  }
+}
+.alert-light {
+  @apply bg-gray-200 text-gray-800;
+
+  &.light {
+    @apply text-gray-700;
+  }
+}
+
+.alert-dark {
+  @apply bg-gray-700 text-white;
+  &.light {
+    @apply bg-opacity-[54%] text-gray-100;
+  }
+}
+
+// outline color
+.alert-outline-primary {
+  @apply border border-indigo-500 text-indigo-500;
+}
+.alert-outline-secondary {
+  @apply border border-fuchsia-500 text-gray-700;
+}
+.alert-outline-success {
+  @apply border border-green-500 text-green-500;
+}
+.alert-outline-danger {
+  @apply border border-red-500 text-red-500;
+}
+.alert-outline-warning {
+  @apply border border-yellow-500 text-yellow-500;
+}
+.alert-outline-info {
+  @apply border border-cyan-500 text-cyan-500;
+}
+.alert-outline-light {
+  @apply border border-gray-200 text-gray-700;
+}
+.alert-outline-dark {
+  @apply border border-gray-900 text-gray-900;
+}

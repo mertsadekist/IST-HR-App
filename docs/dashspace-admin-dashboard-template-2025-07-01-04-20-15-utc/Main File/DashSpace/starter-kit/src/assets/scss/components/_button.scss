@@ -1,0 +1,203 @@
+.btn {
+  @apply font-medium  text-sm    tracking-[0.025rem] py-[10px] px-5
+  rounded-lg capitalize  transition-all duration-150 md:whitespace-nowrap whitespace-normal  items-center
+  relative;
+}
+
+.btn.block-btn {
+  @apply block w-full text-center;
+  span {
+    @apply justify-center;
+  }
+}
+.btn-dark {
+  @apply bg-gray-700 dark:bg-gray-900 dark:hover:bg-gray-700   text-white hover:bg-gray-900;
+}
+.btn-primary {
+  @apply bg-indigo-500  text-white hover:bg-indigo-600;
+}
+.btn-secondary {
+  @apply bg-fuchsia-500  text-white hover:bg-fuchsia-600;
+}
+.btn-success {
+  @apply bg-green-500  text-white hover:bg-green-600;
+}
+.btn-info {
+  @apply bg-cyan-500  text-white hover:bg-cyan-600;
+}
+.btn-warning {
+  @apply bg-yellow-500  text-white hover:bg-yellow-600;
+}
+.btn-danger {
+  @apply bg-red-500  text-white hover:bg-red-600;
+}
+.btn-light {
+  @apply bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 hover:text-gray-900;
+}
+
+// btn outline
+.btn-outline-dark {
+  @apply bg-transparent text-gray-900 dark:text-white  border border-gray-900  hover:text-white hover:bg-gray-900;
+  &.active {
+    @apply bg-gray-900 text-white dark:bg-gray-900 dark:text-gray-300;
+  }
+}
+[aria-expanded="true"] > .btn-outline-dark {
+  @apply bg-gray-900 text-white;
+}
+.btn-outline-primary {
+  @apply bg-transparent text-indigo-500 border border-indigo-500  hover:text-white hover:bg-indigo-500;
+  &.active {
+    @apply bg-indigo-500 text-white;
+  }
+}
+[aria-expanded="true"] > .btn-outline-primary {
+  @apply bg-indigo-500 text-white;
+}
+.btn-outline-secondary {
+  @apply bg-transparent text-fuchsia-500 border border-fuchsia-500  hover:text-white hover:bg-fuchsia-500;
+  &.active {
+    @apply bg-fuchsia-500 text-white;
+  }
+}
+[aria-expanded="true"] > .btn-outline-secondary {
+  @apply bg-fuchsia-500 text-white;
+}
+.btn-outline-success {
+  @apply bg-transparent text-green-500 border border-green-500  hover:text-white hover:bg-green-500;
+  &.active {
+    @apply bg-green-500 text-white;
+  }
+}
+[aria-expanded="true"] > .btn-outline-success {
+  @apply bg-green-500 text-white;
+}
+.btn-outline-info {
+  @apply bg-transparent text-cyan-600 border border-cyan-500  hover:text-white hover:bg-cyan-500;
+  &.active {
+    @apply bg-cyan-500 text-white;
+  }
+}
+[aria-expanded="true"] > .btn-outline-info {
+  @apply bg-cyan-500 text-white;
+}
+.btn-outline-warning {
+  @apply bg-transparent text-yellow-500 border border-yellow-500  hover:text-white hover:bg-yellow-500;
+  &.active {
+    @apply bg-yellow-500 text-white;
+  }
+}
+[aria-expanded="true"] > .btn-outline-warning {
+  @apply bg-yellow-500 text-white;
+}
+
+.btn-outline-danger {
+  @apply bg-transparent text-red-500 border border-red-500  hover:text-white hover:bg-red-500;
+  &.active {
+    @apply bg-red-500 text-white;
+  }
+}
+[aria-expanded="true"] > .btn-outline-danger {
+  @apply bg-red-500 text-white;
+}
+.btn-outline-light {
+  @apply bg-transparent  text-gray-900 dark:border-gray-700 dark:text-gray-300 
+  border border-gray-200  hover:text-gray-900 hover:bg-gray-200 dark:hover:bg-gray-700;
+  &.active {
+    @apply bg-gray-200 text-gray-900;
+  }
+}
+[aria-expanded="true"] > .btn-outline-light {
+  @apply bg-gray-200 text-gray-900;
+}
+
+// light color
+.btn {
+  &.light {
+    @apply bg-opacity-10 dark:bg-opacity-[0.15] hover:bg-opacity-[0.15];
+  }
+}
+.btn-primary {
+  &.light {
+    @apply text-indigo-500;
+  }
+}
+.btn-secondary {
+  &.light {
+    @apply text-fuchsia-500;
+  }
+}
+.btn-success {
+  &.light {
+    @apply text-green-500;
+  }
+}
+.btn-info {
+  &.light {
+    @apply text-cyan-500;
+  }
+}
+.btn-warning {
+  &.light {
+    @apply text-yellow-500;
+  }
+}
+.btn-danger {
+  &.light {
+    @apply text-red-500;
+  }
+}
+
+// split dropdown
+.split-btngroup {
+  .btn {
+    @apply ltr:rounded-r-none rtl:rounded-l-none hover:ring-0;
+  }
+  button {
+    @apply ltr:last:rounded-r-md rtl:last:rounded-l-md  last:border-l last:border-white last:border-opacity-[0.10];
+    &:hover {
+      box-shadow: none !important;
+    }
+  }
+  [class*="btn-outline-"] {
+    @apply ltr:last:border-l-0 rtl:last:border-r-0  focus:bg-transparent focus:text-inherit;
+  }
+  .btn-outline-primary {
+    @apply focus:text-indigo-500 last:border-indigo-500;
+  }
+  .btn-outline-secondary {
+    @apply focus:text-fuchsia-500 last:border-fuchsia-500;
+  }
+  .btn-outline-success {
+    @apply focus:text-green-500 last:border-green-500;
+  }
+  .btn-outline-danger {
+    @apply focus:text-red-500 last:border-red-500;
+  }
+  .btn-outline-warning {
+    @apply focus:text-yellow-500 last:border-yellow-500;
+  }
+  .btn-outline-info {
+    @apply focus:text-cyan-500 last:border-cyan-500;
+  }
+  .btn-outline-light {
+    @apply focus:text-gray-700 last:border-gray-200;
+  }
+}
+
+// link btn
+.btn-link {
+  @apply text-gray-900 font-medium underline text-sm dark:text-white;
+  &.white {
+    @apply text-white;
+  }
+}
+
+// action btn
+.icon-btn {
+  @apply h-7 w-7 text-base flex flex-col items-center justify-center border border-gray-200 hover:bg-indigo-500/20 hover:text-indigo-500 dark:border-gray-500 rounded;
+}
+
+.invocie-btn {
+  @apply hover:bg-gray-900 hover:text-gray-100 dark:hover:bg-gray-600 mr-3 mb-4;
+}

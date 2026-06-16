@@ -1,0 +1,21 @@
+# Keep the build context small and never ship secrets, deps, or user data.
+**/node_modules
+client/dist
+server/dist
+uploads
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+*.log
+scratch
+docs
+audit
+**/*.md
+IST_HR_System*.html
+Mert Sadek CV*.pdf
+**/.DS_Store
+**/coverage
+**/.vscode
+**/tests

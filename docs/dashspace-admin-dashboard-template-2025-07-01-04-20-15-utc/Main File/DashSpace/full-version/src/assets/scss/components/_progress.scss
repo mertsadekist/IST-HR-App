@@ -1,0 +1,45 @@
+.progress {
+  @apply bg-gray-900 dark:bg-gray-700 h-2;
+  .progress-bar {
+    &.stripes {
+      background-image: linear-gradient(
+        45deg,
+        hsla(0, 0%, 100%, 0.15) 25%,
+        transparent 0,
+        transparent 50%,
+        hsla(0, 0%, 100%, 0.15) 0,
+        hsla(0, 0%, 100%, 0.15) 75%,
+        transparent 0,
+        transparent
+      );
+      background-size: 0.857rem 0.857rem;
+    }
+    &.animate-active::before {
+      animation: progress-active 2s cubic-bezier(0.55, 0.2, 0.3, 0.67) infinite;
+      @apply absolute inset-0 bg-white;
+      content: "";
+    }
+  }
+}
+
+@keyframes progress-bar-stripes {
+  0% {
+    background-position: 1rem 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+@keyframes progress-active {
+  0% {
+    opacity: 0.4;
+    transform: translateX(-100%);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(0);
+  }
+}
+.animate-stripes {
+  animation: progress-bar-stripes 1s linear infinite;
+}

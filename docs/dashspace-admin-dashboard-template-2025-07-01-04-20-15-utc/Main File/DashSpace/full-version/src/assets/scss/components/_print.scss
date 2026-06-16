@@ -1,0 +1,14 @@
+@media print {
+  .invocie-btn {
+    display: none;
+  }
+  .sidebar-wrapper,
+  .DashSpace-app-header,
+  .site-footer,
+  .shadow-deep {
+    @apply hidden;
+  }
+  .content-wrapper {
+    @apply w-full ml-0;
+  }
+}

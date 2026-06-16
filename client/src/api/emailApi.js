@@ -1,0 +1,13 @@
+import api from './axios';
+export const sendEmail = (data) => api.post('/email/send', data);
+export const sendTemplateEmail = (data) => api.post('/email/send-template', data);
+export const sendBulkEmail = (data) => api.post('/email/send-bulk', data);
+export const previewTemplate = (data) => api.post('/email/preview', data);
+export const getTemplates = () => api.get('/email/templates');
+export const getEmailLog = (params) => api.get('/email/log', { params });
+export const getEmailStats = () => api.get('/email/log/stats');
+export const getEmailDetail = (id) => api.get(`/email/log/${id}`);
+export const testSMTP = (data) => api.post('/email/test', data);
+export const getEmailConfig = (params) => api.get('/email/config', { params });
+export const saveEmailConfig = (data) => api.put('/email/config', data);
+export const testEmailConfig = (data) => api.post('/email/config/test', data);
