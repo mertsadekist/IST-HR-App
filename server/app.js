@@ -53,6 +53,10 @@ import applicationsRoutes from './routes/applications.js';
 
 const app = express();
 
+// Behind Coolify/Traefik (or any reverse proxy): trust X-Forwarded-* so req.ip,
+// req.protocol and rate limiting see the real client IP / scheme.
+app.set('trust proxy', 1);
+
 // Middleware
 app.use(cors({
   origin: process.env.NODE_ENV === 'production'
@@ -60,7 +64,19 @@ app.use(cors({
     : ['http://localhost:5173', 'http://localhost:3000'],
   credentials: true,
 }));
-app.use(helmet({ crossOriginResourcePolicy: false }));
+app.use(helmet({
+  crossOriginResourcePolicy: false,
+  contentSecurityPolicy: {
+    useDefaults: true,
+    directives: {
+      // TLS terminates at the reverse proxy and the app is also reachable over
+      // plain HTTP (e.g. Coolify's *.sslip.io fallback). Do NOT force browsers
+      // to upgrade same-origin asset requests to https — that breaks asset
+      // loading (503/CORS) when the page itself is served over http.
+      'upgrade-insecure-requests': null,
+    },
+  },
+}));
 app.use(morgan('dev'));
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
