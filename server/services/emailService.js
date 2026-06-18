@@ -134,7 +134,7 @@ async function logEmail({ companyId, toEmail, toName, fromEmail, subject, bodyHt
  * @param {number} options.relatedId - Related record ID
  * @param {number} options.sentBy - User ID who triggered the send
  */
-export async function sendEmail({ to, toName, subject, html, companyId, templateType, relatedModule, relatedId, sentBy }) {
+export async function sendEmail({ to, toName, subject, html, companyId, templateType, relatedModule, relatedId, sentBy, attachments, cc }) {
   // Reject invalid recipients and neutralize header-injection attempts up front.
   if (!isValidEmail(to)) {
     return { success: false, error: 'Invalid recipient email address' };
@@ -142,6 +142,9 @@ export async function sendEmail({ to, toName, subject, html, companyId, template
   const safeTo = to.trim();
   const safeName = sanitizeHeader(toName);
   const safeSubject = sanitizeHeader(subject);
+  // Only keep valid CC addresses (used to copy a manager / HR on document sends).
+  const safeCc = (Array.isArray(cc) ? cc : (cc ? [cc] : []))
+    .filter(isValidEmail).map((a) => a.trim());
 
   try {
     const { transporter, from, replyTo } = await getTransporter(companyId);
@@ -150,8 +153,11 @@ export async function sendEmail({ to, toName, subject, html, companyId, template
       from,
       replyTo,
       to: safeName ? { name: safeName, address: safeTo } : safeTo,
+      ...(safeCc.length ? { cc: safeCc } : {}),
       subject: safeSubject,
       html,
+      // attachments: [{ filename, content (Buffer), contentType }]
+      ...(Array.isArray(attachments) && attachments.length ? { attachments } : {}),
     });
 
     console.log(`📧 Email sent to ${safeTo}: ${safeSubject} [${info.messageId}]`);

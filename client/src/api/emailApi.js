@@ -11,3 +11,7 @@ export const testSMTP = (data) => api.post('/email/test', data);
 export const getEmailConfig = (params) => api.get('/email/config', { params });
 export const saveEmailConfig = (data) => api.put('/email/config', data);
 export const testEmailConfig = (data) => api.post('/email/config/test', data);
+// Email a PDF document with a cover message. `formData` is multipart with a
+// `file` (the PDF blob) plus to/toName/title/message/cc/relatedModule/relatedId.
+export const sendDocument = (formData) =>
+  api.post('/email/send-document', formData, { headers: { 'Content-Type': 'multipart/form-data' } });

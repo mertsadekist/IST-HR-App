@@ -506,6 +506,32 @@ const templates = {
     `, data.company),
   }),
 
+  // ==================== DOCUMENT DELIVERY (cover message + PDF attachment) ====================
+  // Bilingual cover note sent alongside an attached PDF document (letters,
+  // offers, handover receipts, reports, payslips…).
+  document_delivery: (data) => ({
+    subject: data.subject || `${data.title || 'Document'}${data.company ? ` — ${data.company}` : ''}`,
+    html: baseLayout(`
+      <h2 style="margin-bottom:4px;">${data.title || 'Official Document'}</h2>
+      <p>Dear <strong>${data.name || 'Sir/Madam'}</strong>,</p>
+      <p>Greetings from ${data.company || 'the HR Department'}.</p>
+      ${data.message ? `<p>${String(data.message).replace(/\n/g, '<br>')}</p>` : ''}
+      <p>As requested, please find attached the following document: <strong>${data.title || 'Document'}</strong> (PDF).</p>
+      <p>Should you have any questions, simply reply to this email.</p>
+      <p style="margin-top:18px;">Best regards,<br><strong>${data.sender || `${data.company || 'IST'} — HR Department`}</strong></p>
+      <hr style="border:none;border-top:1px solid #e2e8f0;margin:22px 0;">
+      <div dir="rtl" style="text-align:right;font-family:'Tahoma','Segoe UI',sans-serif;">
+        <h3 style="margin-bottom:4px;">${data.title_ar || data.title || 'مستند رسمي'}</h3>
+        <p>السيد/السيدة <strong>${data.name || ''}</strong> المحترم/ة،</p>
+        <p>تحية طيبة من ${data.company || 'إدارة الموارد البشرية'}.</p>
+        ${data.message_ar ? `<p>${String(data.message_ar).replace(/\n/g, '<br>')}</p>` : ''}
+        <p>بناءً على طلبكم، نرفق لكم المستند التالي: <strong>${data.title_ar || data.title || 'المستند'}</strong> (بصيغة PDF).</p>
+        <p>لأي استفسار، يُرجى الرد على هذا البريد.</p>
+        <p style="margin-top:18px;">مع خالص التقدير،<br><strong>${data.sender_ar || `${data.company || 'IST'} — إدارة الموارد البشرية`}</strong></p>
+      </div>
+    `, data.company),
+  }),
+
   // ==================== CUSTOM ====================
   custom: (data) => ({
     subject: data.subject || 'Message from HR',

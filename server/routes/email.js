@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import multer from 'multer';
 import pool from '../config/db.js';
 import { auth } from '../middleware/auth.js';
 import { authorize } from '../middleware/rbac.js';
@@ -9,6 +10,17 @@ import { tenantScope, companyClause, resolveWriteCompanyId } from '../middleware
 
 const router = Router();
 router.use(auth, tenantScope);
+
+// In-memory upload for document-delivery: the PDF is attached to the email and
+// never persisted (the source document already lives in its own module).
+const docUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/pdf') return cb(null, true);
+    cb(new Error('Only PDF attachments are allowed'));
+  },
+});
 
 // GET /api/email/templates — List all available template types
 router.get('/templates', (req, res) => {
@@ -172,6 +184,52 @@ router.get('/log/:id', authorize('admin', 'hr_manager'), async (req, res) => {
     res.json(row);
   } catch (err) {
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/email/send-document — Email a generated/uploaded PDF with a
+// bilingual cover message. The client renders the on-screen document to PDF
+// (perfect AR/EN + branding) and uploads it here; we attach it and send.
+// Used by Legal Letters, Offers, Handover receipts, Reports & payslips.
+router.post('/send-document', authorize('admin', 'hr_manager'), docUpload.single('file'), async (req, res) => {
+  try {
+    const { to, toName, title, message, cc, relatedModule, relatedId } = req.body;
+    if (!req.file) return res.status(400).json({ error: 'A PDF file is required' });
+    if (!to || !title) return res.status(400).json({ error: 'Recipient and document title are required' });
+
+    const companyId = resolveWriteCompanyId(req, req.body.companyId);
+    let companyName;
+    if (companyId) {
+      const [[c]] = await pool.query('SELECT name FROM companies WHERE id = ?', [companyId]);
+      companyName = c?.name;
+    }
+
+    const { subject, html } = getTemplate('document_delivery', {
+      name: toName, title, message, company: companyName,
+    });
+
+    // Safe ASCII-ish filename for the attachment.
+    const safeFile = `${String(title).replace(/[^\w؀-ۿ\- ]+/g, '').trim().slice(0, 80) || 'document'}.pdf`;
+
+    const result = await sendEmail({
+      to, toName, subject, html,
+      companyId,
+      templateType: 'document_delivery',
+      relatedModule: relatedModule || 'Documents',
+      relatedId: relatedId || null,
+      sentBy: req.user.id,
+      cc: cc ? (Array.isArray(cc) ? cc : String(cc).split(',').map(s => s.trim())) : undefined,
+      attachments: [{ filename: safeFile, content: req.file.buffer, contentType: 'application/pdf' }],
+    });
+
+    if (result.success) {
+      await addAudit(pool, req.user, 'Email', 'Document Sent', `"${title}" sent to ${to}`);
+      return res.json({ success: true, messageId: result.messageId });
+    }
+    return res.status(502).json({ success: false, error: result.error || 'Send failed' });
+  } catch (err) {
+    console.error('POST /email/send-document error:', err);
+    res.status(500).json({ error: err.message });
   }
 });
 
