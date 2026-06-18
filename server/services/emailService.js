@@ -61,10 +61,18 @@ async function getTransporter(companyId = null) {
     throw new Error('Email not configured. Please set up SMTP in Settings → Email Configuration.');
   }
 
+  // Implicit TLS (SMTPS, `secure: true`) is only correct on port 465. On the
+  // submission port 587 (and 25) the connection must start in plaintext and be
+  // upgraded via STARTTLS — using `secure: true` there triggers the classic
+  // "wrong version number" SSL error. Derive the mode from the port so the
+  // connection is always encrypted regardless of how the UI flag is set.
+  const port = Number(config.smtp_port) || 587;
+  const secure = port === 465;
   const transporter = nodemailer.createTransport({
     host: config.smtp_host,
-    port: config.smtp_port,
-    secure: !!config.smtp_secure,
+    port,
+    secure,
+    requireTLS: !secure, // enforce STARTTLS on 587/25
     auth: {
       user: config.smtp_user,
       pass: config.smtp_password,
@@ -212,10 +220,15 @@ export async function testSMTPConnection(companyId = null) {
  */
 export async function testSMTPWithConfig(config) {
   try {
+    // Same port-derived TLS logic as getTransporter: implicit TLS only on 465,
+    // STARTTLS on 587/25 — avoids the "wrong version number" SSL error.
+    const port = Number(config.smtp_port) || 587;
+    const secure = port === 465;
     const transporter = nodemailer.createTransport({
       host: config.smtp_host,
-      port: config.smtp_port,
-      secure: !!config.smtp_secure,
+      port,
+      secure,
+      requireTLS: !secure,
       auth: { user: config.smtp_user, pass: config.smtp_password },
       tls: { rejectUnauthorized: SMTP_REJECT_UNAUTHORIZED },
     });
