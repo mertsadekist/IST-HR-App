@@ -4,7 +4,7 @@ import pool from '../config/db.js';
 import { auth } from '../middleware/auth.js';
 import { authorize } from '../middleware/rbac.js';
 import { addAudit } from '../services/auditService.js';
-import { tenantScope, companyClause } from '../middleware/tenant.js';
+import { tenantScope } from '../middleware/tenant.js';
 import { validate } from '../middleware/validate.js';
 
 const router = Router();
@@ -12,6 +12,12 @@ router.use(auth, tenantScope);
 
 const BCRYPT_ROUNDS = 12;
 const ALLOWED_ROLES = ['admin', 'hr_manager', 'recruiter', 'hr_specialist', 'employee'];
+
+// User management is scoped by the admin's AUTHORITY, not the UI entity selector:
+// a platform admin manages every user; a company-bound admin only their own
+// company's users. (Decoupled from the request's selected company_id.)
+const userMgmtScope = (req, col = 'company_id') =>
+  req.isPlatformAdmin ? { clause: '', params: [] } : { clause: ` AND ${col} = ?`, params: [req.user.company_id] };
 // Only a platform admin may grant the platform-admin role (admin with no company).
 const isPlatformGrant = (req, role, companyId) =>
   role === 'admin' && (companyId === null || companyId === undefined);
@@ -19,7 +25,7 @@ const isPlatformGrant = (req, role, companyId) =>
 // GET /api/users — company-bound admins only see their own company's users
 router.get('/', authorize('admin'), async (req, res) => {
   try {
-    const co = companyClause(req, 'u.company_id');
+    const co = userMgmtScope(req, 'u.company_id');
     const [rows] = await pool.query(`
       SELECT u.id, u.username, u.name, u.email, u.role, u.company_id, u.department_id, u.is_active, u.last_login_at, u.created_at, c.name as company_name, d.name as department_name
       FROM users u
@@ -31,6 +37,25 @@ router.get('/', authorize('admin'), async (req, res) => {
     res.json(rows);
   } catch (err) {
     console.error('GET /users error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/users/:id — single user (scoped by admin authority)
+router.get('/:id', authorize('admin'), async (req, res) => {
+  try {
+    const co = userMgmtScope(req, 'u.company_id');
+    const [[row]] = await pool.query(`
+      SELECT u.id, u.username, u.name, u.email, u.role, u.company_id, u.department_id, u.is_active, u.last_login_at, u.created_at,
+             c.name as company_name, d.name as department_name
+      FROM users u
+      LEFT JOIN companies c ON u.company_id = c.id
+      LEFT JOIN departments d ON u.department_id = d.id
+      WHERE u.id = ?` + co.clause, [req.params.id, ...co.params]);
+    if (!row) return res.status(404).json({ error: 'User not found' });
+    res.json(row);
+  } catch (err) {
+    console.error('GET /users/:id error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -53,7 +78,7 @@ router.post('/', authorize('admin'), validate({
     // cannot mint platform admins.
     let targetCompany = company_id || null;
     if (!req.isPlatformAdmin) {
-      targetCompany = req.companyId;
+      targetCompany = req.user.company_id;
       if (isPlatformGrant(req, newRole, targetCompany)) {
         return res.status(403).json({ error: 'Cannot grant platform admin role' });
       }
@@ -78,7 +103,7 @@ router.put('/:id', authorize('admin'), async (req, res) => {
     const targetId = parseInt(req.params.id);
 
     // Resolve target user within the caller's scope (company-bound admins only their company)
-    const co = companyClause(req, 'company_id');
+    const co = userMgmtScope(req, 'company_id');
     const [[target]] = await pool.query('SELECT id, role, company_id FROM users WHERE id = ?' + co.clause, [targetId, ...co.params]);
     if (!target) return res.status(404).json({ error: 'User not found' });
 
@@ -118,6 +143,26 @@ router.put('/:id', authorize('admin'), async (req, res) => {
   }
 });
 
+// PUT /api/users/:id/password — reset a user's password (scoped by admin authority)
+router.put('/:id/password', authorize('admin'), async (req, res) => {
+  try {
+    const { password } = req.body || {};
+    if (!password || String(password).length < 8) {
+      return res.status(422).json({ error: 'Password must be at least 8 characters' });
+    }
+    const co = userMgmtScope(req, 'company_id');
+    const [[target]] = await pool.query('SELECT id FROM users WHERE id = ?' + co.clause, [req.params.id, ...co.params]);
+    if (!target) return res.status(404).json({ error: 'User not found' });
+    const password_hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+    await pool.query('UPDATE users SET password_hash = ? WHERE id = ?', [password_hash, req.params.id]);
+    await addAudit(pool, req.user, 'Users', 'Password Reset', `Password reset for user #${req.params.id}`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('PUT /users/:id/password error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // PATCH /api/users/:id/toggle — Enable/disable (company-scoped)
 router.patch('/:id/toggle', authorize('admin'), async (req, res) => {
   try {
@@ -125,7 +170,7 @@ router.patch('/:id/toggle', authorize('admin'), async (req, res) => {
     if (parseInt(req.params.id) === req.user.id) {
       return res.status(400).json({ error: 'Cannot disable your own account' });
     }
-    const co = companyClause(req, 'company_id');
+    const co = userMgmtScope(req, 'company_id');
     const [users] = await pool.query('SELECT is_active FROM users WHERE id = ?' + co.clause, [req.params.id, ...co.params]);
     if (!users.length) return res.status(404).json({ error: 'User not found' });
 
@@ -145,7 +190,7 @@ router.delete('/:id', authorize('admin'), async (req, res) => {
     if (parseInt(req.params.id) === req.user.id) {
       return res.status(400).json({ error: 'Cannot delete your own account' });
     }
-    const co = companyClause(req, 'company_id');
+    const co = userMgmtScope(req, 'company_id');
     const [result] = await pool.query('DELETE FROM users WHERE id = ?' + co.clause, [req.params.id, ...co.params]);
     if (result.affectedRows === 0) return res.status(404).json({ error: 'User not found' });
     await addAudit(pool, req.user, 'Users', 'Deleted', `User #${req.params.id} deleted`);
