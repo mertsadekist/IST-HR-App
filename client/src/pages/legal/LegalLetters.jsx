@@ -17,6 +17,18 @@ import dayjs from 'dayjs';
 import SendDocumentModal from '@components/email/SendDocumentModal';
 import { companyLetterhead } from '@utils/letterhead';
 
+// Each generated letter row carries its company's letterhead fields (fresh from
+// the server), so we don't depend on a possibly-stale Redux companies list.
+function letterLh(letter) {
+  if (!letter) return null;
+  return companyLetterhead({
+    id: letter.company_id,
+    letterhead_path: letter.letterhead_path,
+    letterhead_type: letter.letterhead_type,
+    letterhead_margins: letter.letterhead_margins,
+  });
+}
+
 const escapeHtml = (s) => String(s || '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 const isArabic = (s) => /[؀-ۿ]/.test(s || '');
 
@@ -409,14 +421,14 @@ export default function LegalLetters() {
         open={!!sendLetter}
         onClose={() => setSendLetter(null)}
         title={sendLetter ? `${sendLetter.template_name} — ${sendLetter.recipient_name}` : 'Letter'}
-        getHtml={() => buildLetterHtml(sendLetter, { bare: !!companyLetterhead(companies.find((c) => c.id === sendLetter?.company_id)) })}
+        getHtml={() => buildLetterHtml(sendLetter, { bare: !!letterLh(sendLetter) })}
         rtl={sendLetter ? isArabic(sendLetter.rendered_html || sendLetter.content) : false}
         defaultTo={sendLetter?.recipient_email || ''}
         defaultToName={sendLetter?.recipient_name || ''}
         relatedModule="legal_letters"
         relatedId={sendLetter?.id || ''}
         companyId={sendLetter?.company_id || ''}
-        letterhead={companyLetterhead(companies.find((c) => c.id === sendLetter?.company_id))}
+        letterhead={letterLh(sendLetter)}
       />
     </div>
   );

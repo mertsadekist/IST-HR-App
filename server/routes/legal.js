@@ -60,7 +60,8 @@ router.get('/letters', async (req, res) => {
   try {
     const co = companyClause(req, 'gl.company_id');
     let sql = `SELECT gl.*, lt.name as template_name,
-               c.name as company_name, c.short_code, c.color_primary
+               c.name as company_name, c.short_code, c.color_primary,
+               c.letterhead_path, c.letterhead_type, c.letterhead_margins
                FROM generated_letters gl
                LEFT JOIN letter_templates lt ON gl.template_id = lt.id
                LEFT JOIN companies c ON gl.company_id = c.id WHERE 1=1` + co.clause;
@@ -125,7 +126,17 @@ router.post('/letters', authorize('admin', 'hr_manager'), async (req, res) => {
     });
 
     await addAudit(pool, req.user, 'Legal', 'Generated', `Letter "${template.name}" for ${recipientName}`);
-    res.status(201).json({ id: result.insertId, content, recipient_name: recipientName, template_name: template.name, generated_at: new Date() });
+
+    // Return the full row (incl. company + letterhead fields) so the client can
+    // immediately send it with the correct letterhead, without waiting for a reload.
+    const [[full]] = await pool.query(`SELECT gl.*, lt.name as template_name,
+      c.name as company_name, c.short_code, c.color_primary,
+      c.letterhead_path, c.letterhead_type, c.letterhead_margins
+      FROM generated_letters gl
+      LEFT JOIN letter_templates lt ON gl.template_id = lt.id
+      LEFT JOIN companies c ON gl.company_id = c.id
+      WHERE gl.id = ?`, [result.insertId]);
+    res.status(201).json({ ...full, content });
   } catch (err) { console.error('POST /legal/letters error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
