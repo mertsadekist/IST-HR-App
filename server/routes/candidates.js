@@ -285,8 +285,8 @@ router.put('/:id/move', authorize('admin', 'hr_manager', 'recruiter'), async (re
   }
 });
 
-// DELETE /api/candidates/:id (company-scoped)
-router.delete('/:id', authorize('admin', 'hr_manager'), async (req, res) => {
+// DELETE /api/candidates/:id (company-scoped) — admin only (hr_manager cannot delete)
+router.delete('/:id', authorize('admin'), async (req, res) => {
   try {
     const co = companyClause(req, 'company_id');
     const [result] = await pool.query('DELETE FROM candidates WHERE id = ?' + co.clause, [req.params.id, ...co.params]);

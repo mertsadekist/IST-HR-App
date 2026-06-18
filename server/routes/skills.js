@@ -85,8 +85,8 @@ router.post('/', auth, authorize('admin', 'hr_manager'), async (req, res) => {
   }
 });
 
-// DELETE /api/skills/:id
-router.delete('/:id', auth, authorize('admin', 'hr_manager'), async (req, res) => {
+// DELETE /api/skills/:id — admin only (hr_manager cannot delete)
+router.delete('/:id', auth, authorize('admin'), async (req, res) => {
   try {
     await pool.query('DELETE FROM skills WHERE id = ?', [req.params.id]);
     res.json({ success: true });

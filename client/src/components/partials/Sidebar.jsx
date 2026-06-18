@@ -135,17 +135,18 @@ export default function Sidebar({ isOpen, onClose }) {
       roles: ['admin', 'hr_manager'],
       items: [
         { path: '/reports', icon: BarChart3, label: t('nav.reports') },
-        { path: '/audit', icon: ClipboardList, label: t('nav.audit_logs'), roles: ['admin'] },
+        { path: '/audit', icon: ClipboardList, label: t('nav.audit_logs'), roles: ['admin', 'hr_manager'] },
         { path: '/kpi', icon: Trophy, label: t('nav.kpi_tracker') },
-        { path: '/email-log', icon: Mail, label: t('nav.email_log', 'Email Log'), roles: ['admin'] },
+        { path: '/email-log', icon: Mail, label: t('nav.email_log', 'Email Log'), roles: ['admin', 'hr_manager'] },
       ],
     },
     {
       label: t('nav.operations'),
-      roles: ['admin'],
+      roles: ['admin', 'hr_manager'],
       items: [
         { path: '/org-chart', icon: Network, label: t('nav.org_chart') },
-        { path: '/users', icon: UserCog, label: t('nav.users', 'Users') },
+        // User management stays admin-only (prevents privilege escalation).
+        { path: '/users', icon: UserCog, label: t('nav.users', 'Users'), roles: ['admin'] },
         { path: '/settings', icon: Settings, label: t('nav.settings') },
       ],
     },

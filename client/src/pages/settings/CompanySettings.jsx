@@ -21,6 +21,8 @@ export default function CompanySettings() {
   const { t } = useTranslation();
   const dispatch = useDispatch();
   const { items: companies, loading } = useSelector((s) => s.companies);
+  const { user } = useSelector((s) => s.auth);
+  const isAdmin = user?.role === 'admin'; // only admin may add/edit/delete companies
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -112,7 +114,7 @@ export default function CompanySettings() {
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-surface-500">{t('company_settings.configured', { count: companies.length })}</p>
-        <Button onClick={openAdd}><Plus size={16} /> {t('company_settings.add_company')}</Button>
+        {isAdmin && <Button onClick={openAdd}><Plus size={16} /> {t('company_settings.add_company')}</Button>}
       </div>
 
       {/* Company Cards */}
@@ -122,7 +124,7 @@ export default function CompanySettings() {
             icon="🏢"
             title={t('company_settings.no_companies')}
             description={t('company_settings.start_creating')}
-            action={<Button onClick={openAdd}><Plus size={16} /> {t('company_settings.add_company')}</Button>}
+            action={isAdmin ? <Button onClick={openAdd}><Plus size={16} /> {t('company_settings.add_company')}</Button> : null}
           />
         </Card>
       ) : (
@@ -167,19 +169,22 @@ export default function CompanySettings() {
                   )}
                 </div>
 
-                <div className="flex gap-2">
-                  <Button variant="secondary" size="sm" onClick={() => openEdit(company)} className="flex-1">
-                    <Edit3 size={14} /> {t('common.edit')}
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => handleDelete(company)} className="text-red-500 hover:!bg-red-50">
-                    <Trash2 size={14} />
-                  </Button>
-                </div>
+                {isAdmin && (
+                  <div className="flex gap-2">
+                    <Button variant="secondary" size="sm" onClick={() => openEdit(company)} className="flex-1">
+                      <Edit3 size={14} /> {t('common.edit')}
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => handleDelete(company)} className="text-red-500 hover:!bg-red-50">
+                      <Trash2 size={14} />
+                    </Button>
+                  </div>
+                )}
               </div>
             </Card>
           ))}
 
           {/* Add Card */}
+          {isAdmin && (
           <button
             onClick={openAdd}
             className="card border-2 border-dashed border-surface-200 hover:border-brand-300 hover:bg-brand-50/30 transition-all p-6 flex flex-col items-center justify-center gap-2 min-h-[200px] cursor-pointer group"
@@ -189,6 +194,7 @@ export default function CompanySettings() {
             </div>
             <p className="text-sm font-medium text-surface-500 group-hover:text-brand-600">{t('company_settings.add_company')}</p>
           </button>
+          )}
         </div>
       )}
 

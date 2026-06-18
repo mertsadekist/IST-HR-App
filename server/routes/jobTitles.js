@@ -33,7 +33,7 @@ router.get('/', auth, async (req, res) => {
 });
 
 // POST /api/job-titles (with nested seniorities)
-router.post('/', auth, authorize('admin'), async (req, res) => {
+router.post('/', auth, authorize('admin', 'hr_manager'), async (req, res) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -71,7 +71,7 @@ router.post('/', auth, authorize('admin'), async (req, res) => {
 });
 
 // PUT /api/job-titles/:id
-router.put('/:id', auth, authorize('admin'), async (req, res) => {
+router.put('/:id', auth, authorize('admin', 'hr_manager'), async (req, res) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();

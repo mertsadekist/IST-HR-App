@@ -185,7 +185,7 @@ router.put('/:id', authorize('admin', 'hr_manager', 'hr_specialist'), validate({
   } catch (err) { console.error('PUT /attendance/:id error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
-router.delete('/:id', authorize('admin', 'hr_manager'), async (req, res) => {
+router.delete('/:id', authorize('admin'), async (req, res) => {
   try {
     const co = companyClause(req, 'company_id');
     const [result] = await pool.query('DELETE FROM attendance WHERE id = ?' + co.clause, [req.params.id, ...co.params]);

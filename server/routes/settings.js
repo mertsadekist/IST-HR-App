@@ -22,7 +22,7 @@ router.get('/ats-stages', auth, async (req, res) => {
 });
 
 // POST /api/settings/ats-stages
-router.post('/ats-stages', auth, authorize('admin'), async (req, res) => {
+router.post('/ats-stages', auth, authorize('admin', 'hr_manager'), async (req, res) => {
   try {
     const { name, color, text_color, sort_order, is_success, is_fail } = req.body;
     const [result] = await pool.query('INSERT INTO ats_stages SET ?', {
@@ -38,7 +38,7 @@ router.post('/ats-stages', auth, authorize('admin'), async (req, res) => {
 });
 
 // PUT /api/settings/ats-stages/reorder
-router.put('/ats-stages/reorder', auth, authorize('admin'), async (req, res) => {
+router.put('/ats-stages/reorder', auth, authorize('admin', 'hr_manager'), async (req, res) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -58,7 +58,7 @@ router.put('/ats-stages/reorder', auth, authorize('admin'), async (req, res) => 
 });
 
 // PUT /api/settings/ats-stages/:id
-router.put('/ats-stages/:id', auth, authorize('admin'), async (req, res) => {
+router.put('/ats-stages/:id', auth, authorize('admin', 'hr_manager'), async (req, res) => {
   try {
     await pool.query('UPDATE ats_stages SET ? WHERE id = ?', [req.body, req.params.id]);
     res.json({ success: true });
@@ -104,7 +104,7 @@ router.get('/asset-categories', auth, async (req, res) => {
 });
 
 // POST /api/settings/asset-categories
-router.post('/asset-categories', auth, authorize('admin'), async (req, res) => {
+router.post('/asset-categories', auth, authorize('admin', 'hr_manager'), async (req, res) => {
   try {
     const [result] = await pool.query('INSERT INTO asset_categories SET ?', req.body);
     await addAudit(pool, req.user, 'Settings', 'Asset Category Created', `Category "${req.body.name}" created`);
@@ -116,7 +116,7 @@ router.post('/asset-categories', auth, authorize('admin'), async (req, res) => {
 });
 
 // PUT /api/settings/asset-categories/:id
-router.put('/asset-categories/:id', auth, authorize('admin'), async (req, res) => {
+router.put('/asset-categories/:id', auth, authorize('admin', 'hr_manager'), async (req, res) => {
   try {
     await pool.query('UPDATE asset_categories SET ? WHERE id = ?', [req.body, req.params.id]);
     res.json({ success: true });
@@ -169,7 +169,7 @@ router.get('/platform-catalog', auth, async (req, res) => {
 });
 
 // POST /api/settings/platform-catalog
-router.post('/platform-catalog', auth, authorize('admin'), async (req, res) => {
+router.post('/platform-catalog', auth, authorize('admin', 'hr_manager'), async (req, res) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -196,7 +196,7 @@ router.post('/platform-catalog', auth, authorize('admin'), async (req, res) => {
 });
 
 // PUT /api/settings/platform-catalog/:id
-router.put('/platform-catalog/:id', auth, authorize('admin'), async (req, res) => {
+router.put('/platform-catalog/:id', auth, authorize('admin', 'hr_manager'), async (req, res) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -262,7 +262,7 @@ router.get('/onboarding-templates', auth, async (req, res) => {
 });
 
 // POST /api/settings/onboarding-templates
-router.post('/onboarding-templates', auth, authorize('admin'), async (req, res) => {
+router.post('/onboarding-templates', auth, authorize('admin', 'hr_manager'), async (req, res) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -290,7 +290,7 @@ router.post('/onboarding-templates', auth, authorize('admin'), async (req, res) 
 });
 
 // PUT /api/settings/onboarding-templates/:id
-router.put('/onboarding-templates/:id', auth, authorize('admin'), async (req, res) => {
+router.put('/onboarding-templates/:id', auth, authorize('admin', 'hr_manager'), async (req, res) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -357,7 +357,7 @@ router.get('/offboarding-templates', auth, async (req, res) => {
 });
 
 // POST /api/settings/offboarding-templates
-router.post('/offboarding-templates', auth, authorize('admin'), async (req, res) => {
+router.post('/offboarding-templates', auth, authorize('admin', 'hr_manager'), async (req, res) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -385,7 +385,7 @@ router.post('/offboarding-templates', auth, authorize('admin'), async (req, res)
 });
 
 // PUT /api/settings/offboarding-templates/:id
-router.put('/offboarding-templates/:id', auth, authorize('admin'), async (req, res) => {
+router.put('/offboarding-templates/:id', auth, authorize('admin', 'hr_manager'), async (req, res) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
