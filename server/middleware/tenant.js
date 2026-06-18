@@ -1,25 +1,30 @@
 /**
- * Multi-tenant isolation middleware.
+ * Company-scoping middleware (single organization, multiple companies).
  *
- * The authoritative tenant identity is the JWT `company_id`, NOT a value the
- * client sends in the query string or body. This middleware computes the
- * effective company for the request and exposes helpers so that every query
- * can be scoped consistently.
+ * This is ONE organization that owns several companies (entities). Internal
+ * staff work across ALL of them and switch between entities in the UI, so the
+ * effective company for a request is the one the client selected
+ * (`company_id` in the query/body) — the role governs *permissions*, not which
+ * company's data is visible.
  *
- *  - Platform admins (`admin`) manage all companies. They MAY narrow to a single
- *    company by passing `company_id` (query or body); otherwise the request spans
- *    all companies (req.companyId === null).
- *  - Every other role is pinned to their own `company_id` from the token. Any
- *    client-supplied `company_id` is ignored.
+ *  - Internal staff (admin / hr_manager / recruiter): see all companies; the
+ *    request is narrowed to the selected entity (`company_id`), or spans all
+ *    companies when none is given (req.companyId === null).
+ *  - Self-service users (employee): pinned to their own `company_id` from the
+ *    token; any client-supplied company_id is ignored.
+ *
+ * Tenant *management* (creating/archiving companies) remains gated by
+ * `isPlatformAdmin` regardless of the above.
  *
  * Must run AFTER the `auth` middleware (it relies on req.user).
  */
 
+// Roles that operate the HR system across every company in the organization.
+const CROSS_COMPANY_ROLES = ['admin', 'hr_manager', 'recruiter'];
+
 /**
- * A request is "platform admin" only when the user has the `admin` role AND is
- * not bound to a single company (company_id is null). A company-bound admin is
- * treated as a company-scoped administrator and CANNOT cross tenants.
- * (Until a dedicated super_admin role exists — see audit DB-003.)
+ * A request is "platform admin" (may create/archive companies) only when the
+ * user has the `admin` role AND is not bound to a single company.
  */
 export const isPlatformAdmin = (user) =>
   user?.role === 'admin' && (user.company_id === null || user.company_id === undefined);
@@ -29,16 +34,18 @@ export const tenantScope = (req, res, next) => {
     return res.status(401).json({ error: 'Authentication required' });
   }
 
-  if (isPlatformAdmin(req.user)) {
+  req.isPlatformAdmin = isPlatformAdmin(req.user);
+
+  if (CROSS_COMPANY_ROLES.includes(req.user.role)) {
     const requested = req.query.company_id ?? req.body?.company_id;
     req.companyId = requested ? Number(requested) : null; // null = all companies
-    req.isPlatformAdmin = true;
+    req.crossCompany = true;
   } else {
     if (!req.user.company_id) {
       return res.status(403).json({ error: 'No company context for this user' });
     }
     req.companyId = Number(req.user.company_id);
-    req.isPlatformAdmin = false;
+    req.crossCompany = false;
   }
 
   next();
@@ -59,11 +66,10 @@ export const companyClause = (req, column = 'company_id') => {
 
 /**
  * Resolves the company_id to persist when creating a row.
- * Non-admins always write under their own company. Admins use whatever they
- * targeted (or the explicit body value when acting on a specific company).
- * Throws-style guard: returns null if an admin gave no company for a write that needs one.
+ * Internal staff write under the company they targeted (the selected entity, or
+ * an explicit body value). Self-service users always write under their own company.
  */
 export const resolveWriteCompanyId = (req, bodyCompanyId) => {
-  if (!req.isPlatformAdmin) return req.companyId;
-  return bodyCompanyId != null ? Number(bodyCompanyId) : req.companyId;
+  if (req.crossCompany) return bodyCompanyId != null ? Number(bodyCompanyId) : req.companyId;
+  return req.companyId;
 };
