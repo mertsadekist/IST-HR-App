@@ -6,7 +6,8 @@ import Modal from '@components/ui/Modal';
 import Input from '@components/ui/Input';
 import Button from '@components/ui/Button';
 import { sendDocument } from '@api/emailApi';
-import { elementToPdfBlob, htmlToPdfBlob, downloadBlob } from '@utils/pdf';
+import { getLetterheadBytes } from '@api/companiesApi';
+import { elementToPdfBlob, htmlToPdfBlob, composeWithLetterhead, downloadBlob } from '@utils/pdf';
 
 /**
  * Reusable "Send document by email (as PDF)" modal.
@@ -32,6 +33,10 @@ export default function SendDocumentModal({
   relatedModule = 'Documents',
   relatedId = '',
   companyId = '',
+  // When the company has a letterhead, pass { companyId, type, margins } and the
+  // document is composed onto it. `getHtml`/`getElement` should then return the
+  // body content WITHOUT its own header/footer (the letterhead provides those).
+  letterhead = null,
 }) {
   const { t } = useTranslation();
   const [to, setTo] = useState(defaultTo);
@@ -50,6 +55,18 @@ export default function SendDocumentModal({
   }, [open, defaultTo, defaultToName, defaultCc, initialTitle, defaultMessage]);
 
   const buildBlob = async () => {
+    // Compose onto the company letterhead when one is configured.
+    if (letterhead?.companyId) {
+      const res = await getLetterheadBytes(letterhead.companyId);
+      return composeWithLetterhead({
+        letterheadBytes: res.data,
+        letterheadType: letterhead.type || 'pdf',
+        element: getElement ? getElement() : undefined,
+        html: getHtml ? getHtml() : undefined,
+        rtl,
+        marginsMm: letterhead.margins,
+      });
+    }
     if (getElement) {
       const el = getElement();
       if (!el) throw new Error('Document content not found');

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchCompanies } from '@store/slices/companiesSlice';
 import * as companiesApi from '@api/companiesApi';
@@ -27,6 +27,10 @@ export default function CompanySettings() {
   const [editing, setEditing] = useState(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(emptyForm());
+  // Letterhead state (admin only; per-company A4 background)
+  const [lhMargins, setLhMargins] = useState({ top: 50, bottom: 40, left: 18, right: 18 });
+  const [lhBusy, setLhBusy] = useState(false);
+  const lhInputRef = useRef(null);
 
   function emptyForm() {
     return {
@@ -53,7 +57,50 @@ export default function CompanySettings() {
       status: company.status || 'Active',
       logo: company.logo || '',
     });
+    try {
+      setLhMargins(company.letterhead_margins ? JSON.parse(company.letterhead_margins) : { top: 50, bottom: 40, left: 18, right: 18 });
+    } catch { setLhMargins({ top: 50, bottom: 40, left: 18, right: 18 }); }
     setModalOpen(true);
+  };
+
+  // Re-fetch the company being edited (after a letterhead change) and refresh list.
+  const refreshEditing = async () => {
+    if (!editing) return;
+    try {
+      const res = await companiesApi.getCompany(editing.id);
+      setEditing(res.data);
+    } catch { /* ignore */ }
+    dispatch(fetchCompanies());
+  };
+
+  const handleLhUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file || !editing) return;
+    setLhBusy(true);
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      await companiesApi.uploadLetterhead(editing.id, fd);
+      toast.success('Letterhead uploaded');
+      await refreshEditing();
+    } catch (err) { toast.error(err.response?.data?.error || 'Upload failed'); }
+    finally { setLhBusy(false); if (lhInputRef.current) lhInputRef.current.value = ''; }
+  };
+
+  const handleLhMargins = async () => {
+    if (!editing) return;
+    setLhBusy(true);
+    try { await companiesApi.saveLetterheadMargins(editing.id, lhMargins); toast.success('Margins saved'); dispatch(fetchCompanies()); }
+    catch { toast.error('Failed to save margins'); }
+    finally { setLhBusy(false); }
+  };
+
+  const handleLhRemove = async () => {
+    if (!editing) return;
+    setLhBusy(true);
+    try { await companiesApi.deleteLetterhead(editing.id); toast.success('Letterhead removed'); await refreshEditing(); }
+    catch { toast.error('Failed to remove letterhead'); }
+    finally { setLhBusy(false); }
   };
 
   const handleSave = async (e) => {
@@ -363,6 +410,39 @@ export default function CompanySettings() {
               <p className="text-xs text-surface-400">{form.short_code || 'CODE'} · {form.currency} · {form.industry || 'Industry'}</p>
             </div>
           </div>
+
+          {/* Letterhead (A4 background for generated documents) — existing company only */}
+          {editing && (
+            <div className="border-t border-surface-100 pt-4">
+              <label className="block text-sm font-medium text-surface-700 mb-2">{t('company_settings.letterhead', 'Letterhead (A4 background for documents)')}</label>
+              {editing.letterhead_path ? (
+                <div className="flex items-center gap-3 mb-3">
+                  <span className="text-xs px-2 py-1 rounded bg-emerald-50 text-emerald-700 font-medium">✓ {t('company_settings.letterhead_set', 'Letterhead set')} ({String(editing.letterhead_type || '').toUpperCase()})</span>
+                  <button type="button" onClick={handleLhRemove} className="text-xs text-red-500 hover:text-red-700">{t('company_settings.remove', 'Remove')}</button>
+                </div>
+              ) : (
+                <p className="text-xs text-surface-400 mb-3">{t('company_settings.no_letterhead', 'No letterhead uploaded yet.')}</p>
+              )}
+              <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-surface-100 hover:bg-surface-200 rounded-xl text-sm font-medium text-surface-700">
+                <Upload size={14} />
+                {editing.letterhead_path ? t('company_settings.replace_letterhead', 'Replace letterhead') : t('company_settings.upload_letterhead', 'Upload letterhead')} (PDF / PNG / JPG)
+                <input type="file" ref={lhInputRef} accept=".pdf,.png,.jpg,.jpeg" className="hidden" onChange={handleLhUpload} />
+              </label>
+
+              <div className="grid grid-cols-4 gap-2 mt-3">
+                {['top', 'bottom', 'left', 'right'].map((k) => (
+                  <div key={k}>
+                    <label className="block text-[10px] text-surface-500 uppercase mb-1">{k} (mm)</label>
+                    <input type="number" min="0" max="200" value={lhMargins[k]}
+                      onChange={(e) => setLhMargins((p) => ({ ...p, [k]: Number(e.target.value) }))}
+                      className="w-full px-2 py-1.5 text-sm bg-white border border-surface-200 rounded-lg" />
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-surface-400 mt-1">{t('company_settings.letterhead_hint', 'Content margins keep the letterhead header/footer clear. Save margins, then use “Send by Email (PDF)” on a letter to preview and fine-tune.')}</p>
+              <Button type="button" size="sm" variant="secondary" className="mt-2" onClick={handleLhMargins} loading={lhBusy}>{t('company_settings.save_margins', 'Save margins')}</Button>
+            </div>
+          )}
 
           <div className="flex justify-end gap-3 pt-2">
             <Button type="button" variant="secondary" onClick={() => setModalOpen(false)}>

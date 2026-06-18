@@ -14,4 +14,5 @@ node apply_payroll.mjs
 node apply_onboarding_v2.mjs
 node apply_notifications.mjs
 node apply_recruitment.mjs
+node apply_letterheads.mjs
 echo "✅ All migrations applied."
