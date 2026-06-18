@@ -81,10 +81,12 @@ router.post('/letters', authorize('admin', 'hr_manager'), async (req, res) => {
     const [[template]] = await pool.query('SELECT * FROM letter_templates WHERE id = ?', [template_id]);
     if (!template) return res.status(404).json({ error: 'Template not found' });
 
-    // Get employee + company (scoped to caller's company)
+    // Resolve the employee by id. Internal staff (admin/hr_manager) operate across
+    // the organization, so a letter may be issued for any employee; the letter's
+    // company is taken from the employee. Self-service users stay company-scoped.
     let employee = null;
     if (employee_id) {
-      const eco = companyClause(req, 'e.company_id');
+      const eco = req.crossCompany ? { clause: '', params: [] } : companyClause(req, 'e.company_id');
       const [[emp]] = await pool.query(`SELECT e.*, c.name as company_name, c.short_code, d.name as department_name, jt.title as job_title_name
         FROM employees e LEFT JOIN companies c ON e.company_id = c.id LEFT JOIN departments d ON e.department_id = d.id
         LEFT JOIN job_titles jt ON e.job_title_id = jt.id WHERE e.id = ?` + eco.clause, [employee_id, ...eco.params]);
@@ -93,7 +95,7 @@ router.post('/letters', authorize('admin', 'hr_manager'), async (req, res) => {
     }
 
     const recipientName = employee ? `${employee.first_name} ${employee.last_name}` : (fields_data?.employee_name || 'Employee');
-    const companyId = resolveWriteCompanyId(req, req.body.company_id) || employee?.company_id;
+    const companyId = employee?.company_id || resolveWriteCompanyId(req, req.body.company_id);
 
     // Generate content via DeepSeek AI
     let content = '';

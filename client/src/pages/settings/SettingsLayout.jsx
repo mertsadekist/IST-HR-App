@@ -2,19 +2,22 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { Building2, Network, Wrench, Box, Settings2, Mail, FileText } from 'lucide-react';
 import { cn } from '@utils/cn';
 import { useTranslation } from 'react-i18next';
+import { useSelector } from 'react-redux';
 
 export default function SettingsLayout() {
   const { t } = useTranslation();
+  const isAdmin = useSelector((s) => s.auth.user?.role) === 'admin';
 
   const settingsTabs = [
     { path: '/settings/companies', icon: Building2, label: t('nav.companies') },
     { path: '/settings/departments', icon: Network, label: t('nav.departments') },
     { path: '/settings/skills', icon: Wrench, label: t('nav.skills') },
     { path: '/settings/catalog', icon: Box, label: t('nav.asset_catalog') },
-    { path: '/settings/system', icon: Settings2, label: t('nav.system_config') },
-    { path: '/settings/email', icon: Mail, label: t('nav.email_config', 'Email') },
+    // Infrastructure / sensitive config — admin only.
+    { path: '/settings/system', icon: Settings2, label: t('nav.system_config'), adminOnly: true },
+    { path: '/settings/email', icon: Mail, label: t('nav.email_config', 'Email'), adminOnly: true },
     { path: '/settings/templates', icon: FileText, label: t('nav.templates', 'Templates') },
-  ];
+  ].filter((tab) => !tab.adminOnly || isAdmin);
 
   return (
     <div className="space-y-6 animate-fade-in">
