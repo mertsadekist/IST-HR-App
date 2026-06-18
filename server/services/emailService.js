@@ -220,16 +220,31 @@ export async function testSMTPConnection(companyId = null) {
  */
 export async function testSMTPWithConfig(config) {
   try {
+    // If the password field was left blank (kept existing), fall back to the
+    // stored, decrypted password so "Test Connection" works without retyping.
+    let { smtp_host, smtp_user, smtp_password, smtp_port } = config;
+    if (!smtp_password) {
+      const stored = await loadSMTPConfig(config.company_id || null);
+      if (stored) {
+        smtp_password = stored.smtp_password;
+        smtp_host = smtp_host || stored.smtp_host;
+        smtp_user = smtp_user || stored.smtp_user;
+        smtp_port = smtp_port || stored.smtp_port;
+      }
+    }
+    if (!smtp_password) {
+      return { success: false, message: 'SMTP password is required. Please enter the email account password.' };
+    }
     // Same port-derived TLS logic as getTransporter: implicit TLS only on 465,
     // STARTTLS on 587/25 — avoids the "wrong version number" SSL error.
-    const port = Number(config.smtp_port) || 587;
+    const port = Number(smtp_port) || 587;
     const secure = port === 465;
     const transporter = nodemailer.createTransport({
-      host: config.smtp_host,
+      host: smtp_host,
       port,
       secure,
       requireTLS: !secure,
-      auth: { user: config.smtp_user, pass: config.smtp_password },
+      auth: { user: smtp_user, pass: smtp_password },
       tls: { rejectUnauthorized: SMTP_REJECT_UNAUTHORIZED },
     });
     await transporter.verify();
@@ -294,8 +309,12 @@ export async function saveEmailConfig(config, companyId = null) {
  */
 export async function getEmailConfig(companyId = null) {
   const [[config]] = await pool.query(
-    'SELECT id, company_id, smtp_host, smtp_port, smtp_secure, smtp_user, from_name, from_email, reply_to, enabled FROM email_config WHERE company_id <=> ?',
+    `SELECT id, company_id, smtp_host, smtp_port, smtp_secure, smtp_user,
+            from_name, from_email, reply_to, enabled,
+            (smtp_password_encrypted IS NOT NULL) AS has_password
+       FROM email_config WHERE company_id <=> ?`,
     [companyId]
   );
+  if (config) config.has_password = !!config.has_password;
   return config || null;
 }

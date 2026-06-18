@@ -18,7 +18,7 @@ export default function EmailSettings() {
     smtp_port: 587,
     smtp_secure: true,
     smtp_user: '',
-    smtp_pass: '',
+    smtp_password: '',
     from_name: '',
     from_email: '',
     reply_to: '',
@@ -38,7 +38,7 @@ export default function EmailSettings() {
           smtp_port: data.smtp_port || 587,
           smtp_secure: !!data.smtp_secure,
           smtp_user: data.smtp_user || '',
-          smtp_pass: '',
+          smtp_password: '',
           from_name: data.from_name || '',
           from_email: data.from_email || '',
           reply_to: data.reply_to || '',
@@ -76,7 +76,7 @@ export default function EmailSettings() {
     try {
       await emailApi.saveEmailConfig(form);
       toast.success(t('email_settings.saved', 'Email configuration saved'));
-      setHasPassword(!!form.smtp_pass || hasPassword);
+      setHasPassword(!!form.smtp_password || hasPassword);
       setTestResult(null);
     } catch (err) {
       toast.error(err.response?.data?.error || t('email_settings.save_failed', 'Failed to save configuration'));
@@ -176,11 +176,11 @@ export default function EmailSettings() {
               <input
                 type="password"
                 placeholder={hasPassword ? '(saved)' : t('email_settings.enter_password', 'Enter password')}
-                value={form.smtp_pass}
-                onChange={(e) => update('smtp_pass', e.target.value)}
+                value={form.smtp_password}
+                onChange={(e) => update('smtp_password', e.target.value)}
                 className="w-full px-3 py-2.5 text-sm bg-white border border-surface-200 rounded-xl text-surface-900 placeholder:text-surface-400 input-focus transition-all duration-200"
               />
-              {hasPassword && !form.smtp_pass && (
+              {hasPassword && !form.smtp_password && (
                 <p className="text-[10px] text-surface-400">{t('email_settings.password_saved_hint', 'Leave blank to keep existing password')}</p>
               )}
             </div>
