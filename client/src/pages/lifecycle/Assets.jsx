@@ -13,11 +13,12 @@ import Select from '@components/ui/Select';
 import EmptyState from '@components/ui/EmptyState';
 import { confirmDelete } from '@utils/confirm';
 import { toast } from 'react-toastify';
-import { Plus, Edit3, Trash2, Laptop, RotateCcw, Search, Monitor, Globe, Wrench, Printer, Upload, CheckCircle2, FileCheck, Package, Eye, EyeOff, Link2, Key, Copy } from 'lucide-react';
+import { Plus, Edit3, Trash2, Laptop, RotateCcw, Search, Monitor, Globe, Wrench, Printer, Upload, CheckCircle2, FileCheck, Package, Eye, EyeOff, Link2, Key, Copy, Send } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import HandoverReceipt from './components/HandoverReceipt';
 import EmailButton from '@components/email/EmailButton';
+import SendDocumentModal from '@components/email/SendDocumentModal';
 
 const typeIcons = { Hardware: Monitor, Account: Globe, Software: Wrench };
 const statusColors = { Active: 'active', Returned: 'success', Deactivated: 'warning', Missing: 'danger' };
@@ -48,6 +49,7 @@ export default function Assets() {
 
   // Print & Upload Receipt
   const [receiptAsset, setReceiptAsset] = useState(null);
+  const [sendReceiptOpen, setSendReceiptOpen] = useState(false);
   const [uploadReceiptAsset, setUploadReceiptAsset] = useState(null);
   const [uploading, setUploading] = useState(false);
   const receiptRef = useRef(null);
@@ -367,6 +369,9 @@ export default function Assets() {
                           <button onClick={() => handlePrint(a)} className="p-1.5 text-surface-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors" title="Print Handover Receipt">
                             <Printer size={14} />
                           </button>
+                          <button onClick={() => { setReceiptAsset(a); setSendReceiptOpen(true); }} className="p-1.5 text-surface-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors" title={t('send_doc.send_pdf', 'Send receipt by email (PDF)')}>
+                            <Send size={14} />
+                          </button>
                           <button onClick={() => { setUploadReceiptAsset(a); setTimeout(() => uploadInputRef.current?.click(), 100); }} className="p-1.5 text-surface-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors" title="Upload Signed Receipt">
                             <Upload size={14} />
                           </button>
@@ -393,12 +398,25 @@ export default function Assets() {
         onChange={handleUploadReceipt}
       />
 
-      {/* Hidden receipt render area for printing */}
+      {/* Hidden receipt render area for printing / PDF */}
       <div style={{ position: 'fixed', left: '-9999px', top: 0, width: '800px' }}>
         {receiptAsset && (
           <HandoverReceipt ref={receiptRef} asset={receiptAsset} company={currentCompany} />
         )}
       </div>
+
+      {/* Send handover receipt by email (PDF) */}
+      <SendDocumentModal
+        open={sendReceiptOpen}
+        onClose={() => setSendReceiptOpen(false)}
+        title={receiptAsset ? `Asset Handover Receipt — ${receiptAsset.first_name} ${receiptAsset.last_name}` : 'Asset Handover Receipt'}
+        getElement={() => receiptRef.current}
+        defaultTo={receiptAsset?.email || ''}
+        defaultToName={receiptAsset ? `${receiptAsset.first_name} ${receiptAsset.last_name}` : ''}
+        relatedModule="Assets"
+        relatedId={receiptAsset?.id || ''}
+        companyId={receiptAsset?.company_id || ''}
+      />
 
       {/* Assign/Edit Modal */}
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? t('lifecycle.edit_asset') : t('lifecycle.assign_asset')} size="xl">

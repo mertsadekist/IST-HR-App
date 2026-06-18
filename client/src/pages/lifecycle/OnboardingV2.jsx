@@ -16,6 +16,7 @@ import {
   ShieldCheck, Sparkles, CircleDot, Ban, ArrowRight, Eye, Mail,
 } from 'lucide-react';
 import dayjs from 'dayjs';
+import SendDocumentModal from '@components/email/SendDocumentModal';
 
 const STAGES = [
   'DRAFT', 'CV_UPLOADED', 'UNDER_HR_REVIEW', 'HR_APPROVED', 'OFFER_SENT', 'OFFER_ACCEPTED',
@@ -378,6 +379,7 @@ function OffersPanel({ detail, reload }) {
   const [form, setForm] = useState({ employment_type: 'Full-time' });
   const [saving, setSaving] = useState(false);
   const [preview, setPreview] = useState(null); // { loading, subject, html, offerNumber }
+  const [sendDoc, setSendDoc] = useState(null); // { html, title }
   const offers = detail.offers || [];
   const last = offers[offers.length - 1];
   const hasOpenOffer = offers.some((o) => ['Draft', 'Sent', 'Accepted'].includes(o.status));
@@ -502,9 +504,27 @@ function OffersPanel({ detail, reload }) {
             <div className="border border-surface-100 rounded-xl overflow-hidden">
               <iframe title="offer-email" srcDoc={preview.html} className="w-full" style={{ height: '60vh', border: 0 }} sandbox="" />
             </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button size="sm" variant="secondary" onClick={() => { setSendDoc({ html: preview.html, title: `Employment Offer ${preview.offerNumber || ''}`.trim() }); }}>
+                <Send size={13} /> Send as PDF
+              </Button>
+            </div>
           </div>
         ) : null}
       </Modal>
+
+      {/* Send offer as PDF (cover email + attachment) */}
+      <SendDocumentModal
+        open={!!sendDoc}
+        onClose={() => setSendDoc(null)}
+        title={sendDoc?.title || 'Employment Offer'}
+        getHtml={() => sendDoc?.html || ''}
+        defaultTo={detail.email || detail.candidate_email || ''}
+        defaultToName={detail.candidate_name || ''}
+        relatedModule="Onboarding"
+        relatedId={detail.id || ''}
+        companyId={detail.company_id || ''}
+      />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSelector } from 'react-redux';
 import * as reportsApi from '@api/reportsApi';
 import Card from '@components/ui/Card';
@@ -6,9 +6,10 @@ import Button from '@components/ui/Button';
 import Badge from '@components/ui/Badge';
 import Select from '@components/ui/Select';
 import { toast } from 'react-toastify';
-import { BarChart3, Users, Clock, UserCheck, RefreshCw, TrendingUp } from 'lucide-react';
+import { BarChart3, Users, Clock, UserCheck, RefreshCw, TrendingUp, Send } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
+import SendDocumentModal from '@components/email/SendDocumentModal';
 
 export default function Reports() {
   const { t } = useTranslation();
@@ -19,6 +20,8 @@ export default function Reports() {
   const [journeyData, setJourneyData] = useState([]);
   const [employeeData, setEmployeeData] = useState(null);
   const [onboardingData, setOnboardingData] = useState(null);
+  const [sendOpen, setSendOpen] = useState(false);
+  const reportRef = useRef(null);
 
   useEffect(() => { loadReport(); }, [tab, currentCompanyId]);
 
@@ -50,7 +53,10 @@ export default function Reports() {
       <div className="flex items-center justify-between">
         <div><h1 className="text-2xl font-bold text-surface-900">{t('reports.title')}</h1>
           <p className="text-surface-500 mt-0.5 text-sm">{t('reports.subtitle')}</p></div>
-        <Button variant="secondary" onClick={loadReport}><RefreshCw size={14} /> {t('reports.refresh')}</Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={loadReport}><RefreshCw size={14} /> {t('reports.refresh')}</Button>
+          <Button onClick={() => setSendOpen(true)}><Send size={14} /> {t('send_doc.send_pdf', 'Send by Email (PDF)')}</Button>
+        </div>
       </div>
 
       <div className="flex gap-1 bg-surface-50 p-1 rounded-xl w-fit">
@@ -62,6 +68,7 @@ export default function Reports() {
         ))}
       </div>
 
+      <div ref={reportRef} className="space-y-6 bg-white">
       {loading ? (
         <Card className="!p-6 animate-pulse"><div className="h-6 bg-surface-200 rounded w-1/3 mb-4" /><div className="h-4 bg-surface-100 rounded w-1/2 mb-2" /><div className="h-4 bg-surface-100 rounded w-2/3" /></Card>
       ) : (
@@ -236,6 +243,17 @@ export default function Reports() {
           )}
         </>
       )}
+      </div>
+
+      {/* Send report by email (PDF) */}
+      <SendDocumentModal
+        open={sendOpen}
+        onClose={() => setSendOpen(false)}
+        title={`${tabs.find((x) => x.key === tab)?.label || 'Report'} — ${dayjs().format('MMM YYYY')}`}
+        getElement={() => reportRef.current}
+        relatedModule="Reports"
+        companyId={currentCompanyId || ''}
+      />
     </div>
   );
 }
