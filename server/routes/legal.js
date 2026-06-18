@@ -96,7 +96,18 @@ router.post('/letters', authorize('admin', 'hr_manager'), async (req, res) => {
     }
 
     const recipientName = employee ? `${employee.first_name} ${employee.last_name}` : (fields_data?.employee_name || 'Employee');
-    const companyId = employee?.company_id || resolveWriteCompanyId(req, req.body.company_id);
+
+    // The letter is ISSUED BY the company the user selected on the form; fall back
+    // to the employee's own company when none was chosen. This drives the letter's
+    // company_id, the AI content, and the letterhead — so picking IST Real Estate
+    // produces an IST Real Estate letter even for a cross-company employee.
+    const selectedCompanyId = req.body.company_id ? Number(req.body.company_id) : null;
+    const companyId = selectedCompanyId || employee?.company_id || null;
+    let letterCompanyName = employee?.company_name || fields_data?.company_name;
+    if (companyId && companyId !== employee?.company_id) {
+      const [[co]] = await pool.query('SELECT name FROM companies WHERE id = ?', [companyId]);
+      if (co?.name) letterCompanyName = co.name;
+    }
 
     // Generate content via DeepSeek AI
     let content = '';
@@ -106,10 +117,10 @@ router.post('/letters', authorize('admin', 'hr_manager'), async (req, res) => {
         employee_name: recipientName,
         job_title: employee?.job_title_name || fields_data?.job_title,
         department: employee?.department_name || fields_data?.department,
-        company_name: employee?.company_name || fields_data?.company_name,
+        company_name: letterCompanyName,
         start_date: employee?.start_date,
         salary: employee?.full_salary,
-      }, { name: employee?.company_name || 'Company' });
+      }, { name: letterCompanyName || 'Company' });
       content = aiResult;
     } catch (aiErr) {
       console.error('AI generation failed, using fallback:', aiErr.message);
