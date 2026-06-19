@@ -71,7 +71,25 @@
     "previous": "السابق",
     "print": "طباعة",
     "refresh": "تحديث",
-    "select": "اختر..."
+    "select": "اختر...",
+    "failed_load": "فشل التحميل",
+    "saved": "تم الحفظ",
+    "created": "تم الإنشاء",
+    "updated": "تم التحديث",
+    "deleted": "تم الحذف",
+    "save_failed": "فشل الحفظ",
+    "delete_failed": "فشل الحذف",
+    "operation_failed": "فشلت العملية",
+    "required_fields": "يرجى تعبئة كل الحقول المطلوبة",
+    "actions": "إجراءات",
+    "status": "الحالة",
+    "date": "التاريخ",
+    "notes": "ملاحظات",
+    "approve": "موافقة",
+    "reject": "رفض",
+    "submit": "إرسال",
+    "search": "بحث...",
+    "view": "عرض"
   },
   "dashboard": {
     "title": "لوحة القيادة",
@@ -1001,5 +1019,14 @@
     "title_required": "العنوان مطلوب",
     "to": "إلى",
     "to_required": "بريد المستلِم مطلوب"
+  },
+  "login": {
+    "subtitle": "بوابة إدارة الموارد البشرية",
+    "username": "اسم المستخدم",
+    "username_ph": "أدخل اسم المستخدم",
+    "password": "كلمة المرور",
+    "password_ph": "أدخل كلمة المرور",
+    "sign_in": "تسجيل الدخول",
+    "footer": "مجموعة IST · نظام إدارة الموارد البشرية"
   }
 }

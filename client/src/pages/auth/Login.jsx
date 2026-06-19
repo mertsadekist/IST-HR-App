@@ -3,9 +3,11 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { loginUser, clearError } from '@store/slices/authSlice';
 import { Lock, User, Eye, EyeOff, Sparkles } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import Button from '@components/ui/Button';
 
 export default function Login() {
+  const { t } = useTranslation();
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { loginLoading, error } = useSelector((state) => state.auth);
@@ -40,7 +42,7 @@ export default function Login() {
               <Sparkles className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-2xl font-bold text-surface-900">IST HR System</h1>
-            <p className="text-surface-500 mt-1 text-sm">Human Resource Management Portal</p>
+            <p className="text-surface-500 mt-1 text-sm">{t('login.subtitle')}</p>
           </div>
 
           {/* Error */}
@@ -53,14 +55,14 @@ export default function Login() {
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-surface-700">Username</label>
+              <label className="text-sm font-medium text-surface-700">{t('login.username')}</label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400" size={18} />
                 <input
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Enter your username"
+                  placeholder={t('login.username_ph')}
                   autoComplete="username"
                   required
                   autoFocus
@@ -70,14 +72,14 @@ export default function Login() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-surface-700">Password</label>
+              <label className="text-sm font-medium text-surface-700">{t('login.password')}</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400" size={18} />
                 <input
                   type={showPass ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
+                  placeholder={t('login.password_ph')}
                   autoComplete="current-password"
                   required
                   className="w-full pl-10 pr-12 py-3 text-sm bg-white/80 border border-surface-200 rounded-xl input-focus transition-all"
@@ -98,12 +100,12 @@ export default function Login() {
               className="w-full py-3 text-base font-semibold"
               size="lg"
             >
-              Sign In
+              {t('login.sign_in')}
             </Button>
           </form>
 
           <p className="text-center text-xs text-surface-400 mt-6">
-            © {new Date().getFullYear()} IST Group · HR Management System
+            © {new Date().getFullYear()} {t('login.footer')}
           </p>
         </div>
       </div>

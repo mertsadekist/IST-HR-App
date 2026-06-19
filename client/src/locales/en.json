@@ -71,7 +71,25 @@
     "previous": "Previous",
     "print": "Print",
     "refresh": "Refresh",
-    "select": "Select..."
+    "select": "Select...",
+    "failed_load": "Failed to load",
+    "saved": "Saved",
+    "created": "Created",
+    "updated": "Updated",
+    "deleted": "Deleted",
+    "save_failed": "Failed to save",
+    "delete_failed": "Delete failed",
+    "operation_failed": "Operation failed",
+    "required_fields": "Please fill all required fields",
+    "actions": "Actions",
+    "status": "Status",
+    "date": "Date",
+    "notes": "Notes",
+    "approve": "Approve",
+    "reject": "Reject",
+    "submit": "Submit",
+    "search": "Search...",
+    "view": "View"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -1001,5 +1019,14 @@
     "title_required": "Title is required",
     "to": "To",
     "to_required": "Recipient email is required"
+  },
+  "login": {
+    "subtitle": "Human Resource Management Portal",
+    "username": "Username",
+    "username_ph": "Enter your username",
+    "password": "Password",
+    "password_ph": "Enter your password",
+    "sign_in": "Sign In",
+    "footer": "IST Group · HR Management System"
   }
 }
