@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
+import { useTranslation } from 'react-i18next';
 import * as payApi from '@api/payrollApi';
 import Card from '@components/ui/Card';
 import Button from '@components/ui/Button';
@@ -13,8 +14,10 @@ import dayjs from 'dayjs';
 
 const apiErr = (e, f) => e?.response?.data?.error || (e?.response?.data?.errors?.[0]?.message) || f;
 const statusVariant = (s) => ({ Draft: 'info', Approved: 'warning', Paid: 'success', Cancelled: 'danger' }[s] || 'info');
+const stLabel = (t, s) => t(`payroll_runs.st_${String(s || '').toLowerCase()}`, s);
 
 export default function PayrollRuns() {
+  const { t } = useTranslation();
   const { user } = useSelector((s) => s.auth);
   const { currentCompanyId } = useSelector((s) => s.entity);
   const isAdmin = user?.role === 'admin';
@@ -28,7 +31,7 @@ export default function PayrollRuns() {
 
   const load = async () => {
     setLoading(true);
-    try { const { data } = await payApi.getRuns(); setRuns(data); } catch { toast.error('Failed to load payroll runs'); }
+    try { const { data } = await payApi.getRuns(); setRuns(data); } catch { toast.error(t('common.failed_load')); }
     finally { setLoading(false); }
     try { const { data } = await payApi.myPayslips({}); setMyslips(data); } catch { /* ignore */ }
   };
@@ -36,26 +39,26 @@ export default function PayrollRuns() {
 
   const generate = async () => {
     setGenerating(true);
-    try { const { data } = await payApi.generateRun({ period }); toast.success(`Run generated: ${data.employee_count} employee(s), net ${data.total_net}`); load(); }
-    catch (e) { toast.error(apiErr(e, 'Generate failed')); } finally { setGenerating(false); }
+    try { const { data } = await payApi.generateRun({ period }); toast.success(t('payroll_runs.run_generated', { count: data.employee_count, net: data.total_net })); load(); }
+    catch (e) { toast.error(apiErr(e, t('payroll_runs.generate_failed'))); } finally { setGenerating(false); }
   };
-  const openDetail = async (r) => { setOpenRun(r); try { const { data } = await payApi.getRun(r.id); setDetail(data); } catch { toast.error('Failed to load run'); } };
+  const openDetail = async (r) => { setOpenRun(r); try { const { data } = await payApi.getRun(r.id); setDetail(data); } catch { toast.error(t('payroll_runs.load_run_failed')); } };
   const reloadDetail = async () => { if (openRun) { const { data } = await payApi.getRun(openRun.id); setDetail(data); } load(); };
 
-  const approve = async (r) => { try { await payApi.approveRun(r.id); toast.success('Run approved'); reloadDetail(); } catch (e) { toast.error(apiErr(e, 'Failed')); } };
-  const pay = async (r) => { try { await payApi.markPaid(r.id); toast.success('Marked paid'); reloadDetail(); } catch (e) { toast.error(apiErr(e, 'Failed')); } };
-  const del = async (r) => { const c = await confirmDelete(`payroll run ${r.period}`); if (!c.isConfirmed) return; try { await payApi.deleteRun(r.id); toast.success('Deleted'); setOpenRun(null); setDetail(null); load(); } catch (e) { toast.error(apiErr(e, 'Failed')); } };
+  const approve = async (r) => { try { await payApi.approveRun(r.id); toast.success(t('payroll_runs.approved')); reloadDetail(); } catch (e) { toast.error(apiErr(e, t('common.operation_failed'))); } };
+  const pay = async (r) => { try { await payApi.markPaid(r.id); toast.success(t('payroll_runs.marked_paid')); reloadDetail(); } catch (e) { toast.error(apiErr(e, t('common.operation_failed'))); } };
+  const del = async (r) => { const c = await confirmDelete(`payroll run ${r.period}`); if (!c.isConfirmed) return; try { await payApi.deleteRun(r.id); toast.success(t('common.deleted')); setOpenRun(null); setDetail(null); load(); } catch (e) { toast.error(apiErr(e, t('common.operation_failed'))); } };
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-surface-900">Payroll Runs</h1>
-          <p className="text-surface-500 mt-0.5 text-sm">Generate monthly payroll (pulls unpaid leave + absence deductions), approve and pay</p>
+          <h1 className="text-2xl font-bold text-surface-900">{t('payroll_runs.title')}</h1>
+          <p className="text-surface-500 mt-0.5 text-sm">{t('payroll_runs.subtitle')}</p>
         </div>
         <div className="flex items-center gap-2">
           <input type="month" value={period} onChange={(e) => setPeriod(e.target.value)} className="text-sm border border-surface-200 rounded-lg px-3 py-2" />
-          <Button onClick={generate} loading={generating}><Plus size={16} /> Generate run</Button>
+          <Button onClick={generate} loading={generating}><Plus size={16} /> {t('payroll_runs.generate')}</Button>
           <Button variant="secondary" onClick={load}><RefreshCw size={14} /></Button>
         </div>
       </div>
@@ -63,7 +66,7 @@ export default function PayrollRuns() {
       {loading ? (
         <div className="card p-6 animate-pulse"><div className="h-4 bg-surface-200 rounded w-1/3" /></div>
       ) : runs.length === 0 ? (
-        <Card><EmptyState icon={<Banknote className="w-6 h-6 text-surface-400" />} title="No payroll runs" description="Pick a month and click Generate run." /></Card>
+        <Card><EmptyState icon={<Banknote className="w-6 h-6 text-surface-400" />} title={t('payroll_runs.no_runs')} description={t('payroll_runs.no_runs_desc')} /></Card>
       ) : (
         <div className="space-y-2">
           {runs.map((r) => (
@@ -71,10 +74,10 @@ export default function PayrollRuns() {
               <div className="flex items-center gap-4 flex-wrap">
                 <div className="w-10 h-10 rounded-xl bg-brand-100 flex items-center justify-center text-brand-700"><Banknote size={18} /></div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2"><span className="font-semibold text-surface-900">{dayjs(r.period + '-01').format('MMMM YYYY')}</span><Badge variant={statusVariant(r.status)}>{r.status}</Badge></div>
-                  <p className="text-xs text-surface-400 mt-0.5">{r.employee_count} employees · gross {r.total_gross} · deductions {r.total_deductions}</p>
+                  <div className="flex items-center gap-2"><span className="font-semibold text-surface-900">{dayjs(r.period + '-01').format('MMMM YYYY')}</span><Badge variant={statusVariant(r.status)}>{stLabel(t, r.status)}</Badge></div>
+                  <p className="text-xs text-surface-400 mt-0.5">{r.employee_count} {t('payroll_runs.employees')} · {t('payroll_runs.gross')} {r.total_gross} · {t('payroll_runs.deductions')} {r.total_deductions}</p>
                 </div>
-                <div className="text-right"><p className="text-xs text-surface-400">Net total</p><p className="font-bold text-brand-600">{r.total_net}</p></div>
+                <div className="text-right"><p className="text-xs text-surface-400">{t('payroll_runs.net_total')}</p><p className="font-bold text-brand-600">{r.total_net}</p></div>
               </div>
             </Card>
           ))}
@@ -84,34 +87,34 @@ export default function PayrollRuns() {
       {/* My payslips */}
       {myslips.length > 0 && (
         <Card className="!p-0 overflow-hidden">
-          <div className="p-4 border-b border-surface-100"><h3 className="font-semibold text-surface-800">My Payslips</h3></div>
+          <div className="p-4 border-b border-surface-100"><h3 className="font-semibold text-surface-800">{t('payroll_runs.my_payslips')}</h3></div>
           <table className="w-full text-sm">
-            <thead className="bg-surface-50 text-surface-500 text-xs"><tr><th className="text-left p-3">Period</th><th className="p-3">Gross</th><th className="p-3">Deductions</th><th className="p-3">Net</th><th className="p-3">Status</th></tr></thead>
+            <thead className="bg-surface-50 text-surface-500 text-xs"><tr><th className="text-left p-3">{t('payroll_runs.th_period')}</th><th className="p-3">{t('payroll_runs.th_gross')}</th><th className="p-3">{t('payroll_runs.th_deductions')}</th><th className="p-3">{t('payroll_runs.th_net')}</th><th className="p-3">{t('payroll_runs.th_status')}</th></tr></thead>
             <tbody>{myslips.map((s) => (
-              <tr key={s.id} className="border-t border-surface-50"><td className="p-3">{dayjs(s.period + '-01').format('MMM YYYY')}</td><td className="p-3 text-center">{s.gross}</td><td className="p-3 text-center">{s.deductions}</td><td className="p-3 text-center font-semibold text-brand-600">{s.net}</td><td className="p-3 text-center"><Badge variant={statusVariant(s.run_status)} className="text-[10px]">{s.run_status}</Badge></td></tr>
+              <tr key={s.id} className="border-t border-surface-50"><td className="p-3">{dayjs(s.period + '-01').format('MMM YYYY')}</td><td className="p-3 text-center">{s.gross}</td><td className="p-3 text-center">{s.deductions}</td><td className="p-3 text-center font-semibold text-brand-600">{s.net}</td><td className="p-3 text-center"><Badge variant={statusVariant(s.run_status)} className="text-[10px]">{stLabel(t, s.run_status)}</Badge></td></tr>
             ))}</tbody>
           </table>
         </Card>
       )}
 
-      <Modal open={!!openRun} onClose={() => { setOpenRun(null); setDetail(null); }} title={detail ? `Payroll — ${dayjs(detail.period + '-01').format('MMMM YYYY')}` : 'Loading'} size="xl">
+      <Modal open={!!openRun} onClose={() => { setOpenRun(null); setDetail(null); }} title={detail ? t('payroll_runs.modal_title', { period: dayjs(detail.period + '-01').format('MMMM YYYY') }) : t('payroll_runs.loading')} size="xl">
         {!detail ? <div className="flex justify-center py-10"><Loader2 className="w-7 h-7 text-brand-600 animate-spin" /></div> : (
           <div className="space-y-4">
             <div className="flex items-center gap-3 flex-wrap p-3 bg-surface-50 rounded-xl">
-              <Badge variant={statusVariant(detail.status)}>{detail.status}</Badge>
-              <span className="text-sm text-surface-600">{detail.employee_count} employees</span>
-              <span className="text-sm text-surface-600">Net: <b className="text-brand-600">{detail.total_net}</b></span>
+              <Badge variant={statusVariant(detail.status)}>{stLabel(t, detail.status)}</Badge>
+              <span className="text-sm text-surface-600">{detail.employee_count} {t('payroll_runs.employees')}</span>
+              <span className="text-sm text-surface-600">{t('payroll_runs.net')}: <b className="text-brand-600">{detail.total_net}</b></span>
               <div className="ml-auto flex gap-2">
-                {detail.status === 'Draft' && <Button size="sm" onClick={() => approve(detail)}><CheckCircle2 size={14} /> Approve</Button>}
-                {detail.status === 'Approved' && isAdmin && <Button size="sm" onClick={() => pay(detail)}>Mark paid</Button>}
+                {detail.status === 'Draft' && <Button size="sm" onClick={() => approve(detail)}><CheckCircle2 size={14} /> {t('payroll_runs.approve')}</Button>}
+                {detail.status === 'Approved' && isAdmin && <Button size="sm" onClick={() => pay(detail)}>{t('payroll_runs.mark_paid')}</Button>}
                 {detail.status === 'Draft' && isAdmin && <Button size="sm" variant="danger" onClick={() => del(detail)}><Trash2 size={14} /></Button>}
               </div>
             </div>
             <Card className="!p-0 overflow-hidden">
               <table className="w-full text-sm">
                 <thead className="bg-surface-50 text-surface-500 text-xs"><tr>
-                  <th className="text-left p-3">Employee</th><th className="p-3">Basic</th><th className="p-3">Allowances</th><th className="p-3">Gross</th>
-                  <th className="p-3">Unpaid</th><th className="p-3">Absence</th><th className="p-3">Deductions</th><th className="p-3">Net</th></tr></thead>
+                  <th className="text-left p-3">{t('payroll_runs.th_employee')}</th><th className="p-3">{t('payroll_runs.th_basic')}</th><th className="p-3">{t('payroll_runs.th_allowances')}</th><th className="p-3">{t('payroll_runs.th_gross')}</th>
+                  <th className="p-3">{t('payroll_runs.th_unpaid')}</th><th className="p-3">{t('payroll_runs.th_absence')}</th><th className="p-3">{t('payroll_runs.th_deductions')}</th><th className="p-3">{t('payroll_runs.th_net')}</th></tr></thead>
                 <tbody>{(detail.items || []).map((it) => (
                   <tr key={it.id} className="border-t border-surface-50">
                     <td className="p-3">{it.first_name} {it.last_name}</td>
