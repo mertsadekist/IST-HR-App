@@ -6,10 +6,13 @@ import Button from '@components/ui/Button';
 import Badge from '@components/ui/Badge';
 import Select from '@components/ui/Select';
 import { toast } from 'react-toastify';
-import { BarChart3, Users, Clock, UserCheck, RefreshCw, TrendingUp, Send } from 'lucide-react';
+import { BarChart3, Users, Clock, UserCheck, RefreshCw, TrendingUp, Send, Printer } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import SendDocumentModal from '@components/email/SendDocumentModal';
+import { getCompany, getLetterheadBytes } from '@api/companiesApi';
+import { companyLetterhead } from '@utils/letterhead';
+import { composeWithLetterhead, elementToPdfBlob, downloadBlob } from '@utils/pdf';
 
 export default function Reports() {
   const { t } = useTranslation();
@@ -21,9 +24,37 @@ export default function Reports() {
   const [employeeData, setEmployeeData] = useState(null);
   const [onboardingData, setOnboardingData] = useState(null);
   const [sendOpen, setSendOpen] = useState(false);
+  const [printing, setPrinting] = useState(false);
   const reportRef = useRef(null);
 
   useEffect(() => { loadReport(); }, [tab, currentCompanyId]);
+
+  // Print / download the current report as a PDF — composed onto the selected
+  // company's letterhead when one is set. Opens in a new tab (print or save there).
+  const handlePrint = async () => {
+    const win = window.open('', '_blank'); // sync open keeps the user gesture
+    setPrinting(true);
+    try {
+      let lh = null;
+      if (currentCompanyId) {
+        try { const { data } = await getCompany(currentCompanyId); lh = companyLetterhead(data); } catch { /* no letterhead */ }
+      }
+      const el = reportRef.current;
+      if (!el) throw new Error('Report not ready');
+      let blob;
+      if (lh) {
+        const res = await getLetterheadBytes(lh.companyId);
+        blob = await composeWithLetterhead({ letterheadBytes: res.data, letterheadType: lh.type, element: el, marginsMm: lh.margins });
+      } else {
+        blob = await elementToPdfBlob(el);
+      }
+      const url = URL.createObjectURL(blob);
+      if (win) win.location.href = url; else downloadBlob(blob, `report-${tab}.pdf`);
+    } catch (err) {
+      if (win) win.close();
+      toast.error(err.message || 'Failed to generate PDF');
+    } finally { setPrinting(false); }
+  };
 
   const loadReport = async () => {
     setLoading(true);
@@ -55,6 +86,7 @@ export default function Reports() {
           <p className="text-surface-500 mt-0.5 text-sm">{t('reports.subtitle')}</p></div>
         <div className="flex gap-2">
           <Button variant="secondary" onClick={loadReport}><RefreshCw size={14} /> {t('reports.refresh')}</Button>
+          <Button variant="secondary" onClick={handlePrint} loading={printing}><Printer size={14} /> {t('reports.print_pdf', 'Print / Download (PDF)')}</Button>
           <Button onClick={() => setSendOpen(true)}><Send size={14} /> {t('send_doc.send_pdf', 'Send by Email (PDF)')}</Button>
         </div>
       </div>
