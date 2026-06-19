@@ -253,6 +253,7 @@ export default function Reports() {
         getElement={() => reportRef.current}
         relatedModule="Reports"
         companyId={currentCompanyId || ''}
+        letterheadCompanyId={currentCompanyId || null}
       />
     </div>
   );

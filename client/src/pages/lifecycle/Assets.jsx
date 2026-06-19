@@ -19,6 +19,9 @@ import dayjs from 'dayjs';
 import HandoverReceipt from './components/HandoverReceipt';
 import EmailButton from '@components/email/EmailButton';
 import SendDocumentModal from '@components/email/SendDocumentModal';
+import { getCompany, getLetterheadBytes } from '@api/companiesApi';
+import { companyLetterhead } from '@utils/letterhead';
+import { composeWithLetterhead, elementToPdfBlob, downloadBlob } from '@utils/pdf';
 
 const typeIcons = { Hardware: Monitor, Account: Globe, Software: Wrench };
 const statusColors = { Active: 'active', Returned: 'success', Deactivated: 'warning', Missing: 'danger' };
@@ -49,6 +52,7 @@ export default function Assets() {
 
   // Print & Upload Receipt
   const [receiptAsset, setReceiptAsset] = useState(null);
+  const [receiptLh, setReceiptLh] = useState(null); // resolved company letterhead config
   const [sendReceiptOpen, setSendReceiptOpen] = useState(false);
   const [uploadReceiptAsset, setUploadReceiptAsset] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -192,33 +196,37 @@ export default function Assets() {
     finally { setRevealingId(null); }
   };
 
-  // Print handover receipt
-  const handlePrint = (asset) => {
+  // Resolve a company's letterhead config (fresh from the server).
+  const resolveLh = async (companyId) => {
+    if (!companyId) return null;
+    try { const { data } = await getCompany(companyId); return companyLetterhead(data); }
+    catch { return null; }
+  };
+
+  // Print handover receipt as a PDF — composed onto the company letterhead when set.
+  const handlePrint = async (asset) => {
+    const win = window.open('', '_blank'); // sync open to keep the user gesture
+    const lh = await resolveLh(asset.company_id);
     setReceiptAsset(asset);
-    setTimeout(() => {
-      const printContent = receiptRef.current;
-      if (!printContent) return;
-      const printWindow = window.open('', '_blank', 'width=900,height=700');
-      printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Asset Handover Receipt - ${asset.name}</title>
-          <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { font-family: Arial, sans-serif; }
-            @media print {
-              body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            }
-          </style>
-        </head>
-        <body>${printContent.innerHTML}</body>
-        </html>
-      `);
-      printWindow.document.close();
-      printWindow.focus();
-      setTimeout(() => { printWindow.print(); }, 300);
-    }, 200);
+    setReceiptLh(lh);
+    // Let the hidden receipt re-render (bare when on a letterhead) before capture.
+    await new Promise((r) => setTimeout(r, 200));
+    try {
+      const el = receiptRef.current;
+      if (!el) throw new Error('Receipt not ready');
+      let blob;
+      if (lh) {
+        const res = await getLetterheadBytes(lh.companyId);
+        blob = await composeWithLetterhead({ letterheadBytes: res.data, letterheadType: lh.type, element: el, marginsMm: lh.margins });
+      } else {
+        blob = await elementToPdfBlob(el);
+      }
+      const url = URL.createObjectURL(blob);
+      if (win) win.location.href = url; else downloadBlob(blob, `handover-receipt-${asset.name || asset.id}.pdf`);
+    } catch (err) {
+      if (win) win.close();
+      toast.error(err.message || 'Print failed');
+    }
   };
 
   // Upload signed receipt
@@ -369,7 +377,7 @@ export default function Assets() {
                           <button onClick={() => handlePrint(a)} className="p-1.5 text-surface-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors" title="Print Handover Receipt">
                             <Printer size={14} />
                           </button>
-                          <button onClick={() => { setReceiptAsset(a); setSendReceiptOpen(true); }} className="p-1.5 text-surface-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors" title={t('send_doc.send_pdf', 'Send receipt by email (PDF)')}>
+                          <button onClick={async () => { setReceiptAsset(a); setReceiptLh(await resolveLh(a.company_id)); setSendReceiptOpen(true); }} className="p-1.5 text-surface-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors" title={t('send_doc.send_pdf', 'Send receipt by email (PDF)')}>
                             <Send size={14} />
                           </button>
                           <button onClick={() => { setUploadReceiptAsset(a); setTimeout(() => uploadInputRef.current?.click(), 100); }} className="p-1.5 text-surface-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors" title="Upload Signed Receipt">
@@ -401,7 +409,7 @@ export default function Assets() {
       {/* Hidden receipt render area for printing / PDF */}
       <div style={{ position: 'fixed', left: '-9999px', top: 0, width: '800px' }}>
         {receiptAsset && (
-          <HandoverReceipt ref={receiptRef} asset={receiptAsset} company={currentCompany} />
+          <HandoverReceipt ref={receiptRef} asset={receiptAsset} company={currentCompany} onLetterhead={!!receiptLh} />
         )}
       </div>
 
@@ -416,6 +424,7 @@ export default function Assets() {
         relatedModule="Assets"
         relatedId={receiptAsset?.id || ''}
         companyId={receiptAsset?.company_id || ''}
+        letterhead={receiptLh}
       />
 
       {/* Assign/Edit Modal */}

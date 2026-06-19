@@ -17,6 +17,41 @@ import {
 } from 'lucide-react';
 import dayjs from 'dayjs';
 import SendDocumentModal from '@components/email/SendDocumentModal';
+import { getCompany } from '@api/companiesApi';
+import { companyLetterhead } from '@utils/letterhead';
+
+// Resolve a company's letterhead config (fresh from the server).
+async function resolveCompanyLh(companyId) {
+  if (!companyId) return null;
+  try { const { data } = await getCompany(companyId); return companyLetterhead(data); }
+  catch { return null; }
+}
+
+// Bare, formal employment-offer letter (no email card) for printing onto a letterhead.
+function buildOfferLetterHtml(o, detail) {
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  const fmt = (d) => (d ? dayjs(d).format('MMMM D, YYYY') : '');
+  const company = detail.company_name || '';
+  const rows = [
+    ['Position', o.job_title], ['Department', o.department], ['Work location', o.work_location],
+    ['Employment type', o.employment_type], ['Reporting manager', o.reporting_manager],
+    ['Joining date', fmt(o.joining_date)], ['Basic salary', o.basic_salary],
+    ['Probation period', o.probation_period], ['Working hours', o.working_hours], ['Notice period', o.notice_period],
+  ].filter(([, v]) => v != null && v !== '');
+  return `
+    <div style="font-size:14px;line-height:1.9;color:#111;">
+      <p style="text-align:right;margin:0 0 18px;">${fmt(new Date().toISOString())}</p>
+      <p>Dear <strong>${esc(detail.candidate_name || '')}</strong>,</p>
+      <h2 style="font-size:18px;margin:14px 0 10px;">Employment Offer${o.offer_number ? ` — ${esc(o.offer_number)}` : ''}</h2>
+      <p>We are pleased to offer you the position of <strong>${esc(o.job_title || '')}</strong>${o.department ? ` in the ${esc(o.department)} department` : ''} at <strong>${esc(company)}</strong>. The principal terms of your employment are set out below:</p>
+      <table style="width:100%;border-collapse:collapse;margin:14px 0;">
+        ${rows.map(([k, v]) => `<tr><td style="padding:6px 10px;border-bottom:1px solid #eee;font-weight:600;width:38%;color:#555;">${k}</td><td style="padding:6px 10px;border-bottom:1px solid #eee;">${esc(v)}</td></tr>`).join('')}
+      </table>
+      ${o.additional_terms ? `<p>${esc(o.additional_terms)}</p>` : ''}
+      <p>Please confirm your acceptance by signing and returning this letter${o.offer_expiry_date ? ` by <strong>${fmt(o.offer_expiry_date)}</strong>` : ''}.</p>
+      <p style="margin-top:30px;">Sincerely,<br>[Authorized Signatory]<br><strong>${esc(company)}</strong></p>
+    </div>`;
+}
 
 const STAGES = [
   'DRAFT', 'CV_UPLOADED', 'UNDER_HR_REVIEW', 'HR_APPROVED', 'OFFER_SENT', 'OFFER_ACCEPTED',
@@ -424,7 +459,7 @@ function OffersPanel({ detail, reload }) {
     setPreview({ loading: true, offerNumber: o.offer_number });
     try {
       const { data } = await previewTemplate({ templateType: 'employment_offer', data: buildOfferEmailData(o) });
-      setPreview({ loading: false, subject: data.subject, html: data.html, offerNumber: o.offer_number });
+      setPreview({ loading: false, subject: data.subject, html: data.html, offerNumber: o.offer_number, offer: o });
     } catch (e) { toast.error(apiErr(e, 'Failed to render preview')); setPreview(null); }
   };
   const send = async (o) => { try { await obApi.sendOffer(o.id); toast.success(`Offer ${o.offer_number} sent (copy to you)`); reload(); } catch (e) { toast.error(apiErr(e, 'Send failed')); } };
@@ -505,7 +540,11 @@ function OffersPanel({ detail, reload }) {
               <iframe title="offer-email" srcDoc={preview.html} className="w-full" style={{ height: '60vh', border: 0 }} sandbox="" />
             </div>
             <div className="flex justify-end gap-2 pt-1">
-              <Button size="sm" variant="secondary" onClick={() => { setSendDoc({ html: preview.html, title: `Employment Offer ${preview.offerNumber || ''}`.trim() }); }}>
+              <Button size="sm" variant="secondary" onClick={async () => {
+                const lh = await resolveCompanyLh(detail.company_id);
+                const html = lh ? buildOfferLetterHtml(preview.offer, detail) : preview.html;
+                setSendDoc({ html, title: `Employment Offer ${preview.offerNumber || ''}`.trim(), lh });
+              }}>
                 <Send size={13} /> Send as PDF
               </Button>
             </div>
@@ -519,6 +558,8 @@ function OffersPanel({ detail, reload }) {
         onClose={() => setSendDoc(null)}
         title={sendDoc?.title || 'Employment Offer'}
         getHtml={() => sendDoc?.html || ''}
+        rtl={false}
+        letterhead={sendDoc?.lh || null}
         defaultTo={detail.email || detail.candidate_email || ''}
         defaultToName={detail.candidate_name || ''}
         relatedModule="Onboarding"

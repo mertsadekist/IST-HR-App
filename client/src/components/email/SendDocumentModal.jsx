@@ -6,7 +6,8 @@ import Modal from '@components/ui/Modal';
 import Input from '@components/ui/Input';
 import Button from '@components/ui/Button';
 import { sendDocument } from '@api/emailApi';
-import { getLetterheadBytes } from '@api/companiesApi';
+import { getLetterheadBytes, getCompany } from '@api/companiesApi';
+import { companyLetterhead } from '@utils/letterhead';
 import { elementToPdfBlob, htmlToPdfBlob, composeWithLetterhead, downloadBlob } from '@utils/pdf';
 
 /**
@@ -33,10 +34,12 @@ export default function SendDocumentModal({
   relatedModule = 'Documents',
   relatedId = '',
   companyId = '',
-  // When the company has a letterhead, pass { companyId, type, margins } and the
-  // document is composed onto it. `getHtml`/`getElement` should then return the
-  // body content WITHOUT its own header/footer (the letterhead provides those).
+  // Compose onto a company letterhead when one exists. Either pass a resolved
+  // `letterhead` object ({ companyId, type, margins }), OR pass `letterheadCompanyId`
+  // and the modal resolves it freshly from the server. When a letterhead is used,
+  // `getHtml`/`getElement` should return body content without its own header/footer.
   letterhead = null,
+  letterheadCompanyId = null,
 }) {
   const { t } = useTranslation();
   const [to, setTo] = useState(defaultTo);
@@ -54,17 +57,27 @@ export default function SendDocumentModal({
     }
   }, [open, defaultTo, defaultToName, defaultCc, initialTitle, defaultMessage]);
 
+  // Resolve the letterhead config: explicit object, or freshly fetched by company id.
+  const resolveLetterhead = async () => {
+    if (letterhead?.companyId) return letterhead;
+    if (letterheadCompanyId) {
+      try { const { data } = await getCompany(letterheadCompanyId); return companyLetterhead(data); }
+      catch { return null; }
+    }
+    return null;
+  };
+
   const buildBlob = async () => {
-    // Compose onto the company letterhead when one is configured.
-    if (letterhead?.companyId) {
-      const res = await getLetterheadBytes(letterhead.companyId);
+    const lh = await resolveLetterhead();
+    if (lh?.companyId) {
+      const res = await getLetterheadBytes(lh.companyId);
       return composeWithLetterhead({
         letterheadBytes: res.data,
-        letterheadType: letterhead.type || 'pdf',
+        letterheadType: lh.type || 'pdf',
         element: getElement ? getElement() : undefined,
         html: getHtml ? getHtml() : undefined,
         rtl,
-        marginsMm: letterhead.margins,
+        marginsMm: lh.margins,
       });
     }
     if (getElement) {

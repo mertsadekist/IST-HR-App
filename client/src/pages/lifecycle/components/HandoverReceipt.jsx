@@ -1,18 +1,20 @@
 import { forwardRef } from 'react';
 import dayjs from 'dayjs';
 
-const HandoverReceipt = forwardRef(({ asset, company }, ref) => {
+const HandoverReceipt = forwardRef(({ asset, company, onLetterhead = false }, ref) => {
   const today = dayjs().format('DD / MM / YYYY');
 
   return (
     <div ref={ref} className="handover-receipt-print" style={{ fontFamily: 'Arial, sans-serif', maxWidth: '800px', margin: '0 auto', padding: '40px', color: '#1a1a1a', fontSize: '13px', lineHeight: '1.6' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '3px solid #5B21B6', paddingBottom: '16px', marginBottom: '24px' }}>
-        <div>
-          <h1 style={{ fontSize: '22px', fontWeight: 'bold', color: '#5B21B6', margin: 0 }}>{company?.name || 'Company Name'}</h1>
-          <p style={{ color: '#666', fontSize: '11px', margin: '4px 0 0' }}>{company?.short_code || ''}</p>
-        </div>
-        <div style={{ textAlign: 'right' }}>
+      {/* Header — the company branding is dropped on a letterhead (it already carries it) */}
+      <div style={{ display: 'flex', justifyContent: onLetterhead ? 'center' : 'space-between', alignItems: 'center', borderBottom: onLetterhead ? 'none' : '3px solid #5B21B6', paddingBottom: '16px', marginBottom: '24px' }}>
+        {!onLetterhead && (
+          <div>
+            <h1 style={{ fontSize: '22px', fontWeight: 'bold', color: '#5B21B6', margin: 0 }}>{company?.name || 'Company Name'}</h1>
+            <p style={{ color: '#666', fontSize: '11px', margin: '4px 0 0' }}>{company?.short_code || ''}</p>
+          </div>
+        )}
+        <div style={{ textAlign: onLetterhead ? 'center' : 'right' }}>
           <h2 style={{ fontSize: '18px', fontWeight: 'bold', margin: 0, color: '#333' }}>Asset Handover Receipt</h2>
           <p style={{ color: '#666', fontSize: '11px', margin: '4px 0 0' }}>وثيقة تسليم واستلام الأصول</p>
           <p style={{ color: '#999', fontSize: '11px', margin: '2px 0 0' }}>Date / التاريخ: {today}</p>
