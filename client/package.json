@@ -8,7 +8,8 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "i18n:check": "node scripts/i18n-audit.mjs"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.10",

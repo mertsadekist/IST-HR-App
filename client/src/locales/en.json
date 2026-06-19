@@ -90,6 +90,12 @@
     "employee_added": "Employee added successfully"
   },
   "recruitment": {
+    "john": "John",
+    "doe": "Doe",
+    "email_placeholder": "name@example.com",
+    "phone_placeholder": "+971 50 123 4567",
+    "nationality_placeholder": "e.g. Emirati",
+    "cand_notes_placeholder": "Notes about the candidate…",
     "vacancies": "Vacancies",
     "vacancies_subtitle": "Manage open positions and hiring blueprints",
     "add_vacancy": "Add Vacancy",
