@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
+import { useTranslation } from 'react-i18next';
 import * as leaveApi from '@api/leaveApi';
 import * as employeesApi from '@api/employeesApi';
 import Card from '@components/ui/Card';
@@ -13,8 +14,10 @@ import dayjs from 'dayjs';
 
 const apiErr = (e, f) => e?.response?.data?.error || (e?.response?.data?.errors?.[0]?.message) || f;
 const statusVariant = (s) => ({ Approved: 'success', Rejected: 'danger', Cancelled: 'danger', Pending: 'warning' }[s] || 'info');
+const stLabel = (t, s) => t(`leave.st_${String(s || '').toLowerCase()}`, s);
 
 export default function Leave() {
+  const { t } = useTranslation();
   const { user } = useSelector((s) => s.auth);
   const { currentCompanyId } = useSelector((s) => s.entity);
   const isHR = ['admin', 'hr_manager'].includes(user?.role);
@@ -38,7 +41,7 @@ export default function Leave() {
         const b = await leaveApi.getBalances({}); setBalances(b.data);
         try { const e = await employeesApi.getEmployees({ limit: 500 }); setEmployees(e.data.data || []); } catch { /* ignore */ }
       }
-    } catch { toast.error('Failed to load leave data'); }
+    } catch { toast.error(t('common.failed_load')); }
     finally { setLoading(false); }
   };
   useEffect(() => { loadAll(); /* eslint-disable-next-line */ }, [currentCompanyId, statusFilter]);
@@ -47,30 +50,30 @@ export default function Leave() {
     try {
       if (action === 'approve') await leaveApi.approveRequest(r.id);
       else if (action === 'reject') {
-        const note = window.prompt('Rejection note (optional):') ?? '';
+        const note = window.prompt(t('leave.rejection_note')) ?? '';
         await leaveApi.rejectRequest(r.id, { note });
       } else if (action === 'cancel') await leaveApi.cancelRequest(r.id);
-      toast.success('Updated'); loadAll();
-    } catch (e) { toast.error(apiErr(e, 'Action failed')); }
+      toast.success(t('common.updated')); loadAll();
+    } catch (e) { toast.error(apiErr(e, t('leave.action_failed'))); }
   };
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-surface-900">Leave Management</h1>
-          <p className="text-surface-500 mt-0.5 text-sm">Requests, balances and leave types</p>
+          <h1 className="text-2xl font-bold text-surface-900">{t('leave.title')}</h1>
+          <p className="text-surface-500 mt-0.5 text-sm">{t('leave.subtitle')}</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="secondary" onClick={loadAll}><RefreshCw size={14} /> Refresh</Button>
-          <Button onClick={() => setReqModal(true)}><Plus size={16} /> New Request</Button>
+          <Button variant="secondary" onClick={loadAll}><RefreshCw size={14} /> {t('common.refresh')}</Button>
+          <Button onClick={() => setReqModal(true)}><Plus size={16} /> {t('leave.new_request')}</Button>
         </div>
       </div>
 
       <div className="flex gap-1 border-b border-surface-100">
         {['requests', ...(isHR ? ['balances', 'types'] : [])].map((tb) => (
           <button key={tb} onClick={() => setTab(tb)}
-            className={`px-4 py-2 text-sm font-medium capitalize border-b-2 -mb-px transition-all ${tab === tb ? 'border-brand-600 text-brand-700' : 'border-transparent text-surface-500 hover:text-surface-700'}`}>{tb}</button>
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-all ${tab === tb ? 'border-brand-600 text-brand-700' : 'border-transparent text-surface-500 hover:text-surface-700'}`}>{t(`leave.tab_${tb}`)}</button>
         ))}
       </div>
 
@@ -79,11 +82,11 @@ export default function Leave() {
           <div className="flex gap-1 flex-wrap">
             {['', 'Pending', 'Approved', 'Rejected', 'Cancelled'].map((s) => (
               <button key={s} onClick={() => setStatusFilter(s)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium ${statusFilter === s ? 'bg-brand-700 text-white' : 'bg-surface-100 text-surface-600 hover:bg-surface-200'}`}>{s || 'All'}</button>
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium ${statusFilter === s ? 'bg-brand-700 text-white' : 'bg-surface-100 text-surface-600 hover:bg-surface-200'}`}>{s ? stLabel(t, s) : t('common.all')}</button>
             ))}
           </div>
           {loading ? <Skel /> : requests.length === 0 ? (
-            <Card><EmptyState icon={<CalendarDays className="w-6 h-6 text-surface-400" />} title="No leave requests" /></Card>
+            <Card><EmptyState icon={<CalendarDays className="w-6 h-6 text-surface-400" />} title={t('leave.no_requests')} /></Card>
           ) : (
             <div className="space-y-2">
               {requests.map((r) => (
@@ -94,18 +97,18 @@ export default function Leave() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-surface-900">{r.first_name} {r.last_name}</span>
                         <Badge variant="info" className="text-[10px]">{r.leave_type_name}</Badge>
-                        <Badge variant={statusVariant(r.status)} className="text-[10px]">{r.status}</Badge>
+                        <Badge variant={statusVariant(r.status)} className="text-[10px]">{stLabel(t, r.status)}</Badge>
                       </div>
-                      <p className="text-xs text-surface-400 mt-0.5">{dayjs(r.start_date).format('MMM D')} → {dayjs(r.end_date).format('MMM D, YYYY')} · {r.days} day(s){r.reason ? ` · ${r.reason}` : ''}</p>
+                      <p className="text-xs text-surface-400 mt-0.5">{dayjs(r.start_date).format('MMM D')} → {dayjs(r.end_date).format('MMM D, YYYY')} · {r.days} {t('leave.days')}{r.reason ? ` · ${r.reason}` : ''}</p>
                     </div>
                     {isHR && r.status === 'Pending' && (
                       <div className="flex gap-1.5">
-                        <Button size="sm" onClick={() => decide(r, 'approve')}><Check size={13} /> Approve</Button>
-                        <Button size="sm" variant="danger" onClick={() => decide(r, 'reject')}><X size={13} /> Reject</Button>
+                        <Button size="sm" onClick={() => decide(r, 'approve')}><Check size={13} /> {t('common.approve')}</Button>
+                        <Button size="sm" variant="danger" onClick={() => decide(r, 'reject')}><X size={13} /> {t('common.reject')}</Button>
                       </div>
                     )}
                     {r.status !== 'Cancelled' && r.status !== 'Rejected' && (
-                      <Button size="sm" variant="ghost" onClick={() => decide(r, 'cancel')}>Cancel</Button>
+                      <Button size="sm" variant="ghost" onClick={() => decide(r, 'cancel')}>{t('leave.cancel')}</Button>
                     )}
                   </div>
                 </Card>
@@ -118,13 +121,13 @@ export default function Leave() {
       {tab === 'balances' && isHR && (
         <Card className="!p-0 overflow-hidden">
           <div className="flex items-center justify-between p-4 border-b border-surface-100">
-            <h3 className="font-semibold text-surface-800">Balances</h3>
-            <Button size="sm" onClick={() => setBalModal(true)}><Plus size={14} /> Set entitlement</Button>
+            <h3 className="font-semibold text-surface-800">{t('leave.balances_title')}</h3>
+            <Button size="sm" onClick={() => setBalModal(true)}><Plus size={14} /> {t('leave.set_entitlement')}</Button>
           </div>
           <table className="w-full text-sm">
             <thead className="bg-surface-50 text-surface-500 text-xs"><tr>
-              <th className="text-left p-3">Employee</th><th className="text-left p-3">Type</th><th className="p-3">Year</th>
-              <th className="p-3">Entitled</th><th className="p-3">Used</th><th className="p-3">Remaining</th></tr></thead>
+              <th className="text-left p-3">{t('leave.th_employee')}</th><th className="text-left p-3">{t('leave.th_type')}</th><th className="p-3">{t('leave.th_year')}</th>
+              <th className="p-3">{t('leave.th_entitled')}</th><th className="p-3">{t('leave.th_used')}</th><th className="p-3">{t('leave.th_remaining')}</th></tr></thead>
             <tbody>
               {balances.map((b) => (
                 <tr key={b.id} className="border-t border-surface-50">
@@ -133,7 +136,7 @@ export default function Leave() {
                   <td className="p-3 text-center">{b.used}</td><td className="p-3 text-center font-semibold text-brand-600">{b.remaining}</td>
                 </tr>
               ))}
-              {balances.length === 0 && <tr><td colSpan={6} className="p-6 text-center text-surface-400 text-sm">No balances set</td></tr>}
+              {balances.length === 0 && <tr><td colSpan={6} className="p-6 text-center text-surface-400 text-sm">{t('leave.no_balances')}</td></tr>}
             </tbody>
           </table>
         </Card>
@@ -142,17 +145,17 @@ export default function Leave() {
       {tab === 'types' && isHR && (
         <Card className="!p-0 overflow-hidden">
           <div className="flex items-center justify-between p-4 border-b border-surface-100">
-            <h3 className="font-semibold text-surface-800">Leave Types</h3>
-            <Button size="sm" onClick={() => setTypeModal(true)}><Plus size={14} /> Add type</Button>
+            <h3 className="font-semibold text-surface-800">{t('leave.types_title')}</h3>
+            <Button size="sm" onClick={() => setTypeModal(true)}><Plus size={14} /> {t('leave.add_type')}</Button>
           </div>
           <div className="divide-y divide-surface-50">
             {types.map((tp) => (
               <div key={tp.id} className="flex items-center gap-3 p-3">
                 <span className="w-2.5 h-2.5 rounded-full" style={{ background: tp.color || '#7c3aed' }} />
                 <span className="font-medium text-surface-800">{tp.name}</span>
-                <Badge variant={tp.is_paid ? 'success' : 'info'} className="text-[10px]">{tp.is_paid ? 'Paid' : 'Unpaid'}</Badge>
-                {tp.company_id == null && <Badge variant="info" className="text-[10px]">Global</Badge>}
-                <span className="ml-auto text-xs text-surface-400">{tp.default_days} days/yr</span>
+                <Badge variant={tp.is_paid ? 'success' : 'info'} className="text-[10px]">{tp.is_paid ? t('leave.paid') : t('leave.unpaid')}</Badge>
+                {tp.company_id == null && <Badge variant="info" className="text-[10px]">{t('leave.global')}</Badge>}
+                <span className="ml-auto text-xs text-surface-400">{t('leave.days_per_year', { n: tp.default_days })}</span>
               </div>
             ))}
           </div>
@@ -169,93 +172,96 @@ export default function Leave() {
 function Skel() { return <div className="space-y-2">{[1, 2, 3].map((i) => <div key={i} className="card p-4 animate-pulse"><div className="h-4 bg-surface-200 rounded w-1/3" /></div>)}</div>; }
 
 function RequestModal({ open, onClose, types, isHR, employees = [], onSaved }) {
+  const { t } = useTranslation();
   const [form, setForm] = useState({ leave_type_id: '', start_date: '', end_date: '', reason: '', employee_id: '' });
   const [saving, setSaving] = useState(false);
   const save = async () => {
-    if (!form.leave_type_id || !form.start_date || !form.end_date) { toast.error('Type and dates are required'); return; }
+    if (!form.leave_type_id || !form.start_date || !form.end_date) { toast.error(t('leave.type_dates_required')); return; }
     setSaving(true);
     try {
       const body = { ...form };
       if (!isHR || !body.employee_id) delete body.employee_id;
-      await leaveApi.createRequest(body); toast.success('Leave request submitted'); onSaved();
+      await leaveApi.createRequest(body); toast.success(t('leave.submitted')); onSaved();
       setForm({ leave_type_id: '', start_date: '', end_date: '', reason: '', employee_id: '' });
-    } catch (e) { toast.error(apiErr(e, 'Failed to submit')); } finally { setSaving(false); }
+    } catch (e) { toast.error(apiErr(e, t('leave.submit_failed'))); } finally { setSaving(false); }
   };
   return (
-    <Modal open={open} onClose={onClose} title="New Leave Request" size="md">
+    <Modal open={open} onClose={onClose} title={t('leave.modal_new')} size="md">
       <div className="space-y-3">
-        <div><label className="text-xs font-semibold text-surface-700">Leave type *</label>
+        <div><label className="text-xs font-semibold text-surface-700">{t('leave.f_type')} *</label>
           <select value={form.leave_type_id} onChange={(e) => setForm((f) => ({ ...f, leave_type_id: e.target.value }))} className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1">
-            <option value="">Select…</option>{types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            <option value="">{t('leave.select')}</option>{types.map((tp) => <option key={tp.id} value={tp.id}>{tp.name}</option>)}
           </select></div>
         <div className="grid grid-cols-2 gap-3">
-          <div><label className="text-xs font-semibold text-surface-700">Start date *</label><input type="date" value={form.start_date} onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value }))} className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1" /></div>
-          <div><label className="text-xs font-semibold text-surface-700">End date *</label><input type="date" value={form.end_date} onChange={(e) => setForm((f) => ({ ...f, end_date: e.target.value }))} className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1" /></div>
+          <div><label className="text-xs font-semibold text-surface-700">{t('leave.f_start')} *</label><input type="date" value={form.start_date} onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value }))} className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1" /></div>
+          <div><label className="text-xs font-semibold text-surface-700">{t('leave.f_end')} *</label><input type="date" value={form.end_date} onChange={(e) => setForm((f) => ({ ...f, end_date: e.target.value }))} className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1" /></div>
         </div>
         {isHR && (
           <div>
-            <label className="text-xs font-semibold text-surface-700">Employee (leave blank for yourself)</label>
+            <label className="text-xs font-semibold text-surface-700">{t('leave.f_employee_self')}</label>
             <select value={form.employee_id} onChange={(e) => setForm((f) => ({ ...f, employee_id: e.target.value }))} className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1">
-              <option value="">— Myself —</option>
+              <option value="">{t('leave.myself')}</option>
               {employees.map((emp) => <option key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name}</option>)}
             </select>
           </div>
         )}
-        <div><label className="text-xs font-semibold text-surface-700">Reason</label><textarea rows={2} value={form.reason} onChange={(e) => setForm((f) => ({ ...f, reason: e.target.value }))} className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1" /></div>
-        <Button onClick={save} loading={saving}>Submit request</Button>
+        <div><label className="text-xs font-semibold text-surface-700">{t('leave.f_reason')}</label><textarea rows={2} value={form.reason} onChange={(e) => setForm((f) => ({ ...f, reason: e.target.value }))} className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1" /></div>
+        <Button onClick={save} loading={saving}>{t('leave.submit_request')}</Button>
       </div>
     </Modal>
   );
 }
 
 function BalanceModal({ open, onClose, types, employees = [], onSaved }) {
+  const { t } = useTranslation();
   const [form, setForm] = useState({ employee_id: '', leave_type_id: '', year: new Date().getFullYear(), entitled: '' });
   const [saving, setSaving] = useState(false);
   const save = async () => {
     setSaving(true);
-    try { await leaveApi.setBalance({ ...form, employee_id: Number(form.employee_id), leave_type_id: Number(form.leave_type_id), year: Number(form.year), entitled: Number(form.entitled) }); toast.success('Entitlement set'); onSaved(); }
-    catch (e) { toast.error(apiErr(e, 'Failed')); } finally { setSaving(false); }
+    try { await leaveApi.setBalance({ ...form, employee_id: Number(form.employee_id), leave_type_id: Number(form.leave_type_id), year: Number(form.year), entitled: Number(form.entitled) }); toast.success(t('leave.entitlement_set')); onSaved(); }
+    catch (e) { toast.error(apiErr(e, t('common.operation_failed'))); } finally { setSaving(false); }
   };
   return (
-    <Modal open={open} onClose={onClose} title="Set Leave Entitlement" size="md">
+    <Modal open={open} onClose={onClose} title={t('leave.modal_balance')} size="md">
       <div className="space-y-3">
-        <div><label className="text-xs font-semibold text-surface-700">Employee *</label>
+        <div><label className="text-xs font-semibold text-surface-700">{t('leave.th_employee')} *</label>
           <select value={form.employee_id} onChange={(e) => setForm((f) => ({ ...f, employee_id: e.target.value }))} className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1">
-            <option value="">Select employee…</option>
+            <option value="">{t('leave.select_employee')}</option>
             {employees.map((emp) => <option key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name}</option>)}
           </select></div>
-        <div><label className="text-xs font-semibold text-surface-700">Type *</label>
+        <div><label className="text-xs font-semibold text-surface-700">{t('leave.f_type')} *</label>
           <select value={form.leave_type_id} onChange={(e) => setForm((f) => ({ ...f, leave_type_id: e.target.value }))} className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1">
-            <option value="">Select…</option>{types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            <option value="">{t('leave.select')}</option>{types.map((tp) => <option key={tp.id} value={tp.id}>{tp.name}</option>)}
           </select></div>
         <div className="grid grid-cols-2 gap-3">
-          <div><label className="text-xs font-semibold text-surface-700">Year *</label><input type="number" value={form.year} onChange={(e) => setForm((f) => ({ ...f, year: e.target.value }))} className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1" /></div>
-          <div><label className="text-xs font-semibold text-surface-700">Entitled days *</label><input type="number" value={form.entitled} onChange={(e) => setForm((f) => ({ ...f, entitled: e.target.value }))} className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1" /></div>
+          <div><label className="text-xs font-semibold text-surface-700">{t('leave.th_year')} *</label><input type="number" value={form.year} onChange={(e) => setForm((f) => ({ ...f, year: e.target.value }))} className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1" /></div>
+          <div><label className="text-xs font-semibold text-surface-700">{t('leave.f_entitled')} *</label><input type="number" value={form.entitled} onChange={(e) => setForm((f) => ({ ...f, entitled: e.target.value }))} className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1" /></div>
         </div>
-        <Button onClick={save} loading={saving}>Save</Button>
+        <Button onClick={save} loading={saving}>{t('common.save')}</Button>
       </div>
     </Modal>
   );
 }
 
 function TypeModal({ open, onClose, onSaved }) {
+  const { t } = useTranslation();
   const [form, setForm] = useState({ name: '', default_days: 0, is_paid: true });
   const [saving, setSaving] = useState(false);
   const save = async () => {
-    if (!form.name) { toast.error('Name required'); return; }
+    if (!form.name) { toast.error(t('leave.name_required')); return; }
     setSaving(true);
-    try { await leaveApi.createType({ ...form, default_days: Number(form.default_days) }); toast.success('Leave type added'); onSaved(); setForm({ name: '', default_days: 0, is_paid: true }); }
-    catch (e) { toast.error(apiErr(e, 'Failed')); } finally { setSaving(false); }
+    try { await leaveApi.createType({ ...form, default_days: Number(form.default_days) }); toast.success(t('leave.type_added')); onSaved(); setForm({ name: '', default_days: 0, is_paid: true }); }
+    catch (e) { toast.error(apiErr(e, t('common.operation_failed'))); } finally { setSaving(false); }
   };
   return (
-    <Modal open={open} onClose={onClose} title="Add Leave Type" size="md">
+    <Modal open={open} onClose={onClose} title={t('leave.modal_type')} size="md">
       <div className="space-y-3">
-        <div><label className="text-xs font-semibold text-surface-700">Name *</label><input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1" /></div>
+        <div><label className="text-xs font-semibold text-surface-700">{t('leave.f_name')} *</label><input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1" /></div>
         <div className="grid grid-cols-2 gap-3 items-end">
-          <div><label className="text-xs font-semibold text-surface-700">Default days/year</label><input type="number" value={form.default_days} onChange={(e) => setForm((f) => ({ ...f, default_days: e.target.value }))} className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1" /></div>
-          <label className="flex items-center gap-2 text-sm pb-2"><input type="checkbox" checked={form.is_paid} onChange={(e) => setForm((f) => ({ ...f, is_paid: e.target.checked }))} /> Paid leave</label>
+          <div><label className="text-xs font-semibold text-surface-700">{t('leave.f_default_days')}</label><input type="number" value={form.default_days} onChange={(e) => setForm((f) => ({ ...f, default_days: e.target.value }))} className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1" /></div>
+          <label className="flex items-center gap-2 text-sm pb-2"><input type="checkbox" checked={form.is_paid} onChange={(e) => setForm((f) => ({ ...f, is_paid: e.target.checked }))} /> {t('leave.paid_leave')}</label>
         </div>
-        <Button onClick={save} loading={saving}>Add</Button>
+        <Button onClick={save} loading={saving}>{t('common.add')}</Button>
       </div>
     </Modal>
   );
