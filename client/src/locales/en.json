@@ -38,7 +38,9 @@
     "payroll_runs": "Payroll Runs",
     "performance": "Performance",
     "templates": "Templates",
-    "users": "Users"
+    "users": "Users",
+    "help": "Help",
+    "help_center": "Help Center"
   },
   "topbar": {
     "search_placeholder": "Search across HR system...",
@@ -1580,5 +1582,23 @@
     "t_uploading_document": "Uploading document...",
     "t_uploading_handover": "Uploading handover sheet...",
     "t_reading_cv": "Reading CV and extracting data…"
+  },
+  "kb": {
+    "title": "Knowledge Base",
+    "subtitle": "How to use every page, with suggested questions",
+    "search_ph": "Search help…",
+    "no_results": "No articles found",
+    "when_to_use": "When to use",
+    "steps": "Step by step",
+    "tips": "Tips",
+    "faq": "Suggested questions",
+    "related": "Related",
+    "group_start": "Getting started",
+    "group_recruitment": "Recruitment",
+    "group_lifecycle": "Employee lifecycle",
+    "group_compliance": "Compliance",
+    "group_analytics": "Analytics",
+    "group_operations": "Operations & Settings",
+    "group_portal": "Employee portal"
   }
 }

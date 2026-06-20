@@ -8,7 +8,7 @@ import {
   Laptop, TrendingUp, DoorOpen, Scale, FileArchive, Calculator,
   BarChart3, ClipboardList, Trophy, Network, UserCog, Settings,
   Sparkles, ChevronDown, X, Package, Shield, Mail,
-  CalendarDays, Clock, Banknote, Inbox
+  CalendarDays, Clock, Banknote, Inbox, HelpCircle
 } from 'lucide-react';
 import { cn } from '@utils/cn';
 
@@ -155,6 +155,12 @@ export default function Sidebar({ isOpen, onClose }) {
       roles: ['employee', 'admin', 'hr_manager'],
       items: [
         { path: '/portal/my-assets', icon: Shield, label: t('nav.my_assets', 'My Assets & Accounts') },
+      ],
+    },
+    {
+      label: t('nav.help', 'HELP'),
+      items: [
+        { path: '/help', icon: HelpCircle, label: t('nav.help_center', 'Help Center') },
       ],
     },
   ];

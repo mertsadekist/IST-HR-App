@@ -25,6 +25,9 @@ function PageLoader() {
 const Login = lazy(() => import('@pages/auth/Login'));
 const Dashboard = lazy(() => import('@pages/dashboard/Dashboard'));
 
+// Help / Knowledge Base
+const KnowledgeBase = lazy(() => import('@pages/help/KnowledgeBase'));
+
 // Settings
 const SettingsLayout = lazy(() => import('@pages/settings/SettingsLayout'));
 const CompanySettings = lazy(() => import('@pages/settings/CompanySettings'));
@@ -93,6 +96,7 @@ export default function App() {
               <Route element={<MainLayout />}>
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/help" element={<KnowledgeBase />} />
 
                 {/* Recruitment */}
                 <Route path="/ats" element={<AtsPipeline />} />

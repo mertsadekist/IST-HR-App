@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { logout } from '@store/slices/authSlice';
-import { Menu, LogOut, Bell, Search, Globe, Check, CheckCheck } from 'lucide-react';
+import { Menu, LogOut, Bell, Search, Globe, Check, CheckCheck, HelpCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { articleIdForRoute } from '@/data/kb';
 import dayjs from 'dayjs';
 import * as notificationsApi from '@api/notificationsApi';
 
@@ -94,8 +95,14 @@ function NotificationBell() {
 export default function Topbar({ onMenuClick }) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useSelector((state) => state.auth);
   const { t, i18n } = useTranslation();
+
+  const openHelp = () => {
+    const id = articleIdForRoute(location.pathname);
+    navigate(id ? `/help?article=${id}` : '/help');
+  };
 
   const handleLogout = () => {
     dispatch(logout());
@@ -133,6 +140,10 @@ export default function Topbar({ onMenuClick }) {
         <button onClick={toggleLanguage} className="flex items-center gap-2 p-2 text-sm font-medium text-surface-600 hover:text-brand-600 hover:bg-brand-50 rounded-xl transition-colors">
           <Globe size={18} />
           <span className="hidden sm:inline">{t('topbar.language')}</span>
+        </button>
+
+        <button onClick={openHelp} title={t('nav.help_center', 'Help Center')} className="p-2 text-surface-400 hover:text-brand-600 hover:bg-brand-50 rounded-xl transition-colors">
+          <HelpCircle size={20} />
         </button>
 
         <NotificationBell />

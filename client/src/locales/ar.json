@@ -38,7 +38,9 @@
     "payroll_runs": "دورات الرواتب",
     "performance": "الأداء",
     "templates": "القوالب",
-    "users": "المستخدمون"
+    "users": "المستخدمون",
+    "help": "مساعدة",
+    "help_center": "مركز المساعدة"
   },
   "topbar": {
     "search_placeholder": "ابحث في نظام الموارد البشرية...",
@@ -1580,5 +1582,23 @@
     "t_uploading_document": "جارِ رفع المستند...",
     "t_uploading_handover": "جارِ رفع ورقة التسليم...",
     "t_reading_cv": "جارِ قراءة السيرة واستخراج البيانات…"
+  },
+  "kb": {
+    "title": "قاعدة المعرفة",
+    "subtitle": "طريقة استخدام كل صفحة، مع الأسئلة المقترحة",
+    "search_ph": "ابحث في المساعدة…",
+    "no_results": "لا توجد مقالات",
+    "when_to_use": "متى تُستخدم",
+    "steps": "خطوة بخطوة",
+    "tips": "نصائح",
+    "faq": "أسئلة مقترحة",
+    "related": "ذات صلة",
+    "group_start": "البدء",
+    "group_recruitment": "التوظيف",
+    "group_lifecycle": "دورة حياة الموظف",
+    "group_compliance": "الامتثال",
+    "group_analytics": "التحليلات",
+    "group_operations": "العمليات والإعدادات",
+    "group_portal": "بوابة الموظف"
   }
 }
