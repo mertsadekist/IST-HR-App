@@ -11,14 +11,14 @@ import FlowDiagram from './diagrams/FlowDiagram';
 import {
   Lock, LayoutDashboard, Building2, ShieldCheck, Send, Kanban, Users, FileText, Inbox, Target, Globe,
   UserCheck, CalendarDays, Clock, Banknote, Laptop, Package, TrendingUp, DoorOpen, Scale, FileArchive,
-  Calculator, BarChart3, Trophy, ClipboardList, Mail, Network, UserCog, Settings, Box, Shield,
+  Calculator, BarChart3, Trophy, ClipboardList, Mail, Network, UserCog, Settings, Box, Shield, Wrench,
   HelpCircle, Search, ChevronRight, BookOpen, Lightbulb, MessageCircleQuestion,
 } from 'lucide-react';
 
 const ICONS = {
   Lock, LayoutDashboard, Building2, ShieldCheck, Send, Kanban, Users, FileText, Inbox, Target, Globe,
   UserCheck, CalendarDays, Clock, Banknote, Laptop, Package, TrendingUp, DoorOpen, Scale, FileArchive,
-  Calculator, BarChart3, Trophy, ClipboardList, Mail, Network, UserCog, Settings, Box, Shield, BookOpen,
+  Calculator, BarChart3, Trophy, ClipboardList, Mail, Network, UserCog, Settings, Box, Shield, Wrench, BookOpen,
 };
 const Icon = ({ name, ...p }) => { const C = ICONS[name] || FileText; return <C {...p} />; };
 

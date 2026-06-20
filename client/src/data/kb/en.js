@@ -463,6 +463,390 @@ const articles = [
     ],
     related: ['offboarding', 'assets'],
   },
+
+  // ───────────────────────── Compliance ─────────────────────────
+  {
+    id: 'legal-letters', route: '/legal-letters', group: 'compliance', roles: ['admin', 'hr_manager'], icon: 'Scale',
+    title: 'Legal Letters',
+    overview: 'Generate official letters (Salary Certificate, Experience, NOC, Warning, Termination, Show Cause, etc.) with AI-assisted content for an employee, then preview, print or email them as a PDF — composed onto the company letterhead when one is set.',
+    whenToUse: 'Whenever an employee needs a formal letter from the company.',
+    diagram: { type: 'flow', steps: ['Pick template', 'Choose company + employee', 'AI drafts content', 'Preview', 'Print / Email (PDF)'] },
+    steps: [
+      { title: 'Choose a template', detail: 'Click a letter type (or Generate) and select the issuing company and the employee.' },
+      { title: 'Fill fields & generate', detail: 'Provide any template-specific fields; AI drafts the letter using employee + company data.' },
+      { title: 'Print or email', detail: 'Open the letter and Print or “Send by Email (PDF)” — it’s composed onto the selected company’s letterhead.' },
+    ],
+    tips: [
+      'The letter is issued under the company you pick on the form (not necessarily the employee’s company).',
+      'Generate a fresh letter after uploading a letterhead so it composes correctly.',
+    ],
+    faq: [
+      { q: 'It shows the wrong company name.', a: 'Pick the correct company in the generate form — the letter (and letterhead) follow your selection.' },
+      { q: 'The letterhead overlaps the text.', a: 'Increase the top margin for that company in Settings → Companies → Letterhead.' },
+      { q: 'Can I add my own letter type?', a: 'Yes — “Add Template” lets admins/HR create new letter templates.' },
+    ],
+    related: ['send-documents', 'companies', 'company-docs'],
+  },
+  {
+    id: 'company-docs', route: '/company-docs', group: 'compliance', roles: ['admin', 'hr_manager'], icon: 'FileArchive',
+    title: 'Company Documents',
+    overview: 'A repository for official company documents organized by category (policies, safety, compliance, training…). Upload, search, filter and download files per company.',
+    whenToUse: 'To store and share the company’s official documents and policies.',
+    diagram: { type: 'screen', items: [
+      { n: 1, label: 'Category filter + search' },
+      { n: 2, label: 'Upload document' },
+      { n: 3, label: 'Document list by category' },
+      { n: 4, label: 'Download / delete' },
+    ] },
+    steps: [
+      { title: 'Create categories', detail: 'Organize documents into categories (e.g. Policy, Safety, Compliance).' },
+      { title: 'Upload', detail: 'Upload a file and assign it to a category for the current company.' },
+      { title: 'Find & download', detail: 'Search or filter by category, then download what you need.' },
+    ],
+    tips: ['Documents are scoped to the selected company (Entity).'],
+    faq: [
+      { q: 'Who can delete documents?', a: 'Deleting is admin-only; HR can upload and download.' },
+      { q: 'Are files kept safely?', a: 'Yes — stored on persistent storage that survives redeploys.' },
+    ],
+    related: ['legal-letters', 'companies'],
+  },
+  {
+    id: 'payroll', route: '/payroll', group: 'compliance', roles: ['admin', 'hr_manager'], icon: 'Calculator',
+    title: 'Payroll & Labor Law',
+    overview: 'Labor-law calculators and references: compute end-of-service benefits (EOSB) by tenure and contract type, absence/lateness deductions, and attendance-based summaries.',
+    whenToUse: 'For settlements at exit and to understand deduction rules — distinct from the monthly Payroll Runs.',
+    diagram: { type: 'flow', steps: ['Enter employee data', 'Pick contract type', 'Calculate EOSB / deductions', 'Review summary'] },
+    steps: [
+      { title: 'Enter inputs', detail: 'Provide salary, start/end dates and contract type.' },
+      { title: 'Calculate', detail: 'Compute end-of-service entitlement and any absence/lateness deductions.' },
+      { title: 'Use the result', detail: 'Apply the figures in offboarding or final settlement.' },
+    ],
+    tips: ['This is a calculator/reference; the actual monthly salary processing happens in Payroll Runs.'],
+    faq: [
+      { q: 'Difference from Payroll Runs?', a: 'Payroll Runs computes monthly salaries; this page is for EOSB and labor-law calculations.' },
+      { q: 'Which contract types are supported?', a: 'EOSB is computed by tenure and the selected contract type.' },
+    ],
+    related: ['payroll-runs', 'offboarding'],
+  },
+
+  // ───────────────────────── Analytics ─────────────────────────
+  {
+    id: 'reports', route: '/reports', group: 'analytics', roles: ['admin', 'hr_manager'], icon: 'BarChart3',
+    title: 'Reports',
+    overview: 'Built-in reports: recruitment pipeline, candidate journey, employees overview, and onboarding progress. Print/download as a PDF (on letterhead) or email it.',
+    whenToUse: 'For periodic insight into recruitment and workforce, and to share snapshots.',
+    diagram: { type: 'screen', items: [
+      { n: 1, label: 'Report tabs (pipeline, journey, employees, onboarding)' },
+      { n: 2, label: 'Print / Download (PDF)' },
+      { n: 3, label: 'Send by Email (PDF)' },
+      { n: 4, label: 'Report content (scoped to the company)' },
+    ] },
+    steps: [
+      { title: 'Pick a report', detail: 'Switch tabs between the four available reports.' },
+      { title: 'Export', detail: 'Print/Download as PDF (composed onto the company letterhead) or email it.' },
+    ],
+    tips: ['Reports follow the selected Entity — switch company to compare.'],
+    faq: [
+      { q: 'Can I email a report?', a: 'Yes — “Send by Email (PDF)” attaches it with a cover message.' },
+      { q: 'Why is a report empty?', a: 'No data for the selected company/period yet.' },
+    ],
+    related: ['dashboard', 'kpi', 'org-chart'],
+  },
+  {
+    id: 'kpi', route: '/kpi', group: 'analytics', roles: ['admin', 'hr_manager'], icon: 'Trophy',
+    title: 'KPI Tracker',
+    overview: 'Log hiring events against reward tiers, confirm hires, and view summary stats (total hires, fulfilled tiers, rewards). Tiers (amount, icon, label) are configurable.',
+    whenToUse: 'To track recruitment KPIs and tier-based rewards for hires.',
+    diagram: { type: 'flow', steps: ['Create tiers', 'Log a hire', 'Assign tier', 'Confirm', 'Summary stats'] },
+    steps: [
+      { title: 'Create tiers', detail: 'Define reward tiers with an amount, icon and label.' },
+      { title: 'Log & confirm hires', detail: 'Record a hire event, assign tier(s), and confirm it.' },
+      { title: 'Read the summary', detail: 'See totals: hires, fulfilled tiers and rewards.' },
+    ],
+    tips: ['Configure tiers first in System Config or here, so hires can be assigned to them.'],
+    faq: [
+      { q: 'How do I add a tier?', a: 'Create a KPI tier with its amount/label; then assign it when logging a hire.' },
+      { q: 'Can I delete a hire entry?', a: 'Yes — remove an entry from the list.' },
+    ],
+    related: ['performance', 'reports', 'system-config'],
+  },
+  {
+    id: 'audit', route: '/audit', group: 'analytics', roles: ['admin'], icon: 'ClipboardList',
+    title: 'Audit Log',
+    overview: 'A complete trail of system actions — who did what, in which module, when, with details. Search and filter by module, and export as JSON. Admin only.',
+    whenToUse: 'For security, compliance and troubleshooting — to see exactly what changed and by whom.',
+    diagram: { type: 'screen', items: [
+      { n: 1, label: 'Search (user / action / detail)' },
+      { n: 2, label: 'Module filter' },
+      { n: 3, label: 'Export JSON' },
+      { n: 4, label: 'Log rows: user, action, module, time' },
+    ] },
+    steps: [
+      { title: 'Search & filter', detail: 'Find entries by user, action or detail, and narrow by module.' },
+      { title: 'Export', detail: 'Export the filtered log as JSON for records or analysis.' },
+    ],
+    tips: ['Entries are recorded automatically for create/update/delete and key actions.'],
+    faq: [
+      { q: 'Who can see the audit log?', a: 'Admins only.' },
+      { q: 'Is it scoped per company?', a: 'It records actions across the data the admin can access.' },
+    ],
+    related: ['users', 'email-log'],
+  },
+  {
+    id: 'email-log', route: '/email-log', group: 'analytics', roles: ['admin', 'hr_manager'], icon: 'Mail',
+    title: 'Email Log',
+    overview: 'A record of every outgoing email with its delivery status (Sent/Failed/Queued), recipient, subject, module and timestamp. Open any entry for full details.',
+    whenToUse: 'To confirm an email was sent and to troubleshoot delivery problems.',
+    diagram: { type: 'screen', items: [
+      { n: 1, label: 'Search (recipient / subject)' },
+      { n: 2, label: 'Filter by status & module' },
+      { n: 3, label: 'Email rows with status' },
+      { n: 4, label: 'Detail: full email content' },
+    ] },
+    steps: [
+      { title: 'Search & filter', detail: 'Filter by status (Sent/Failed/Queued) and related module, or search by recipient/subject.' },
+      { title: 'Open a detail', detail: 'View the full email content and metadata.' },
+    ],
+    tips: ['If many emails show Failed, check the SMTP configuration in Settings → Email.'],
+    faq: [
+      { q: 'An email failed — what now?', a: 'Open it to see the error; verify SMTP settings and resend from the source action.' },
+      { q: 'Does it store the email body?', a: 'Yes — the detail view shows the full content that was sent.' },
+    ],
+    related: ['email-settings', 'send-documents'],
+  },
+  {
+    id: 'org-chart', route: '/org-chart', group: 'analytics', roles: ['admin', 'hr_manager'], icon: 'Network',
+    title: 'Org Chart',
+    overview: 'An interactive chart of the selected company’s departments and job titles. Pan and zoom, and click a department to see its job titles and counts.',
+    whenToUse: 'To visualize and review the organizational structure of a company.',
+    diagram: { type: 'screen', items: [
+      { n: 1, label: 'Company selector' },
+      { n: 2, label: 'Pan & zoom canvas' },
+      { n: 3, label: 'Department nodes' },
+      { n: 4, label: 'Side panel: job titles & counts' },
+    ] },
+    steps: [
+      { title: 'Select a company', detail: 'Pick the entity whose structure you want to view.' },
+      { title: 'Explore', detail: 'Pan/zoom the canvas and click nodes to inspect departments and titles.' },
+    ],
+    tips: ['Structure comes from Departments & Titles in Settings — keep those up to date.'],
+    faq: [
+      { q: 'The chart is empty.', a: 'Add departments and job titles for the company in Settings → Departments & Titles.' },
+      { q: 'Can I edit the chart here?', a: 'No — it visualizes data managed in Settings.' },
+    ],
+    related: ['departments', 'employees'],
+  },
+
+  // ───────────────────────── Operations & Settings ─────────────────────────
+  {
+    id: 'users', route: '/users', group: 'operations', roles: ['admin'], icon: 'UserCog',
+    title: 'User Management',
+    overview: 'Create and manage system users, assign roles (admin, hr_manager, recruiter, employee), set their company/department, and reset passwords. Admin only.',
+    whenToUse: 'To give staff access and control what each person can do.',
+    diagram: { type: 'screen', items: [
+      { n: 1, label: 'Add user' },
+      { n: 2, label: 'User rows: name, role, company' },
+      { n: 3, label: 'Edit role / company / department' },
+      { n: 4, label: 'Reset password' },
+    ] },
+    steps: [
+      { title: 'Add a user', detail: 'Set username, name, email, password and role; assign a company/department if relevant.' },
+      { title: 'Edit or reset', detail: 'Change a user’s role or details, or reset their password.' },
+      { title: 'Mind the roles', detail: 'Pick the least role needed — see the Roles & permissions article.' },
+    ],
+    tips: ['Only admins manage users; this keeps the no-delete / company-view rules enforceable for HR.'],
+    faq: [
+      { q: 'Why is this page admin-only?', a: 'Managing users/roles could escalate privileges, so it’s restricted to admins.' },
+      { q: 'How do I reset a password?', a: 'Open the user and use Reset password.' },
+      { q: 'Can I change a user’s company?', a: 'Yes — edit the user; HR is organization-wide regardless.' },
+    ],
+    related: ['roles', 'audit'],
+  },
+  {
+    id: 'companies', route: '/settings/companies', group: 'operations', roles: ['admin', 'hr_manager'], icon: 'Building2',
+    title: 'Companies',
+    overview: 'Manage the companies (entities) in the organization: name, short code, currency, brand colors, logo, and the A4 letterhead used on generated PDFs. Admins add/edit/delete; HR views only.',
+    whenToUse: 'To set up each company and its branding/letterhead before issuing documents.',
+    diagram: { type: 'screen', items: [
+      { n: 1, label: 'Add company (admin)' },
+      { n: 2, label: 'Company cards: code, currency, logo' },
+      { n: 3, label: 'Edit details & brand colors' },
+      { n: 4, label: 'Upload letterhead + margins' },
+    ] },
+    steps: [
+      { title: 'Create a company', detail: 'Admin: add name, short code, currency, industry, contact, logo and brand colors.' },
+      { title: 'Upload a letterhead', detail: 'In the company edit form, upload an A4 letterhead (PDF/PNG/JPG) and set content margins (mm).' },
+      { title: 'Tune margins', detail: 'Adjust top/bottom/left/right so document text sits clear of the header/footer.' },
+    ],
+    tips: [
+      'Letterhead + company create/edit are admin-only; HR sees companies read-only.',
+      'After uploading a letterhead, generate a document to preview and fine-tune margins.',
+    ],
+    faq: [
+      { q: 'Why can’t HR add a company?', a: 'By design — company create/edit/delete is admin-only; HR has view access.' },
+      { q: 'Where is the letterhead used?', a: 'On generated legal letters, offers, receipts and reports when you send/print them as PDF.' },
+      { q: 'The letterhead overlaps text.', a: 'Increase the top margin for that company and re-preview.' },
+    ],
+    related: ['send-documents', 'legal-letters', 'roles'],
+  },
+  {
+    id: 'departments', route: '/settings/departments', group: 'operations', roles: ['admin', 'hr_manager'], icon: 'Network',
+    title: 'Departments & Titles',
+    overview: 'Manage each company’s departments and the job titles within them (including seniorities with salary bands and required skills).',
+    whenToUse: 'To define the org structure used across employees, vacancies and the org chart.',
+    diagram: { type: 'screen', items: [
+      { n: 1, label: 'Company selector' },
+      { n: 2, label: 'Departments (add/edit/delete)' },
+      { n: 3, label: 'Job titles under a department' },
+      { n: 4, label: 'Seniorities, salary bands, skills' },
+    ] },
+    steps: [
+      { title: 'Pick the company', detail: 'Departments are per company.' },
+      { title: 'Add departments', detail: 'Create departments, then expand to manage job titles.' },
+      { title: 'Define titles', detail: 'Add job titles with seniorities, salary bands and required skills.' },
+    ],
+    tips: ['This structure feeds the Org Chart and employee/vacancy assignment.'],
+    faq: [
+      { q: 'Who can delete a department?', a: 'Admins; HR can add/edit.' },
+      { q: 'Where do job titles appear?', a: 'When assigning roles to employees and on the org chart.' },
+    ],
+    related: ['org-chart', 'skills', 'employees'],
+  },
+  {
+    id: 'skills', route: '/settings/skills', group: 'operations', roles: ['admin', 'hr_manager'], icon: 'Wrench',
+    title: 'Skills Library',
+    overview: 'Maintain skill categories and individual skills used for evaluating candidates and employees.',
+    whenToUse: 'To curate the skills referenced in CV scoring, job titles and evaluations.',
+    diagram: { type: 'screen', items: [
+      { n: 1, label: 'Skill categories (expand/collapse)' },
+      { n: 2, label: 'Add/edit/delete category' },
+      { n: 3, label: 'Skills within a category' },
+      { n: 4, label: 'Add/edit/delete skill' },
+    ] },
+    steps: [
+      { title: 'Create categories', detail: 'Group skills under categories.' },
+      { title: 'Add skills', detail: 'Add individual skills under each category.' },
+    ],
+    tips: ['Well-organized skills improve CV scoring and job-title definitions.'],
+    faq: [
+      { q: 'Where are skills used?', a: 'In CV Scorer profiles, job titles and candidate evaluations.' },
+      { q: 'Who can delete skills?', a: 'Admins; HR can add/edit.' },
+    ],
+    related: ['cv-scorer', 'departments'],
+  },
+  {
+    id: 'asset-catalog', route: '/settings/catalog', group: 'operations', roles: ['admin', 'hr_manager'], icon: 'Box',
+    title: 'Asset Catalog',
+    overview: 'Define the TYPES of assets before adding actual items: categories and platforms classified as Hardware, Account or Software. The catalog drives Inventory and Assets.',
+    whenToUse: 'First-time setup of asset/equipment types, before entering inventory.',
+    diagram: { type: 'flow', steps: ['Create categories', 'Add platforms/types', 'Used in Inventory & Assets'] },
+    steps: [
+      { title: 'Create categories', detail: 'Add categories (e.g. Laptops, Phones, Software Accounts) with an icon and color.' },
+      { title: 'Add platforms/types', detail: 'Under each category add platforms classified as Hardware / Account / Software, with allowed companies.' },
+    ],
+    tips: ['Set up the catalog first — Inventory items and assigned Assets reference these types.'],
+    faq: [
+      { q: 'Difference between catalog and inventory?', a: 'Catalog = the “types”; Inventory = the actual physical items of those types.' },
+      { q: 'Who can delete catalog entries?', a: 'Admins; HR can add/edit.' },
+    ],
+    related: ['inventory', 'assets'],
+  },
+  {
+    id: 'system-config', route: '/settings/system', group: 'operations', roles: ['admin'], icon: 'Settings',
+    title: 'System Config',
+    overview: 'Admin configuration for the recruitment pipeline (ATS stages order), onboarding & offboarding stages/templates, letter templates, and KPI tiers. Admin only.',
+    whenToUse: 'To tailor the system’s workflows and templates to your processes.',
+    diagram: { type: 'screen', items: [
+      { n: 1, label: 'ATS stages (reorder)' },
+      { n: 2, label: 'Onboarding / Offboarding stages & templates' },
+      { n: 3, label: 'Letter templates' },
+      { n: 4, label: 'KPI tiers' },
+    ] },
+    steps: [
+      { title: 'Configure ATS stages', detail: 'Reorder/define the recruitment pipeline stages used on the ATS board.' },
+      { title: 'Set workflow templates', detail: 'Configure onboarding/offboarding stages and templates and letter templates.' },
+      { title: 'Manage KPI tiers', detail: 'Define reward tiers used by the KPI Tracker.' },
+    ],
+    tips: ['Changes here affect the ATS board, onboarding/offboarding flows and KPI tracking across the app.'],
+    faq: [
+      { q: 'Why admin-only?', a: 'It changes core workflow structure, so it’s restricted to admins.' },
+      { q: 'Will reordering ATS stages affect existing candidates?', a: 'Candidates keep their stage; the board reflects the new order.' },
+    ],
+    related: ['ats', 'kpi', 'templates'],
+  },
+  {
+    id: 'email-settings', route: '/settings/email', group: 'operations', roles: ['admin'], icon: 'Mail',
+    title: 'Email Settings (SMTP)',
+    overview: 'Configure the outgoing email server (SMTP host, port, credentials, sender identity), test the connection, and enable/disable sending. Admin only.',
+    whenToUse: 'Once during setup so the system can send offers, letters, notifications and documents.',
+    diagram: { type: 'screen', items: [
+      { n: 1, label: 'SMTP host & port' },
+      { n: 2, label: 'Username & password' },
+      { n: 3, label: 'Sender identity (from / reply-to)' },
+      { n: 4, label: 'Test connection + save' },
+    ] },
+    steps: [
+      { title: 'Enter SMTP details', detail: 'Host, port, username, password and the From/Reply-To identity.' },
+      { title: 'Test the connection', detail: 'Re-enter the password and click Test Connection to verify before saving.' },
+      { title: 'Save & enable', detail: 'Save the configuration and keep “Enable Email Sending” on.' },
+    ],
+    tips: [
+      'Port 465 = implicit TLS; port 587 = STARTTLS — the system selects the right mode by port automatically.',
+      'Re-type the SMTP password to test/verify; it’s stored encrypted.',
+    ],
+    faq: [
+      { q: '“Missing credentials” error?', a: 'Re-enter the SMTP password in the field and save; it must be supplied to authenticate.' },
+      { q: '“Wrong version number” error?', a: 'A port/TLS mismatch — the system now derives TLS from the port; use 465 (TLS) or 587 (STARTTLS).' },
+      { q: 'Why is the Email tab hidden for me?', a: 'Email & System config are admin-only.' },
+    ],
+    related: ['email-log', 'send-documents', 'templates'],
+  },
+  {
+    id: 'templates', route: '/settings/templates', group: 'operations', roles: ['admin', 'hr_manager'], icon: 'FileText',
+    title: 'Email Templates',
+    overview: 'Preview and manage the email templates the system uses (candidate received, leave approved, onboarding stage, offer letter, etc.) and their variables.',
+    whenToUse: 'To review or adjust the wording of automated and manual emails.',
+    diagram: { type: 'screen', items: [
+      { n: 1, label: 'Template list' },
+      { n: 2, label: 'Preview' },
+      { n: 3, label: 'Template content & variables' },
+    ] },
+    steps: [
+      { title: 'Browse templates', detail: 'See all templates used across recruitment, onboarding, leave, assets, etc.' },
+      { title: 'Preview', detail: 'Preview how a template renders with sample data.' },
+    ],
+    tips: ['Use the 📧 buttons across the app to send messages built from these templates.'],
+    faq: [
+      { q: 'Where are these templates sent from?', a: 'Various modules trigger them automatically, and you can send some manually via the email buttons.' },
+      { q: 'Can I change variables?', a: 'You can manage template content and the variables it supports.' },
+    ],
+    related: ['email-settings', 'email-log', 'system-config'],
+  },
+
+  // ───────────────────────── Employee portal ─────────────────────────
+  {
+    id: 'my-assets', route: '/portal/my-assets', group: 'portal', roles: ['employee', 'admin', 'hr_manager'], icon: 'Shield',
+    title: 'My Assets & Accounts',
+    overview: 'Your personal self-service view: the hardware assigned to you and the software/account credentials issued to you. Reveal a password briefly (auto-hides) and copy credentials.',
+    whenToUse: 'To check what equipment and accounts you have, and retrieve your login details.',
+    diagram: { type: 'screen', items: [
+      { n: 1, label: 'Assigned hardware (devices)' },
+      { n: 2, label: 'Accounts & credentials' },
+      { n: 3, label: 'Reveal password (auto-hide)' },
+      { n: 4, label: 'Copy username / password' },
+    ] },
+    steps: [
+      { title: 'View your devices', detail: 'See the hardware assigned to you with serial/code.' },
+      { title: 'Get account credentials', detail: 'For accounts, reveal the password (it hides automatically) or copy username/password.' },
+    ],
+    tips: ['Passwords are revealed only briefly for security; copy them rather than leaving them on screen.'],
+    faq: [
+      { q: 'I see “No assets assigned”.', a: 'Nothing has been assigned to you yet — contact HR.' },
+      { q: 'Why does the password hide itself?', a: 'For security, revealed passwords auto-hide after a few seconds.' },
+      { q: 'Can I edit my assets here?', a: 'No — this is a read-only personal view; HR manages assignments.' },
+    ],
+    related: ['assets'],
+  },
 ];
 
 export default articles;
