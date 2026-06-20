@@ -73,7 +73,7 @@ export default function Assets() {
       if (statusFilter) params.status = statusFilter;
       const { data } = await assetsApi.getAssets(params);
       setAssets(data);
-    } catch { toast.error('Failed to load assets'); }
+    } catch { toast.error(t('toasts.t_failed_to_load_assets')); }
     finally { setLoading(false); }
   };
 
@@ -143,7 +143,7 @@ export default function Assets() {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!form.name || !form.employee_id) { toast.error('Name and employee are required'); return; }
+    if (!form.name || !form.employee_id) { toast.error(t('toasts.t_name_and_employee_are_required')); return; }
     setSaving(true);
     try {
       const payload = {
@@ -159,8 +159,8 @@ export default function Assets() {
       if (!payload.account_username) delete payload.account_username;
       if (!payload.account_url) delete payload.account_url;
 
-      if (editing) { await assetsApi.updateAsset(editing.id, payload); toast.success('Asset updated'); }
-      else { await assetsApi.createAsset(payload); toast.success('Asset assigned successfully!'); }
+      if (editing) { await assetsApi.updateAsset(editing.id, payload); toast.success(t('toasts.t_asset_updated')); }
+      else { await assetsApi.createAsset(payload); toast.success(t('toasts.t_asset_assigned_successfully')); }
       setModalOpen(false); loadAssets();
     } catch { toast.error(t('common.error')); } finally { setSaving(false); }
   };
@@ -168,7 +168,7 @@ export default function Assets() {
   const handleReturn = async () => {
     try {
       await assetsApi.returnAsset(returnModal.id, { condition_note: returnCondition });
-      toast.success('Asset returned');
+      toast.success(t('toasts.t_asset_returned'));
       setReturnModal(null); loadAssets();
     } catch { toast.error(t('common.error')); }
   };
@@ -192,7 +192,7 @@ export default function Assets() {
       setTimeout(() => {
         setRevealedPasswords(prev => { const n = { ...prev }; delete n[assetId]; return n; });
       }, 15000);
-    } catch { toast.error('Failed to reveal password'); }
+    } catch { toast.error(t('toasts.t_failed_to_reveal_password')); }
     finally { setRevealingId(null); }
   };
 
@@ -238,11 +238,11 @@ export default function Assets() {
       const fd = new FormData();
       fd.append('receipt', file);
       await assetsApi.uploadReceipt(uploadReceiptAsset.id, fd);
-      toast.success('Signed receipt uploaded successfully!');
+      toast.success(t('toasts.t_signed_receipt_uploaded_successfully'));
       setUploadReceiptAsset(null);
       loadAssets();
     } catch {
-      toast.error('Failed to upload receipt');
+      toast.error(t('toasts.t_failed_to_upload_receipt'));
     } finally {
       setUploading(false);
       e.target.value = '';

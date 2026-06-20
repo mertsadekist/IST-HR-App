@@ -38,7 +38,7 @@ export default function Employees() {
       const { data } = await api.get(url);
       setEmployees(data.data || data); // handle standard pagination response or flat array
     } catch (err) {
-      toast.error('Failed to load employees');
+      toast.error(t('toasts.t_failed_to_load_employees'));
     } finally {
       setLoading(false);
     }
@@ -47,7 +47,7 @@ export default function Employees() {
   const handleWizardComplete = () => {
     setWizardOpen(false);
     loadEmployees();
-    toast.success('Employee successfully onboarded!');
+    toast.success(t('toasts.t_employee_successfully_onboarded'));
   };
 
   const handleOpenProfile = async (emp) => {
@@ -73,7 +73,7 @@ export default function Employees() {
     formData.append('file', file);
     formData.append('category', uploadCategory);
 
-    const toastId = toast.loading('Uploading document...');
+    const toastId = toast.loading(t('toasts.t_uploading_document'));
     try {
       await employeesApi.uploadEmployeeDocument(selectedEmp.id, formData);
       toast.update(toastId, { render: 'Document uploaded successfully!', type: 'success', isLoading: false, autoClose: 3000 });
@@ -99,7 +99,7 @@ export default function Employees() {
       link.click();
       link.remove();
     } catch {
-      toast.error('Failed to download document');
+      toast.error(t('toasts.t_failed_to_download_document'));
     }
   };
 

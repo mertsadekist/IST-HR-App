@@ -82,7 +82,7 @@ function AtsStagesConfig() {
     try {
       const { data } = await settingsApi.getAtsStages();
       setStages(data);
-    } catch { toast.error('Failed to load stages'); }
+    } catch { toast.error(t('toasts.t_failed_to_load_stages')); }
     finally { setLoading(false); }
   };
 
@@ -103,15 +103,15 @@ function AtsStagesConfig() {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!form.name) { toast.error('Stage name is required'); return; }
+    if (!form.name) { toast.error(t('toasts.t_stage_name_is_required')); return; }
     setSaving(true);
     try {
       if (editing) {
         await settingsApi.updateAtsStage(editing.id, form);
-        toast.success('Stage updated');
+        toast.success(t('toasts.t_stage_updated'));
       } else {
         await settingsApi.createAtsStage({ ...form, sort_order: stages.length + 1 });
-        toast.success('Stage created');
+        toast.success(t('toasts.t_stage_created'));
       }
       setModalOpen(false);
       loadStages();
@@ -121,8 +121,8 @@ function AtsStagesConfig() {
   const handleDelete = async (stage) => {
     const result = await confirmDelete(`stage "${stage.name}"`);
     if (result.isConfirmed) {
-      try { await settingsApi.deleteAtsStage(stage.id); toast.success('Stage deleted'); loadStages(); }
-      catch (err) { toast.error('Delete failed — stage may be in use'); }
+      try { await settingsApi.deleteAtsStage(stage.id); toast.success(t('toasts.t_stage_deleted')); loadStages(); }
+      catch (err) { toast.error(t('toasts.t_delete_failed_stage_may_be_in_use')); }
     }
   };
 
@@ -138,7 +138,7 @@ function AtsStagesConfig() {
     try {
       await settingsApi.reorderAtsStages({ stages: reordered });
     } catch (err) {
-      toast.error('Reorder failed');
+      toast.error(t('toasts.t_reorder_failed'));
       loadStages();
     }
   };
@@ -273,7 +273,7 @@ function TemplateConfig({ type, companies }) {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!form.name) { toast.error('Step name is required'); return; }
+    if (!form.name) { toast.error(t('toasts.t_step_name_is_required')); return; }
     setSaving(true);
     try {
       const payload = {
@@ -284,10 +284,10 @@ function TemplateConfig({ type, companies }) {
       };
       if (editing) {
         await apiUpdate(editing.id, payload);
-        toast.success('Template step updated');
+        toast.success(t('toasts.t_template_step_updated'));
       } else {
         await apiCreate(payload);
-        toast.success('Template step created');
+        toast.success(t('toasts.t_template_step_created'));
       }
       setModalOpen(false);
       loadTemplates();
@@ -297,7 +297,7 @@ function TemplateConfig({ type, companies }) {
   const handleDelete = async (tpl) => {
     const result = await confirmDelete(`step "${tpl.name}"`);
     if (result.isConfirmed) {
-      try { await apiDelete(tpl.id); toast.success('Template step deleted'); loadTemplates(); }
+      try { await apiDelete(tpl.id); toast.success(t('toasts.t_template_step_deleted')); loadTemplates(); }
       catch (err) { toast.error(t('common.delete_failed')); }
     }
   };
@@ -440,7 +440,7 @@ function LetterTemplatesConfig() {
     try {
       const { data } = await legalApi.getTemplates();
       setTemplates(data);
-    } catch { toast.error('Failed to load letter templates'); }
+    } catch { toast.error(t('toasts.t_failed_to_load_letter_templates')); }
     finally { setLoading(false); }
   };
 
@@ -462,16 +462,16 @@ function LetterTemplatesConfig() {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!form.name) { toast.error('Template name is required'); return; }
+    if (!form.name) { toast.error(t('toasts.t_template_name_is_required')); return; }
     setSaving(true);
     try {
       const payload = { ...form };
       if (editing) {
         await legalApi.updateTemplate(editing.id, payload);
-        toast.success('Template updated');
+        toast.success(t('toasts.t_template_updated'));
       } else {
         await legalApi.createTemplate(payload);
-        toast.success('Template created');
+        toast.success(t('toasts.t_template_created'));
       }
       setModalOpen(false);
       loadTemplates();
@@ -481,7 +481,7 @@ function LetterTemplatesConfig() {
   const handleDelete = async (tpl) => {
     const result = await confirmDelete(`template "${tpl.name}"`);
     if (result.isConfirmed) {
-      try { await legalApi.deleteTemplate(tpl.id); toast.success('Template deleted'); loadTemplates(); }
+      try { await legalApi.deleteTemplate(tpl.id); toast.success(t('toasts.t_template_deleted')); loadTemplates(); }
       catch { toast.error(t('common.delete_failed')); }
     }
   };
@@ -568,7 +568,7 @@ function KpiTiersConfig() {
     try {
       const { data } = await kpiApi.getTiers();
       setTiers(data);
-    } catch { toast.error('Failed to load KPI tiers'); }
+    } catch { toast.error(t('toasts.t_failed_to_load_kpi_tiers')); }
     finally { setLoading(false); }
   };
 
@@ -579,7 +579,7 @@ function KpiTiersConfig() {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!form.tier_name) { toast.error('Tier name is required'); return; }
+    if (!form.tier_name) { toast.error(t('toasts.t_tier_name_is_required')); return; }
     setSaving(true);
     try {
       await kpiApi.createTier({
@@ -588,7 +588,7 @@ function KpiTiersConfig() {
         max_hires: parseInt(form.max_hires),
         commission_per_hire: parseFloat(form.commission_per_hire),
       });
-      toast.success('Tier created');
+      toast.success(t('toasts.t_tier_created'));
       setModalOpen(false);
       loadTiers();
     } catch (err) { toast.error(t('common.error')); } finally { setSaving(false); }

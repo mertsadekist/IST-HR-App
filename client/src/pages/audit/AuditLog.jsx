@@ -31,7 +31,7 @@ export default function AuditLog() {
       const { data } = await auditApi.getAuditLogs({ limit: 200 });
       setLogs(Array.isArray(data) ? data : data.data || []);
     } catch {
-      toast.error('Failed to load audit logs');
+      toast.error(t('toasts.t_failed_to_load_audit_logs'));
     } finally {
       setLoading(false);
     }

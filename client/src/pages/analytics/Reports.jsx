@@ -66,7 +66,7 @@ export default function Reports() {
         case 'employees': { const { data } = await reportsApi.getEmployeesReport(params); setEmployeeData(data); break; }
         case 'onboarding': { const { data } = await reportsApi.getOnboardingReport(params); setOnboardingData(data); break; }
       }
-    } catch { toast.error('Failed to load report'); }
+    } catch { toast.error(t('toasts.t_failed_to_load_report')); }
     finally { setLoading(false); }
   };
 

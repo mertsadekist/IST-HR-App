@@ -50,7 +50,7 @@ export default function CVScorer() {
 
   const handleCreateProfile = async (e) => {
     e.preventDefault();
-    if (!profileForm.title) { toast.error('Title required'); return; }
+    if (!profileForm.title) { toast.error(t('toasts.t_title_required')); return; }
     setSaving(true);
     try {
       const data = {
@@ -61,7 +61,7 @@ export default function CVScorer() {
         nice_have_skills: profileForm.nice_have_skills ? profileForm.nice_have_skills.split(',').map(s => s.trim()).filter(Boolean) : [],
       };
       await cvScorerApi.createProfile(data);
-      toast.success('Vacancy profile created');
+      toast.success(t('toasts.t_vacancy_profile_created'));
       setProfileModal(false);
       loadProfiles();
     } catch { toast.error(t('common.error')); }
@@ -75,7 +75,7 @@ export default function CVScorer() {
       const { data } = await cvScorerApi.scoreCandidates({ profile_id: profile.id });
       setResults(data);
       toast.success(`${t('recruitment.candidates_scored')} ${data.results?.length || 0}`);
-    } catch { toast.error('Scoring failed'); }
+    } catch { toast.error(t('toasts.t_scoring_failed')); }
     finally { setScoring(false); }
   };
 

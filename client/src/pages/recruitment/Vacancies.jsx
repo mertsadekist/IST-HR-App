@@ -69,7 +69,7 @@ export default function Vacancies() {
       setTotal(data.total);
       setTotalPages(data.totalPages);
     } catch (err) {
-      toast.error('Failed to load vacancies');
+      toast.error(t('toasts.t_failed_to_load_vacancies'));
     } finally {
       setLoading(false);
     }
@@ -126,7 +126,7 @@ export default function Vacancies() {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!form.title || !form.company_id) { toast.error('Title and company are required'); return; }
+    if (!form.title || !form.company_id) { toast.error(t('toasts.t_title_and_company_are_required')); return; }
     setSaving(true);
     try {
       const payload = {
@@ -143,10 +143,10 @@ export default function Vacancies() {
       };
       if (editing) {
         await vacanciesApi.updateVacancy(editing.id, payload);
-        toast.success('Vacancy updated');
+        toast.success(t('toasts.t_vacancy_updated'));
       } else {
         await vacanciesApi.createVacancy(payload);
-        toast.success('Vacancy created');
+        toast.success(t('toasts.t_vacancy_created'));
       }
       setModalOpen(false);
       loadVacancies();
@@ -162,7 +162,7 @@ export default function Vacancies() {
     if (result.isConfirmed) {
       try {
         await vacanciesApi.deleteVacancy(vacancy.id);
-        toast.success('Vacancy deleted');
+        toast.success(t('toasts.t_vacancy_deleted'));
         loadVacancies();
       } catch (err) {
         toast.error(t('common.delete_failed'));
@@ -175,7 +175,7 @@ export default function Vacancies() {
       const { data } = await applicationsApi.publishVacancy(v.id);
       const link = `${window.location.origin}/careers/${data.public_slug}`;
       try { await navigator.clipboard.writeText(link); } catch { /* ignore */ }
-      toast.success('Published — public link copied to clipboard');
+      toast.success(t('toasts.t_published_public_link_copied_to_clipboard'));
       loadVacancies();
     } catch (err) {
       const miss = err.response?.data?.missing;
@@ -185,7 +185,7 @@ export default function Vacancies() {
   const copyLink = async (v) => {
     if (!v.public_slug) return;
     const link = `${window.location.origin}/careers/${v.public_slug}`;
-    try { await navigator.clipboard.writeText(link); toast.success('Public link copied'); }
+    try { await navigator.clipboard.writeText(link); toast.success(t('toasts.t_public_link_copied')); }
     catch { window.prompt('Public link:', link); }
   };
 

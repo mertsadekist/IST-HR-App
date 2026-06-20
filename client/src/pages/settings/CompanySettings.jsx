@@ -81,7 +81,7 @@ export default function CompanySettings() {
     fd.append('file', file);
     try {
       await companiesApi.uploadLetterhead(editing.id, fd);
-      toast.success('Letterhead uploaded');
+      toast.success(t('toasts.t_letterhead_uploaded'));
       await refreshEditing();
     } catch (err) { toast.error(err.response?.data?.error || 'Upload failed'); }
     finally { setLhBusy(false); if (lhInputRef.current) lhInputRef.current.value = ''; }
@@ -90,33 +90,33 @@ export default function CompanySettings() {
   const handleLhMargins = async () => {
     if (!editing) return;
     setLhBusy(true);
-    try { await companiesApi.saveLetterheadMargins(editing.id, lhMargins); toast.success('Margins saved'); dispatch(fetchCompanies()); }
-    catch { toast.error('Failed to save margins'); }
+    try { await companiesApi.saveLetterheadMargins(editing.id, lhMargins); toast.success(t('toasts.t_margins_saved')); dispatch(fetchCompanies()); }
+    catch { toast.error(t('toasts.t_failed_to_save_margins')); }
     finally { setLhBusy(false); }
   };
 
   const handleLhRemove = async () => {
     if (!editing) return;
     setLhBusy(true);
-    try { await companiesApi.deleteLetterhead(editing.id); toast.success('Letterhead removed'); await refreshEditing(); }
-    catch { toast.error('Failed to remove letterhead'); }
+    try { await companiesApi.deleteLetterhead(editing.id); toast.success(t('toasts.t_letterhead_removed')); await refreshEditing(); }
+    catch { toast.error(t('toasts.t_failed_to_remove_letterhead')); }
     finally { setLhBusy(false); }
   };
 
   const handleSave = async (e) => {
     e.preventDefault();
     if (!form.name || !form.short_code || !form.currency) {
-      toast.error('Name, Short Code, and Currency are required');
+      toast.error(t('toasts.t_name_short_code_and_currency_are_required'));
       return;
     }
     setSaving(true);
     try {
       if (editing) {
         await companiesApi.updateCompany(editing.id, form);
-        toast.success('Company updated');
+        toast.success(t('toasts.t_company_updated'));
       } else {
         await companiesApi.createCompany(form);
-        toast.success('Company created');
+        toast.success(t('toasts.t_company_created'));
       }
       setModalOpen(false);
       dispatch(fetchCompanies());
@@ -132,7 +132,7 @@ export default function CompanySettings() {
     if (result.isConfirmed) {
       try {
         await companiesApi.deleteCompany(company.id);
-        toast.success('Company deleted');
+        toast.success(t('toasts.t_company_deleted'));
         dispatch(fetchCompanies());
       } catch (err) {
         toast.error(err.response?.data?.error || 'Delete failed');
@@ -333,7 +333,7 @@ export default function CompanySettings() {
                       const file = e.target.files[0];
                       if (file) {
                         if (file.size > 2 * 1024 * 1024) {
-                          toast.error('Logo must be under 2MB');
+                          toast.error(t('toasts.t_logo_must_be_under_2mb'));
                           return;
                         }
                         const reader = new FileReader();

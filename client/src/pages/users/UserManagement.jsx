@@ -58,7 +58,7 @@ export default function UserManagement() {
       setUsers(uRes.data);
       setDepartments(dRes.data);
     } catch {
-      toast.error('Failed to load data');
+      toast.error(t('toasts.t_failed_to_load_data'));
     } finally {
       setLoading(false);
     }
@@ -83,11 +83,11 @@ export default function UserManagement() {
   const handleSave = async (e) => {
     e.preventDefault();
     if (!form.username || !form.name || !form.role) {
-      toast.error('Username, name, and role are required');
+      toast.error(t('toasts.t_username_name_and_role_are_required'));
       return;
     }
     if (!editing && !form.password) {
-      toast.error('Password is required for new users');
+      toast.error(t('toasts.t_password_is_required_for_new_users'));
       return;
     }
     setSaving(true);
@@ -100,10 +100,10 @@ export default function UserManagement() {
       if (editing) {
         if (!payload.password) delete payload.password;
         await usersApi.updateUser(editing.id, payload);
-        toast.success('User updated');
+        toast.success(t('toasts.t_user_updated'));
       } else {
         await usersApi.createUser(payload);
-        toast.success('User created');
+        toast.success(t('toasts.t_user_created'));
       }
       setModalOpen(false);
       loadData();
@@ -116,14 +116,14 @@ export default function UserManagement() {
 
   const handleDelete = async (user) => {
     if (user.id === currentUser?.id) {
-      toast.error('You cannot delete your own account');
+      toast.error(t('toasts.t_you_cannot_delete_your_own_account'));
       return;
     }
     const result = await confirmDelete(`user "${user.name}"`);
     if (result.isConfirmed) {
       try {
         await usersApi.deleteUser(user.id);
-        toast.success('User deleted');
+        toast.success(t('toasts.t_user_deleted'));
         loadData();
       } catch (err) {
         toast.error(err.response?.data?.error || 'Delete failed');
@@ -133,7 +133,7 @@ export default function UserManagement() {
 
   const handleResetPassword = async () => {
     if (!newPassword || newPassword.length < 6) {
-      toast.error('Password must be at least 6 characters');
+      toast.error(t('toasts.t_password_must_be_at_least_6_characters'));
       return;
     }
     try {

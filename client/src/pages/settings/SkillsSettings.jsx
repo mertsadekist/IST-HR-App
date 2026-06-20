@@ -35,7 +35,7 @@ export default function SkillsSettings() {
       data.forEach((c) => { exp[c.id] = true; });
       setExpanded(exp);
     } catch (err) {
-      toast.error('Failed to load skills');
+      toast.error(t('toasts.t_failed_to_load_skills'));
     } finally {
       setLoading(false);
     }
@@ -53,15 +53,15 @@ export default function SkillsSettings() {
 
   const handleSaveCat = async (e) => {
     e.preventDefault();
-    if (!catForm.name) { toast.error('Category name is required'); return; }
+    if (!catForm.name) { toast.error(t('toasts.t_category_name_is_required')); return; }
     setSavingCat(true);
     try {
       if (editingCat) {
         await skillsApi.updateCategory(editingCat.id, catForm);
-        toast.success('Category updated');
+        toast.success(t('toasts.t_category_updated'));
       } else {
         await skillsApi.createCategory(catForm);
-        toast.success('Category created');
+        toast.success(t('toasts.t_category_created'));
       }
       setCatModalOpen(false);
       loadSkills();
@@ -77,7 +77,7 @@ export default function SkillsSettings() {
     if (result.isConfirmed) {
       try {
         await skillsApi.deleteCategory(cat.id);
-        toast.success('Category deleted');
+        toast.success(t('toasts.t_category_deleted'));
         loadSkills();
       } catch (err) { toast.error(t('common.delete_failed')); }
     }
@@ -100,7 +100,7 @@ export default function SkillsSettings() {
     try {
       await skillsApi.deleteSkill(skillId);
       loadSkills();
-    } catch (err) { toast.error('Failed to delete skill'); }
+    } catch (err) { toast.error(t('toasts.t_failed_to_delete_skill')); }
   };
 
   // Export
@@ -111,7 +111,7 @@ export default function SkillsSettings() {
     const a = document.createElement('a');
     a.href = url; a.download = 'skills-library.json'; a.click();
     URL.revokeObjectURL(url);
-    toast.success('Skills exported');
+    toast.success(t('toasts.t_skills_exported'));
   };
 
   // Filter

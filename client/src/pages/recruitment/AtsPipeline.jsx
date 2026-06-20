@@ -43,7 +43,7 @@ export default function AtsPipeline() {
       const vacRes = await vacanciesApi.getVacancies(vacParams);
       setVacancies(vacRes.data.data || []);
     } catch (err) {
-      toast.error('Failed to load pipeline');
+      toast.error(t('toasts.t_failed_to_load_pipeline'));
     } finally {
       setLoading(false);
     }
@@ -80,7 +80,7 @@ export default function AtsPipeline() {
       else toast.success(`${t('recruitment.moved_to')} ${stage.name}`);
       loadAll();
     } catch (err) {
-      toast.error('Failed to move candidate');
+      toast.error(t('toasts.t_failed_to_move_candidate'));
     }
     setDragging(null);
   };

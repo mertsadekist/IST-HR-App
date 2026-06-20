@@ -48,18 +48,18 @@ export default function KPITracker() {
 
   const handleLogHire = async (e) => {
     e.preventDefault();
-    if (!hireForm.employee_name || !hireForm.company_id || !hireForm.join_date) { toast.error('Name, company, and date required'); return; }
+    if (!hireForm.employee_name || !hireForm.company_id || !hireForm.join_date) { toast.error(t('toasts.t_name_company_and_date_required')); return; }
     setSaving(true);
     try {
       await kpiApi.logHire({ ...hireForm, company_id: parseInt(hireForm.company_id) });
-      toast.success('Hire logged');
+      toast.success(t('toasts.t_hire_logged'));
       setHireModal(false); loadAll();
     } catch { toast.error(t('common.error')); }
     finally { setSaving(false); }
   };
 
   const handleConfirm = async (hire) => {
-    try { await kpiApi.confirmHire(hire.id); toast.success('Confirmed'); loadAll(); }
+    try { await kpiApi.confirmHire(hire.id); toast.success(t('toasts.t_confirmed')); loadAll(); }
     catch { toast.error(t('common.error')); }
   };
 
@@ -70,7 +70,7 @@ export default function KPITracker() {
 
   const handleAddTier = async (e) => {
     e.preventDefault();
-    try { await kpiApi.createTier({ ...tierForm, amount: parseFloat(tierForm.amount) }); toast.success('Tier added'); setTierModal(false); loadAll(); }
+    try { await kpiApi.createTier({ ...tierForm, amount: parseFloat(tierForm.amount) }); toast.success(t('toasts.t_tier_added')); setTierModal(false); loadAll(); }
     catch { toast.error(t('common.error')); }
   };
 

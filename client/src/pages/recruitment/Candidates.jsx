@@ -84,7 +84,7 @@ export default function Candidates() {
       setTotal(data.total);
       setTotalPages(data.totalPages);
     } catch {
-      toast.error('Failed to load candidates');
+      toast.error(t('toasts.t_failed_to_load_candidates'));
     } finally {
       setLoading(false);
     }
@@ -120,7 +120,7 @@ export default function Candidates() {
   const handleSave = async (e) => {
     e.preventDefault();
     if (!form.first_name || !form.last_name || !form.company_id) {
-      toast.error('First name, last name, and company are required');
+      toast.error(t('toasts.t_first_name_last_name_and_company_are_required'));
       return;
     }
     setSaving(true);
@@ -134,10 +134,10 @@ export default function Candidates() {
       };
       if (editing) {
         await candidatesApi.updateCandidate(editing.id, payload);
-        toast.success('Candidate updated');
+        toast.success(t('toasts.t_candidate_updated'));
       } else {
         await candidatesApi.createCandidate(payload);
-        toast.success('Candidate added');
+        toast.success(t('toasts.t_candidate_added'));
       }
       setModalOpen(false);
       loadCandidates();
@@ -153,7 +153,7 @@ export default function Candidates() {
     if (result.isConfirmed) {
       try {
         await candidatesApi.deleteCandidate(c.id);
-        toast.success('Candidate deleted');
+        toast.success(t('toasts.t_candidate_deleted'));
         loadCandidates();
       } catch {
         toast.error(t('common.delete_failed'));
@@ -170,7 +170,7 @@ export default function Candidates() {
   };
 
   const handleMove = async () => {
-    if (!moveStageId) { toast.error('Select a stage'); return; }
+    if (!moveStageId) { toast.error(t('toasts.t_select_a_stage')); return; }
     setMoving(true);
     try {
       const result = await candidatesApi.moveCandidate(moveTarget.id, {
@@ -183,7 +183,7 @@ export default function Candidates() {
       setMoveModalOpen(false);
       loadCandidates();
     } catch (err) {
-      toast.error('Move failed');
+      toast.error(t('toasts.t_move_failed'));
     } finally {
       setMoving(false);
     }
@@ -247,7 +247,7 @@ export default function Candidates() {
   const handleReadCV = async () => {
     if (!profileCandidate) return;
     setUploading(true);
-    const tId = toast.loading('Reading CV and extracting data…');
+    const tId = toast.loading(t('toasts.t_reading_cv'));
     try {
       await candidatesApi.parseCandidateCV(profileCandidate.id);
       const { data: updatedCand } = await candidatesApi.getCandidate(profileCandidate.id);
@@ -293,7 +293,7 @@ export default function Candidates() {
       const { data } = await candidatesApi.getWatiTags(c.id);
       setWatiTags(data);
       setProfileTab('wati');
-    } catch { toast.error('Failed to generate tags'); }
+    } catch { toast.error(t('toasts.t_failed_to_generate_tags')); }
   };
 
   return (

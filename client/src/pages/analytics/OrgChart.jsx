@@ -53,7 +53,7 @@ export default function OrgChart() {
         } catch { dept.jobTitles = []; }
       }
       setDepartments(depts);
-    } catch { toast.error('Failed to load org structure'); }
+    } catch { toast.error(t('toasts.t_failed_to_load_org_structure')); }
     finally { setLoading(false); }
   };
 

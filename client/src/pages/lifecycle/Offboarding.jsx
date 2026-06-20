@@ -62,7 +62,7 @@ export default function Offboarding() {
       if (statusFilter) params.status = statusFilter;
       const { data } = await offboardingApi.getOffboardingList(params);
       setRecords(data);
-    } catch { toast.error('Failed to load offboarding records'); }
+    } catch { toast.error(t('toasts.t_failed_to_load_offboarding_records')); }
     finally { setLoading(false); }
   };
 
@@ -78,14 +78,14 @@ export default function Offboarding() {
 
   const handleInitiate = async (e) => {
     e.preventDefault();
-    if (!initForm.employee_id || !initForm.last_working_day) { toast.error('Employee and LWD required'); return; }
+    if (!initForm.employee_id || !initForm.last_working_day) { toast.error(t('toasts.t_employee_and_lwd_required')); return; }
     setInitiating(true);
     try {
       const payload = { ...initForm, employee_id: parseInt(initForm.employee_id) };
       const { data } = await offboardingApi.initiateOffboarding(payload);
       toast.success(`Offboarding initiated. EOSB: ${data.eosb_amount?.toLocaleString()} AED`);
       setInitModal(false); loadRecords();
-    } catch { toast.error('Failed to initiate'); } finally { setInitiating(false); }
+    } catch { toast.error(t('toasts.t_failed_to_initiate')); } finally { setInitiating(false); }
   };
 
   const openDetail = async (record) => {
@@ -103,7 +103,7 @@ export default function Offboarding() {
         }
       }
     }
-    catch { toast.error('Failed to load details'); }
+    catch { toast.error(t('toasts.t_failed_to_load_details')); }
     finally { setDetailLoading(false); }
   };
 
@@ -122,7 +122,7 @@ export default function Offboarding() {
   };
 
   const handleCompleteStep = async (stepId) => {
-    try { await offboardingApi.completeStep(stepId); toast.success('Step completed'); if (detailModal) openDetail(detailModal); loadRecords(); }
+    try { await offboardingApi.completeStep(stepId); toast.success(t('toasts.t_step_completed')); if (detailModal) openDetail(detailModal); loadRecords(); }
     catch { toast.error(t('common.error')); }
   };
 
@@ -344,7 +344,7 @@ export default function Offboarding() {
                                             link.click();
                                             link.remove();
                                           } catch {
-                                            toast.error('Failed to download document');
+                                            toast.error(t('toasts.t_failed_to_download_document'));
                                           }
                                         }}
                                         className="text-brand-600 hover:text-brand-700 font-semibold"
@@ -366,7 +366,7 @@ export default function Offboarding() {
                                       formData.append('file', file);
                                       formData.append('category', 'Handover Sheet');
                                       
-                                      const toastId = toast.loading('Uploading handover sheet...');
+                                      const toastId = toast.loading(t('toasts.t_uploading_handover'));
                                       try {
                                         await employeesApi.uploadEmployeeDocument(detail.employee_id, formData);
                                         toast.update(toastId, { render: 'Document uploaded successfully!', type: 'success', isLoading: false, autoClose: 3000 });

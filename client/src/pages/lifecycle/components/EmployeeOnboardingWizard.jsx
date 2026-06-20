@@ -85,9 +85,9 @@ export default function EmployeeOnboardingWizard({ open, onClose, onComplete }) 
         parsed_data: parsed
       }]);
 
-      toast.success('Document parsed with AI successfully!');
+      toast.success(t('toasts.t_document_parsed_with_ai_successfully'));
     } catch (err) {
-      toast.error('Failed to parse document');
+      toast.error(t('toasts.t_failed_to_parse_document'));
     } finally {
       setLoading(false);
       e.target.value = null; // Reset input
@@ -124,7 +124,7 @@ export default function EmployeeOnboardingWizard({ open, onClose, onComplete }) 
 
       onComplete();
     } catch (err) {
-      toast.error('Failed to complete onboarding');
+      toast.error(t('toasts.t_failed_to_complete_onboarding'));
     } finally {
       setLoading(false);
     }

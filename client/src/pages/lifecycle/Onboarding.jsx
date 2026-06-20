@@ -32,7 +32,7 @@ export default function Onboarding() {
       if (statusFilter) params.status = statusFilter;
       const { data } = await onboardingApi.getOnboardingList(params);
       setRecords(data);
-    } catch { toast.error('Failed to load onboarding records'); }
+    } catch { toast.error(t('toasts.t_failed_to_load_onboarding_records')); }
     finally { setLoading(false); }
   };
 
@@ -42,7 +42,7 @@ export default function Onboarding() {
     try {
       const { data } = await onboardingApi.getOnboarding(record.id);
       setDetail(data);
-    } catch { toast.error('Failed to load details'); }
+    } catch { toast.error(t('toasts.t_failed_to_load_details')); }
     finally { setDetailLoading(false); }
   };
 
@@ -52,23 +52,23 @@ export default function Onboarding() {
       toast.success(`${data.steps_created} steps initialized from templates`);
       loadRecords();
       if (detailModal?.id === record.id) openDetail(record);
-    } catch { toast.error('Failed to initialize steps'); }
+    } catch { toast.error(t('toasts.t_failed_to_initialize_steps')); }
   };
 
   const handleToggleItem = async (itemId, checked) => {
     try {
       await onboardingApi.toggleChecklistItem(itemId, { is_checked: checked });
       if (detailModal) openDetail(detailModal);
-    } catch { toast.error('Failed to update'); }
+    } catch { toast.error(t('toasts.t_failed_to_update')); }
   };
 
   const handleCompleteStep = async (stepId) => {
     try {
       await onboardingApi.completeStep(stepId);
-      toast.success('Step completed & next unlocked');
+      toast.success(t('toasts.t_step_completed_next_unlocked'));
       if (detailModal) openDetail(detailModal);
       loadRecords();
-    } catch { toast.error('Failed to complete step'); }
+    } catch { toast.error(t('toasts.t_failed_to_complete_step')); }
   };
 
   const statusBadge = (status) => {

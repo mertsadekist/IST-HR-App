@@ -66,7 +66,7 @@ export default function CompanyDocs() {
 
   const handleUpload = async (e) => {
     e.preventDefault();
-    if (!file) { toast.error('Please select a file'); return; }
+    if (!file) { toast.error(t('toasts.t_please_select_a_file')); return; }
     setUploading(true);
     try {
       const formData = new FormData();
@@ -76,9 +76,9 @@ export default function CompanyDocs() {
       formData.append('name', uploadForm.name || file.name);
       if (uploadForm.description) formData.append('description', uploadForm.description);
       await documentsApi.uploadDocument(formData);
-      toast.success('Document uploaded');
+      toast.success(t('toasts.t_document_uploaded'));
       setUploadModal(false); setFile(null); loadAll();
-    } catch { toast.error('Failed to upload'); }
+    } catch { toast.error(t('toasts.t_failed_to_upload')); }
     finally { setUploading(false); }
   };
 
@@ -88,7 +88,7 @@ export default function CompanyDocs() {
       const url = URL.createObjectURL(data);
       const a = document.createElement('a'); a.href = url; a.download = doc.file_name; a.click();
       URL.revokeObjectURL(url);
-    } catch { toast.error('Failed to download'); }
+    } catch { toast.error(t('toasts.t_failed_to_download')); }
   };
 
   const handleDelete = async (doc) => {
@@ -99,7 +99,7 @@ export default function CompanyDocs() {
   const handleAddCategory = async (e) => {
     e.preventDefault();
     if (!catName) return;
-    try { await documentsApi.createCategory({ name: catName }); toast.success('Category added'); setCatModal(false); setCatName(''); loadAll(); }
+    try { await documentsApi.createCategory({ name: catName }); toast.success(t('toasts.t_category_added')); setCatModal(false); setCatName(''); loadAll(); }
     catch { toast.error(t('common.error')); }
   };
 

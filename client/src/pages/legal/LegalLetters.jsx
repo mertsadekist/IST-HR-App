@@ -168,7 +168,7 @@ export default function LegalLetters() {
 
   const handleGenerate = async (e) => {
     e.preventDefault();
-    if (!genForm.template_id || !genForm.employee_id) { toast.error('Template and employee required'); return; }
+    if (!genForm.template_id || !genForm.employee_id) { toast.error(t('toasts.t_template_and_employee_required')); return; }
     setGenerating(true);
     try {
       const { data } = await legalApi.generateLetter({
@@ -177,22 +177,22 @@ export default function LegalLetters() {
         company_id: genForm.company_id ? parseInt(genForm.company_id) : null,
         fields_data: genForm.fields_data,
       });
-      toast.success('Letter generated with AI');
+      toast.success(t('toasts.t_letter_generated_with_ai'));
       setGenModal(false);
       setViewLetter(data);
       loadAll();
-    } catch { toast.error('Failed to generate'); }
+    } catch { toast.error(t('toasts.t_failed_to_generate')); }
     finally { setGenerating(false); }
   };
 
   const handleSaveTemplate = async (e) => {
     e.preventDefault();
-    if (!tplForm.name) { toast.error('Name required'); return; }
+    if (!tplForm.name) { toast.error(t('toasts.t_name_required')); return; }
     setSavingTpl(true);
     try {
       const config = DEFAULT_FIELD_CONFIGS[tplForm.name] || [];
       await legalApi.createTemplate({ ...tplForm, fields_config: JSON.stringify(config) });
-      toast.success('Template created');
+      toast.success(t('toasts.t_template_created'));
       setTplModal(false); loadAll();
     } catch { toast.error(t('common.error')); }
     finally { setSavingTpl(false); }

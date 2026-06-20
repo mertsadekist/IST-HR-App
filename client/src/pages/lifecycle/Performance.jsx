@@ -58,7 +58,7 @@ export default function Performance() {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!form.employee_id || !form.quarter) { toast.error('Employee and quarter required'); return; }
+    if (!form.employee_id || !form.quarter) { toast.error(t('toasts.t_employee_and_quarter_required')); return; }
     setSaving(true);
     try {
       await performanceApi.createTarget({
@@ -67,14 +67,14 @@ export default function Performance() {
         company_id: form.company_id ? parseInt(form.company_id) : null,
         target_amount: form.target_amount ? parseFloat(form.target_amount) : null,
       });
-      toast.success('Target created');
+      toast.success(t('toasts.t_target_created'));
       setModal(false); loadTargets();
     } catch { toast.error(t('common.error')); }
     finally { setSaving(false); }
   };
 
   const handleSign = async (target) => {
-    try { await performanceApi.signTarget(target.id); toast.success('Target signed ✓'); loadTargets(); }
+    try { await performanceApi.signTarget(target.id); toast.success(t('toasts.t_target_signed')); loadTargets(); }
     catch { toast.error(t('common.error')); }
   };
 

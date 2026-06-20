@@ -58,7 +58,7 @@ export default function DepartmentSettings() {
       const { data } = await deptApi.getDepartments({ company_id: selectedCompany });
       setDepartments(data);
     } catch (err) {
-      toast.error('Failed to load departments');
+      toast.error(t('toasts.t_failed_to_load_departments'));
     } finally {
       setLoading(false);
     }
@@ -77,7 +77,7 @@ export default function DepartmentSettings() {
       const { data } = await jobTitlesApi.getJobTitles({ department_id: deptId, company_id: selectedCompany });
       setJobTitles(data);
     } catch (err) {
-      toast.error('Failed to load job titles');
+      toast.error(t('toasts.t_failed_to_load_job_titles'));
     } finally {
       setJobLoading(false);
     }
@@ -102,7 +102,7 @@ export default function DepartmentSettings() {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!form.name) { toast.error('Department name is required'); return; }
+    if (!form.name) { toast.error(t('toasts.t_department_name_is_required')); return; }
     setSaving(true);
     try {
       const payload = {
@@ -112,10 +112,10 @@ export default function DepartmentSettings() {
       };
       if (editing) {
         await deptApi.updateDepartment(editing.id, payload);
-        toast.success('Department updated');
+        toast.success(t('toasts.t_department_updated'));
       } else {
         await deptApi.createDepartment(payload);
-        toast.success('Department created');
+        toast.success(t('toasts.t_department_created'));
       }
       setModalOpen(false);
       loadDepartments();
@@ -131,7 +131,7 @@ export default function DepartmentSettings() {
     if (result.isConfirmed) {
       try {
         await deptApi.deleteDepartment(dept.id);
-        toast.success('Department deleted');
+        toast.success(t('toasts.t_department_deleted'));
         if (selectedDept?.id === dept.id) { setSelectedDept(null); setJobTitles([]); }
         loadDepartments();
       } catch (err) {
@@ -170,7 +170,7 @@ export default function DepartmentSettings() {
 
   const handleSaveJob = async (e) => {
     e.preventDefault();
-    if (!jobForm.title) { toast.error('Job title is required'); return; }
+    if (!jobForm.title) { toast.error(t('toasts.t_job_title_is_required')); return; }
     setSavingJob(true);
     try {
       const payload = {
@@ -181,10 +181,10 @@ export default function DepartmentSettings() {
       };
       if (editingJob) {
         await jobTitlesApi.updateJobTitle(editingJob.id, payload);
-        toast.success('Job title updated');
+        toast.success(t('toasts.t_job_title_updated'));
       } else {
         await jobTitlesApi.createJobTitle(payload);
-        toast.success('Job title created');
+        toast.success(t('toasts.t_job_title_created'));
       }
       setJobModalOpen(false);
       loadJobTitles(selectedDept.id);
@@ -200,7 +200,7 @@ export default function DepartmentSettings() {
     if (result.isConfirmed) {
       try {
         await jobTitlesApi.deleteJobTitle(job.id);
-        toast.success('Job title deleted');
+        toast.success(t('toasts.t_job_title_deleted'));
         loadJobTitles(selectedDept.id);
       } catch (err) {
         toast.error(err.response?.data?.error || 'Delete failed');

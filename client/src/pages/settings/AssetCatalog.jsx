@@ -54,7 +54,7 @@ export default function AssetCatalog() {
       catRes.data.forEach((c) => { exp[c.id] = true; });
       setExpanded(exp);
     } catch (err) {
-      toast.error('Failed to load asset catalog');
+      toast.error(t('toasts.t_failed_to_load_asset_catalog'));
     } finally {
       setLoading(false);
     }
@@ -68,15 +68,15 @@ export default function AssetCatalog() {
 
   const handleSaveCat = async (e) => {
     e.preventDefault();
-    if (!catForm.name) { toast.error('Category name is required'); return; }
+    if (!catForm.name) { toast.error(t('toasts.t_category_name_is_required')); return; }
     setSavingCat(true);
     try {
       if (editingCat) {
         await settingsApi.updateAssetCategory(editingCat.id, catForm);
-        toast.success('Category updated');
+        toast.success(t('toasts.t_category_updated'));
       } else {
         await settingsApi.createAssetCategory(catForm);
-        toast.success('Category created');
+        toast.success(t('toasts.t_category_created'));
       }
       setCatModalOpen(false);
       loadAll();
@@ -86,7 +86,7 @@ export default function AssetCatalog() {
   const handleDeleteCat = async (cat) => {
     const result = await confirmDelete(`category "${cat.name}" and all its platforms`);
     if (result.isConfirmed) {
-      try { await settingsApi.deleteAssetCategory(cat.id); toast.success('Category deleted'); loadAll(); }
+      try { await settingsApi.deleteAssetCategory(cat.id); toast.success(t('toasts.t_category_deleted')); loadAll(); }
       catch (err) { toast.error(t('common.delete_failed')); }
     }
   };
@@ -111,16 +111,16 @@ export default function AssetCatalog() {
 
   const handleSavePlat = async (e) => {
     e.preventDefault();
-    if (!platForm.name || !platForm.category_id) { toast.error('Name and category required'); return; }
+    if (!platForm.name || !platForm.category_id) { toast.error(t('toasts.t_name_and_category_required')); return; }
     setSavingPlat(true);
     try {
       const payload = { ...platForm, category_id: parseInt(platForm.category_id), inventory_total: parseInt(platForm.inventory_total) || 0 };
       if (editingPlat) {
         await settingsApi.updatePlatformItem(editingPlat.id, payload);
-        toast.success('Platform updated');
+        toast.success(t('toasts.t_platform_updated'));
       } else {
         await settingsApi.createPlatformItem(payload);
-        toast.success('Platform created');
+        toast.success(t('toasts.t_platform_created'));
       }
       setPlatModalOpen(false);
       loadAll();
@@ -130,7 +130,7 @@ export default function AssetCatalog() {
   const handleDeletePlat = async (plat) => {
     const result = await confirmDelete(`"${plat.name}"`);
     if (result.isConfirmed) {
-      try { await settingsApi.deletePlatformItem(plat.id); toast.success('Platform deleted'); loadAll(); }
+      try { await settingsApi.deletePlatformItem(plat.id); toast.success(t('toasts.t_platform_deleted')); loadAll(); }
       catch (err) { toast.error(t('common.delete_failed')); }
     }
   };

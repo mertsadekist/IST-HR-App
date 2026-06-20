@@ -85,7 +85,7 @@ export default function TemplateManager() {
         const data = res.data?.data ?? res.data ?? [];
         setTemplates(data);
       })
-      .catch(() => toast.error('Failed to load templates'))
+      .catch(() => toast.error(t('toasts.t_failed_to_load_templates')))
       .finally(() => setLoading(false));
   }, []);
 
@@ -124,7 +124,7 @@ export default function TemplateManager() {
       const html = res.data?.html ?? '';
       setPreviewHtml(html);
     } catch {
-      toast.error('Failed to preview template');
+      toast.error(t('toasts.t_failed_to_preview_template'));
       setPreviewHtml('<p style="padding:20px;color:#ef4444;">Failed to generate preview</p>');
     } finally {
       setPreviewLoading(false);
@@ -371,7 +371,7 @@ export default function TemplateManager() {
                 <Button variant="primary" onClick={() => {
                   setPreviewOpen(false);
                   // Could open compose modal here in future
-                  toast.info('Use the 📧 buttons across the app to send this template');
+                  toast.info(t('toasts.t_use_the_buttons_across_the_app_to_send_this_templa'));
                 }}>
                   <Send size={14} /> {t('email.use_template', 'Use Template')}
                 </Button>
