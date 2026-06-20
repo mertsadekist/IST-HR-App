@@ -5,9 +5,10 @@ dist/
 .DS_Store
 *.log
 
-# User-uploaded files — never commit (persisted via the /data/uploads volume)
-uploads/
-data/
+# User-uploaded files — never commit (persisted via the /data/uploads volume).
+# Anchored to the repo root so app source folders like client/src/data are NOT ignored.
+/uploads/
+/data/
 
 # Working scratch dir and stray artifacts
 scratch/
