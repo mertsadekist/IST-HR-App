@@ -89,7 +89,8 @@
     "reject": "Reject",
     "submit": "Submit",
     "search": "Search...",
-    "view": "View"
+    "view": "View",
+    "upload_failed": "Upload failed"
   },
   "dashboard": {
     "title": "Dashboard",

@@ -162,7 +162,7 @@ export default function Assets() {
       if (editing) { await assetsApi.updateAsset(editing.id, payload); toast.success('Asset updated'); }
       else { await assetsApi.createAsset(payload); toast.success('Asset assigned successfully!'); }
       setModalOpen(false); loadAssets();
-    } catch { toast.error('Failed'); } finally { setSaving(false); }
+    } catch { toast.error(t('common.error')); } finally { setSaving(false); }
   };
 
   const handleReturn = async () => {
@@ -170,12 +170,12 @@ export default function Assets() {
       await assetsApi.returnAsset(returnModal.id, { condition_note: returnCondition });
       toast.success('Asset returned');
       setReturnModal(null); loadAssets();
-    } catch { toast.error('Failed'); }
+    } catch { toast.error(t('common.error')); }
   };
 
   const handleDelete = async (a) => {
     const result = await confirmDelete(`"${a.name}"`);
-    if (result.isConfirmed) { try { await assetsApi.deleteAsset(a.id); toast.success('Deleted'); loadAssets(); } catch { toast.error('Failed'); } }
+    if (result.isConfirmed) { try { await assetsApi.deleteAsset(a.id); toast.success(t('common.deleted')); loadAssets(); } catch { toast.error(t('common.error')); } }
   };
 
   // Reveal password

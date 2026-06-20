@@ -79,7 +79,7 @@ export default function SkillsSettings() {
         await skillsApi.deleteCategory(cat.id);
         toast.success('Category deleted');
         loadSkills();
-      } catch (err) { toast.error('Delete failed'); }
+      } catch (err) { toast.error(t('common.delete_failed')); }
     }
   };
 

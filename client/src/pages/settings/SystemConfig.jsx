@@ -115,7 +115,7 @@ function AtsStagesConfig() {
       }
       setModalOpen(false);
       loadStages();
-    } catch (err) { toast.error('Failed'); } finally { setSaving(false); }
+    } catch (err) { toast.error(t('common.error')); } finally { setSaving(false); }
   };
 
   const handleDelete = async (stage) => {
@@ -291,14 +291,14 @@ function TemplateConfig({ type, companies }) {
       }
       setModalOpen(false);
       loadTemplates();
-    } catch (err) { toast.error('Failed'); } finally { setSaving(false); }
+    } catch (err) { toast.error(t('common.error')); } finally { setSaving(false); }
   };
 
   const handleDelete = async (tpl) => {
     const result = await confirmDelete(`step "${tpl.name}"`);
     if (result.isConfirmed) {
       try { await apiDelete(tpl.id); toast.success('Template step deleted'); loadTemplates(); }
-      catch (err) { toast.error('Delete failed'); }
+      catch (err) { toast.error(t('common.delete_failed')); }
     }
   };
 
@@ -475,14 +475,14 @@ function LetterTemplatesConfig() {
       }
       setModalOpen(false);
       loadTemplates();
-    } catch (err) { toast.error('Failed'); } finally { setSaving(false); }
+    } catch (err) { toast.error(t('common.error')); } finally { setSaving(false); }
   };
 
   const handleDelete = async (tpl) => {
     const result = await confirmDelete(`template "${tpl.name}"`);
     if (result.isConfirmed) {
       try { await legalApi.deleteTemplate(tpl.id); toast.success('Template deleted'); loadTemplates(); }
-      catch { toast.error('Delete failed'); }
+      catch { toast.error(t('common.delete_failed')); }
     }
   };
 
@@ -591,7 +591,7 @@ function KpiTiersConfig() {
       toast.success('Tier created');
       setModalOpen(false);
       loadTiers();
-    } catch (err) { toast.error('Failed'); } finally { setSaving(false); }
+    } catch (err) { toast.error(t('common.error')); } finally { setSaving(false); }
   };
 
   if (loading) {

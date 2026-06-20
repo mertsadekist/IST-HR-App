@@ -156,7 +156,7 @@ export default function Candidates() {
         toast.success('Candidate deleted');
         loadCandidates();
       } catch {
-        toast.error('Delete failed');
+        toast.error(t('common.delete_failed'));
       }
     }
   };
@@ -240,7 +240,7 @@ export default function Candidates() {
       const { data: updatedCand } = await candidatesApi.getCandidate(profileCandidate.id);
       setProfileCandidate(updatedCand);
       loadCandidates();
-    } catch { toast.error('Upload failed'); }
+    } catch { toast.error(t('common.upload_failed')); }
     finally { setUploading(false); }
   };
 

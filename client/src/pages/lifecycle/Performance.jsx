@@ -42,7 +42,7 @@ export default function Performance() {
       if (qFilter) params.quarter = qFilter;
       const { data } = await performanceApi.getTargets(params);
       setTargets(data);
-    } catch { toast.error('Failed to load'); }
+    } catch { toast.error(t('common.failed_load')); }
     finally { setLoading(false); }
   };
 
@@ -69,18 +69,18 @@ export default function Performance() {
       });
       toast.success('Target created');
       setModal(false); loadTargets();
-    } catch { toast.error('Failed'); }
+    } catch { toast.error(t('common.error')); }
     finally { setSaving(false); }
   };
 
   const handleSign = async (target) => {
     try { await performanceApi.signTarget(target.id); toast.success('Target signed ✓'); loadTargets(); }
-    catch { toast.error('Failed'); }
+    catch { toast.error(t('common.error')); }
   };
 
   const handleDelete = async (target) => {
     const r = await confirmDelete(`target for ${target.first_name} ${target.last_name}`);
-    if (r.isConfirmed) { try { await performanceApi.deleteTarget(target.id); toast.success('Deleted'); loadTargets(); } catch { toast.error('Failed'); } }
+    if (r.isConfirmed) { try { await performanceApi.deleteTarget(target.id); toast.success(t('common.deleted')); loadTargets(); } catch { toast.error(t('common.error')); } }
   };
 
   return (

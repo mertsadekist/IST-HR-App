@@ -80,14 +80,14 @@ export default function AssetCatalog() {
       }
       setCatModalOpen(false);
       loadAll();
-    } catch (err) { toast.error('Failed'); } finally { setSavingCat(false); }
+    } catch (err) { toast.error(t('common.error')); } finally { setSavingCat(false); }
   };
 
   const handleDeleteCat = async (cat) => {
     const result = await confirmDelete(`category "${cat.name}" and all its platforms`);
     if (result.isConfirmed) {
       try { await settingsApi.deleteAssetCategory(cat.id); toast.success('Category deleted'); loadAll(); }
-      catch (err) { toast.error('Delete failed'); }
+      catch (err) { toast.error(t('common.delete_failed')); }
     }
   };
 
@@ -124,14 +124,14 @@ export default function AssetCatalog() {
       }
       setPlatModalOpen(false);
       loadAll();
-    } catch (err) { toast.error('Failed'); } finally { setSavingPlat(false); }
+    } catch (err) { toast.error(t('common.error')); } finally { setSavingPlat(false); }
   };
 
   const handleDeletePlat = async (plat) => {
     const result = await confirmDelete(`"${plat.name}"`);
     if (result.isConfirmed) {
       try { await settingsApi.deletePlatformItem(plat.id); toast.success('Platform deleted'); loadAll(); }
-      catch (err) { toast.error('Delete failed'); }
+      catch (err) { toast.error(t('common.delete_failed')); }
     }
   };
 

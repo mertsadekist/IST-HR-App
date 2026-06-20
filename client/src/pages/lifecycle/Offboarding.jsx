@@ -118,12 +118,12 @@ export default function Offboarding() {
 
   const handleToggleItem = async (itemId, checked) => {
     try { await offboardingApi.toggleChecklistItem(itemId, { is_checked: checked }); if (detailModal) openDetail(detailModal); }
-    catch { toast.error('Failed'); }
+    catch { toast.error(t('common.error')); }
   };
 
   const handleCompleteStep = async (stepId) => {
     try { await offboardingApi.completeStep(stepId); toast.success('Step completed'); if (detailModal) openDetail(detailModal); loadRecords(); }
-    catch { toast.error('Failed'); }
+    catch { toast.error(t('common.error')); }
   };
 
   const statusBadge = (status) => {

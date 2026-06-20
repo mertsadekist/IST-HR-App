@@ -89,7 +89,8 @@
     "reject": "رفض",
     "submit": "إرسال",
     "search": "بحث...",
-    "view": "عرض"
+    "view": "عرض",
+    "upload_failed": "فشل الرفع"
   },
   "dashboard": {
     "title": "لوحة القيادة",

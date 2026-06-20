@@ -42,7 +42,7 @@ export default function KPITracker() {
       setHires(hiresRes.data);
       setTiers(tiersRes.data);
       setSummary(summaryRes.data);
-    } catch { toast.error('Failed to load'); }
+    } catch { toast.error(t('common.failed_load')); }
     finally { setLoading(false); }
   };
 
@@ -54,24 +54,24 @@ export default function KPITracker() {
       await kpiApi.logHire({ ...hireForm, company_id: parseInt(hireForm.company_id) });
       toast.success('Hire logged');
       setHireModal(false); loadAll();
-    } catch { toast.error('Failed'); }
+    } catch { toast.error(t('common.error')); }
     finally { setSaving(false); }
   };
 
   const handleConfirm = async (hire) => {
     try { await kpiApi.confirmHire(hire.id); toast.success('Confirmed'); loadAll(); }
-    catch { toast.error('Failed'); }
+    catch { toast.error(t('common.error')); }
   };
 
   const handleDelete = async (hire) => {
     const r = await confirmDelete(`hire "${hire.employee_name}"`);
-    if (r.isConfirmed) { try { await kpiApi.deleteHire(hire.id); toast.success('Deleted'); loadAll(); } catch { toast.error('Failed'); } }
+    if (r.isConfirmed) { try { await kpiApi.deleteHire(hire.id); toast.success(t('common.deleted')); loadAll(); } catch { toast.error(t('common.error')); } }
   };
 
   const handleAddTier = async (e) => {
     e.preventDefault();
     try { await kpiApi.createTier({ ...tierForm, amount: parseFloat(tierForm.amount) }); toast.success('Tier added'); setTierModal(false); loadAll(); }
-    catch { toast.error('Failed'); }
+    catch { toast.error(t('common.error')); }
   };
 
   const toggleTier = (tierId) => {

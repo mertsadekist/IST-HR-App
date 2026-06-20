@@ -165,7 +165,7 @@ export default function Vacancies() {
         toast.success('Vacancy deleted');
         loadVacancies();
       } catch (err) {
-        toast.error('Delete failed');
+        toast.error(t('common.delete_failed'));
       }
     }
   };

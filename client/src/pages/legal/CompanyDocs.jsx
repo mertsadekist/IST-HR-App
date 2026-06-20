@@ -60,7 +60,7 @@ export default function CompanyDocs() {
       const [docsRes, catsRes] = await Promise.all([documentsApi.getDocuments(params), documentsApi.getCategories()]);
       setDocuments(docsRes.data);
       setCategories(catsRes.data);
-    } catch { toast.error('Failed to load'); }
+    } catch { toast.error(t('common.failed_load')); }
     finally { setLoading(false); }
   };
 
@@ -93,14 +93,14 @@ export default function CompanyDocs() {
 
   const handleDelete = async (doc) => {
     const r = await confirmDelete(`"${doc.name}"`);
-    if (r.isConfirmed) { try { await documentsApi.deleteDocument(doc.id); toast.success('Deleted'); loadAll(); } catch { toast.error('Failed'); } }
+    if (r.isConfirmed) { try { await documentsApi.deleteDocument(doc.id); toast.success(t('common.deleted')); loadAll(); } catch { toast.error(t('common.error')); } }
   };
 
   const handleAddCategory = async (e) => {
     e.preventDefault();
     if (!catName) return;
     try { await documentsApi.createCategory({ name: catName }); toast.success('Category added'); setCatModal(false); setCatName(''); loadAll(); }
-    catch { toast.error('Failed'); }
+    catch { toast.error(t('common.error')); }
   };
 
   const filtered = documents.filter(d => !search || `${d.file_name}`.toLowerCase().includes(search.toLowerCase()));

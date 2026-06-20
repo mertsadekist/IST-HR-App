@@ -128,7 +128,7 @@ export default function LegalLetters() {
       ]);
       setTemplates(tplRes.data);
       setLetters(letRes.data);
-    } catch { toast.error('Failed to load'); }
+    } catch { toast.error(t('common.failed_load')); }
     finally { setLoading(false); }
   };
 
@@ -194,13 +194,13 @@ export default function LegalLetters() {
       await legalApi.createTemplate({ ...tplForm, fields_config: JSON.stringify(config) });
       toast.success('Template created');
       setTplModal(false); loadAll();
-    } catch { toast.error('Failed'); }
+    } catch { toast.error(t('common.error')); }
     finally { setSavingTpl(false); }
   };
 
   const handleDeleteLetter = async (letter) => {
     const r = await confirmDelete(`letter "${letter.template_name}"`);
-    if (r.isConfirmed) { try { await legalApi.deleteLetter(letter.id); toast.success('Deleted'); loadAll(); } catch { toast.error('Failed'); } }
+    if (r.isConfirmed) { try { await legalApi.deleteLetter(letter.id); toast.success(t('common.deleted')); loadAll(); } catch { toast.error(t('common.error')); } }
   };
 
   // Print produces the SAME PDF as "Send by Email" — composed onto the company

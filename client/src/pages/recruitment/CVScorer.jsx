@@ -44,7 +44,7 @@ export default function CVScorer() {
       const params = currentCompanyId ? { company_id: currentCompanyId } : {};
       const { data } = await cvScorerApi.getProfiles(params);
       setProfiles(data);
-    } catch { toast.error('Failed to load'); }
+    } catch { toast.error(t('common.failed_load')); }
     finally { setLoading(false); }
   };
 
@@ -64,7 +64,7 @@ export default function CVScorer() {
       toast.success('Vacancy profile created');
       setProfileModal(false);
       loadProfiles();
-    } catch { toast.error('Failed'); }
+    } catch { toast.error(t('common.error')); }
     finally { setSaving(false); }
   };
 
@@ -85,7 +85,7 @@ export default function CVScorer() {
       const skills = typeof profile.must_have_skills === 'string' ? JSON.parse(profile.must_have_skills) : (profile.must_have_skills || []);
       const { data } = await cvScorerApi.generateQuestions({ profile_title: profile.title, skills, seniority: profile.seniority });
       setQuestions(data.questions);
-    } catch { toast.error('Failed'); }
+    } catch { toast.error(t('common.error')); }
     finally { setGenLoading(''); }
   };
 
@@ -95,13 +95,13 @@ export default function CVScorer() {
       const skills = typeof profile.must_have_skills === 'string' ? JSON.parse(profile.must_have_skills) : (profile.must_have_skills || []);
       const { data } = await cvScorerApi.generateJD({ title: profile.title, department: profile.department, must_have_skills: skills, seniority: profile.seniority });
       setJD(data.jd);
-    } catch { toast.error('Failed'); }
+    } catch { toast.error(t('common.error')); }
     finally { setGenLoading(''); }
   };
 
   const handleDelete = async (profile) => {
     const r = await confirmDelete(`profile "${profile.title}"`);
-    if (r.isConfirmed) { try { await cvScorerApi.deleteProfile(profile.id); toast.success('Deleted'); loadProfiles(); } catch { toast.error('Failed'); } }
+    if (r.isConfirmed) { try { await cvScorerApi.deleteProfile(profile.id); toast.success(t('common.deleted')); loadProfiles(); } catch { toast.error(t('common.error')); } }
   };
 
   const parseSkills = (val) => {
