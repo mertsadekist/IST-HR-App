@@ -20,7 +20,6 @@ const articles = [
       { title: 'Click Sign In', detail: 'On success you are redirected to the Dashboard.' },
     ],
     tips: [
-      'The default administrator is admin / admin123 — change it immediately from Users.',
       'Switch the interface language (Arabic/English) any time from the globe icon in the top bar.',
     ],
     faq: [
