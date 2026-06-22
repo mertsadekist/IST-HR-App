@@ -1,18 +1,16 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import Card from '@components/ui/Card';
-import Badge from '@components/ui/Badge';
 import EmptyState from '@components/ui/EmptyState';
 import { getArticles, GROUP_ORDER } from '@/data/kb';
-import AnnotatedScreen from './diagrams/AnnotatedScreen';
 import FlowDiagram from './diagrams/FlowDiagram';
 import {
   Lock, LayoutDashboard, Building2, ShieldCheck, Send, Kanban, Users, FileText, Inbox, Target, Globe,
   UserCheck, CalendarDays, Clock, Banknote, Laptop, Package, TrendingUp, DoorOpen, Scale, FileArchive,
   Calculator, BarChart3, Trophy, ClipboardList, Mail, Network, UserCog, Settings, Box, Shield, Wrench,
-  HelpCircle, Search, ChevronRight, BookOpen, Lightbulb, MessageCircleQuestion,
+  HelpCircle, Search, ChevronRight, BookOpen, Lightbulb, MessageCircleQuestion, Image as ImageIcon, X, ZoomIn,
 } from 'lucide-react';
 
 const ICONS = {
@@ -22,12 +20,16 @@ const ICONS = {
 };
 const Icon = ({ name, ...p }) => { const C = ICONS[name] || FileText; return <C {...p} />; };
 
+// Screenshots are served statically from /public/kb (see client/public/kb).
+const imgUrl = (src) => `/kb/${src}`;
+
 export default function KnowledgeBase() {
   const { t, i18n } = useTranslation();
   const { user } = useSelector((s) => s.auth);
   const role = user?.role;
   const [sp, setSp] = useSearchParams();
   const [query, setQuery] = useState('');
+  const [zoom, setZoom] = useState(null); // { src, caption } when a screenshot is enlarged
 
   const articles = getArticles(i18n.language);
   const visible = useMemo(
@@ -47,6 +49,15 @@ export default function KnowledgeBase() {
   const activeId = sp.get('article');
   const active = visible.find((a) => a.id === activeId) || filtered[0] || visible[0] || null;
   const select = (id) => setSp(id ? { article: id } : {}, { replace: true });
+
+  // Close the lightbox when switching articles, and allow Esc to dismiss it.
+  useEffect(() => { setZoom(null); }, [active?.id]);
+  useEffect(() => {
+    if (!zoom) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setZoom(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [zoom]);
 
   const groups = GROUP_ORDER
     .map((g) => ({ id: g, items: filtered.filter((a) => a.group === g) }))
@@ -109,10 +120,27 @@ export default function KnowledgeBase() {
               </div>
             )}
 
-            {active.diagram && (
-              active.diagram.type === 'flow'
-                ? <FlowDiagram steps={active.diagram.steps} />
-                : <AnnotatedScreen items={active.diagram.items} />
+            {active.diagram?.type === 'flow' && <FlowDiagram steps={active.diagram.steps} />}
+
+            {active.images?.length > 0 && (
+              <div>
+                <h3 className="font-semibold text-surface-800 mb-3 flex items-center gap-1.5"><ImageIcon size={16} className="text-brand-500" /> {t('kb.screens', 'Screens')}</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {active.images.map((im, i) => (
+                    <figure key={i} className="rounded-xl border border-surface-100 bg-surface-50/40 overflow-hidden">
+                      <button type="button" onClick={() => setZoom(im)}
+                        className="group relative block w-full focus:outline-none focus:ring-2 focus:ring-brand-300">
+                        <img src={imgUrl(im.src)} alt={im.caption} loading="lazy"
+                          className="w-full h-auto block bg-white" />
+                        <span className="absolute top-2 ltr:right-2 rtl:left-2 w-7 h-7 rounded-lg bg-black/45 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <ZoomIn size={15} />
+                        </span>
+                      </button>
+                      {im.caption && <figcaption className="text-xs text-surface-500 leading-relaxed px-3 py-2">{im.caption}</figcaption>}
+                    </figure>
+                  ))}
+                </div>
+              </div>
             )}
 
             {active.steps?.length > 0 && (
@@ -173,6 +201,21 @@ export default function KnowledgeBase() {
           </Card>
         )}
       </div>
+
+      {/* Lightbox */}
+      {zoom && (
+        <div onClick={() => setZoom(null)}
+          className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4 animate-fade-in">
+          <button type="button" onClick={() => setZoom(null)}
+            className="absolute top-4 ltr:right-4 rtl:left-4 w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center">
+            <X size={20} />
+          </button>
+          <figure onClick={(e) => e.stopPropagation()} className="max-w-5xl w-full max-h-full flex flex-col items-center gap-3">
+            <img src={imgUrl(zoom.src)} alt={zoom.caption} className="max-h-[80vh] w-auto max-w-full rounded-xl shadow-2xl bg-white" />
+            {zoom.caption && <figcaption className="text-sm text-white/80 text-center max-w-2xl leading-relaxed">{zoom.caption}</figcaption>}
+          </figure>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 {
   "name": "ist-hr-server",
-  "version": "1.0.0",
+  "version": "2.5.0",
   "type": "module",
   "description": "IST HR System - Express API Server",
   "main": "server.js",

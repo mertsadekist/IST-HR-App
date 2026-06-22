@@ -272,7 +272,7 @@ export default function Sidebar({ isOpen, onClose }) {
 
         {/* Footer */}
         <div className="p-4 border-t border-surface-100">
-          <p className="text-xs text-surface-400 text-center">v2.0 · MySQL + AI</p>
+          <p className="text-xs text-surface-400 text-center">v2.5 · MySQL + AI</p>
         </div>
       </aside>
     </>

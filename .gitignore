@@ -14,3 +14,8 @@ dist/
 scratch/
 *.pdf
 IST_HR_System*.html
+
+# Source screenshots for the Knowledge Base — the slugified copies live in
+# client/public/kb (which IS tracked & shipped); this raw folder stays local.
+/Knowledge Base Images/
+_t.mjs
