@@ -235,7 +235,7 @@ export default function Vacancies() {
           />
         </div>
         <div className="flex gap-1">
-          {[{v: '', l: t('recruitment.all_statuses')}, {v: 'Draft', l: t('recruitment.draft')}, {v: 'Open', l: t('recruitment.open')}, {v: 'On Hold', l: t('recruitment.on_hold')}, {v: 'Closed', l: t('recruitment.closed')}].map(s => (
+          {[{v: '', l: t('recruitment.all_statuses')}, {v: 'Draft', l: t('recruitment.draft')}, {v: 'Published', l: t('recruitment.published')}, {v: 'Paused', l: t('recruitment.paused')}, {v: 'Closed', l: t('recruitment.closed')}, {v: 'Archived', l: t('recruitment.archived')}].map(s => (
             <button
               key={s.v}
               onClick={() => { setStatusFilter(s.v); setPage(1); }}

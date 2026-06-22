@@ -81,7 +81,9 @@ router.get('/:id', async (req, res) => {
 // POST /api/vacancies
 router.post('/', authorize('admin', 'hr_manager', 'recruiter'), validate({
   title: { required: true, type: 'string', minLen: 1, maxLen: 255 },
-  status: { type: 'string', enum: ['Draft', 'Open', 'On Hold', 'Closed'] },
+  // Matches the DB enum / lifecycle: Draft → Published → Paused/Closed/Archived.
+  // Legacy values (Open, On Hold) are accepted so older rows never fail validation.
+  status: { type: 'string', enum: ['Draft', 'Published', 'Paused', 'Closed', 'Archived', 'Open', 'On Hold'] },
 }), async (req, res) => {
   try {
     const company_id = resolveWriteCompanyId(req, req.body.company_id);
