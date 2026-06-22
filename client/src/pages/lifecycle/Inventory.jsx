@@ -41,6 +41,8 @@ export default function Inventory() {
   const { t } = useTranslation();
   const { items: companies } = useSelector((s) => s.companies);
   const { currentCompanyId } = useSelector((s) => s.entity);
+  const { user } = useSelector((s) => s.auth);
+  const isAdmin = user?.role === 'admin'; // delete is admin-only
 
   // Data state
   const [items, setItems] = useState([]);
@@ -574,9 +576,11 @@ export default function Inventory() {
                           <button onClick={() => openEdit(item)} className="p-1.5 text-surface-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors" title={t('inventory.edit', 'Edit')}>
                             <Edit3 size={14} />
                           </button>
-                          <button onClick={() => handleDelete(item)} className="p-1.5 text-surface-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title={t('inventory.delete', 'Delete')}>
-                            <Trash2 size={14} />
-                          </button>
+                          {isAdmin && (
+                            <button onClick={() => handleDelete(item)} className="p-1.5 text-surface-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title={t('inventory.delete', 'Delete')}>
+                              <Trash2 size={14} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

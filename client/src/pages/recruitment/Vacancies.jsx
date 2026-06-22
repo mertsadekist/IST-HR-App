@@ -38,6 +38,8 @@ export default function Vacancies() {
   const { t } = useTranslation();
   const { items: companies } = useSelector((s) => s.companies);
   const { currentCompanyId } = useSelector((s) => s.entity);
+  const { user } = useSelector((s) => s.auth);
+  const isAdmin = user?.role === 'admin'; // delete is admin-only
 
   const [vacancies, setVacancies] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -331,9 +333,11 @@ export default function Vacancies() {
                           <button onClick={() => openEdit(v)} className="p-1.5 text-surface-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors">
                             <Edit3 size={14} />
                           </button>
-                          <button onClick={() => handleDelete(v)} className="p-1.5 text-surface-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                            <Trash2 size={14} />
-                          </button>
+                          {isAdmin && (
+                            <button onClick={() => handleDelete(v)} className="p-1.5 text-surface-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                              <Trash2 size={14} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

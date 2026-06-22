@@ -30,6 +30,8 @@ export default function Assets() {
   const { t } = useTranslation();
   const { items: companies } = useSelector((s) => s.companies);
   const { currentCompanyId } = useSelector((s) => s.entity);
+  const { user } = useSelector((s) => s.auth);
+  const isAdmin = user?.role === 'admin'; // delete is admin-only
   const [assets, setAssets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
@@ -385,7 +387,7 @@ export default function Assets() {
                           </button>
                           {a.status === 'Active' && <button onClick={() => { setReturnModal(a); setReturnCondition(''); }} className="p-1.5 text-surface-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors" title="Return"><RotateCcw size={14} /></button>}
                           <button onClick={() => openEdit(a)} className="p-1.5 text-surface-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"><Edit3 size={14} /></button>
-                          <button onClick={() => handleDelete(a)} className="p-1.5 text-surface-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={14} /></button>
+                          {isAdmin && <button onClick={() => handleDelete(a)} className="p-1.5 text-surface-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={14} /></button>}
                         </div>
                       </td>
                     </tr>

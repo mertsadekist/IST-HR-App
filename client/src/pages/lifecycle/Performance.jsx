@@ -23,6 +23,8 @@ export default function Performance() {
   const { t } = useTranslation();
   const { items: companies } = useSelector((s) => s.companies);
   const { currentCompanyId } = useSelector((s) => s.entity);
+  const { user } = useSelector((s) => s.auth);
+  const isAdmin = user?.role === 'admin'; // delete is admin-only
   const [targets, setTargets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [qFilter, setQFilter] = useState('');
@@ -145,7 +147,7 @@ export default function Performance() {
                           relatedId={tgt.id}
                           companyId={tgt.company_id}
                         />
-                        <button onClick={() => handleDelete(tgt)} className="p-1.5 text-surface-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={14} /></button>
+                        {isAdmin && <button onClick={() => handleDelete(tgt)} className="p-1.5 text-surface-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={14} /></button>}
                       </div>
                     </td>
                   </tr>

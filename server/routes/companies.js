@@ -27,7 +27,8 @@ const letterheadUpload = multer({
   },
 });
 
-// GET /api/companies — platform admin sees all; everyone else only their own company
+// GET /api/companies — cross-company roles (and platform admin) see every
+// company; a selected entity narrows the list; employees see only their own.
 router.get('/', async (req, res) => {
   try {
     const co = companyClause(req, 'id');

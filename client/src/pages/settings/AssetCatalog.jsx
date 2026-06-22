@@ -19,6 +19,7 @@ const assetTypeColors = { Hardware: 'text-blue-600', Account: 'text-green-600', 
 export default function AssetCatalog() {
   const { t } = useTranslation();
   const { items: companies } = useSelector((s) => s.companies);
+  const isAdmin = useSelector((s) => s.auth.user?.role) === 'admin'; // delete is admin-only
   const [categories, setCategories] = useState([]);
   const [platforms, setPlatforms] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -202,10 +203,12 @@ export default function AssetCatalog() {
                       className="p-1.5 text-surface-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors">
                       <Edit3 size={14} />
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); handleDeleteCat(cat); }}
-                      className="p-1.5 text-surface-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                      <Trash2 size={14} />
-                    </button>
+                    {isAdmin && (
+                      <button onClick={(e) => { e.stopPropagation(); handleDeleteCat(cat); }}
+                        className="p-1.5 text-surface-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                        <Trash2 size={14} />
+                      </button>
+                    )}
                   </div>
                   {expanded[cat.id] ? <ChevronDown size={16} className="text-surface-400" /> : <ChevronRight size={16} className="text-surface-400" />}
                 </div>
@@ -247,9 +250,11 @@ export default function AssetCatalog() {
                                   <button onClick={() => openEditPlat(plat)} className="p-1.5 text-surface-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors">
                                     <Edit3 size={13} />
                                   </button>
-                                  <button onClick={() => handleDeletePlat(plat)} className="p-1.5 text-surface-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                                    <Trash2 size={13} />
-                                  </button>
+                                  {isAdmin && (
+                                    <button onClick={() => handleDeletePlat(plat)} className="p-1.5 text-surface-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                                      <Trash2 size={13} />
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             </div>

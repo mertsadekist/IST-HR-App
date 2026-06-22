@@ -1,12 +1,23 @@
 /**
- * Multi-company isolation test suite (audit 03 §9 / 08 §7).
+ * Single-organization, multi-company scoping test suite.
  *
- * Verifies that the tenantScope middleware and per-route company scoping added
- * in Phase 1 prevent cross-company reads/writes/deletes and privilege escalation.
+ * This is ONE organization that owns several companies (entities). Internal
+ * staff (admin / hr_manager / recruiter) operate ACROSS every company and
+ * switch entities in the UI; the role governs *permissions*, the selected
+ * entity (`company_id` in the query/body) governs which company's data is
+ * shown. Self-service users (employee) stay pinned to their own company.
+ *
+ * This suite verifies that model end-to-end:
+ *   - cross-company roles see the whole organization, and narrow to the
+ *     selected entity when one is supplied;
+ *   - employees are pinned to their own company and cannot widen scope;
+ *   - writes land under the selected entity;
+ *   - permissions still hold (no self-escalation, hr_manager cannot delete,
+ *     company management gated to platform admins).
  *
  * Strategy: the `auth` middleware only verifies the JWT (no DB lookup), so we
  * seed two real companies + users/records, then mint tokens for users of each
- * company and assert the isolation matrix. All fixtures are torn down in afterAll.
+ * company and assert the matrix. All fixtures are torn down in afterAll.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import supertest from 'supertest';
@@ -29,7 +40,7 @@ function tokenFor(user) {
 }
 const bearer = (t) => ({ Authorization: `Bearer ${t}` });
 
-let tokHrA, tokHrB, tokEmpA, tokAdminB, tokPlatform;
+let tokHrA, tokEmpA, tokAdminB, tokPlatform;
 
 beforeAll(async () => {
   // --- Companies ---
@@ -47,12 +58,10 @@ beforeAll(async () => {
     return u.insertId;
   };
   fixture.ids.hrA = await mkUser('hr_manager', fixture.companyA, 'hrA');
-  fixture.ids.hrB = await mkUser('hr_manager', fixture.companyB, 'hrB');
   fixture.ids.empA = await mkUser('employee', fixture.companyA, 'empA');
-  fixture.ids.adminB = await mkUser('admin', fixture.companyB, 'adminB'); // company-bound admin
+  fixture.ids.adminB = await mkUser('admin', fixture.companyB, 'adminB'); // company-bound admin (not a platform admin)
 
   tokHrA = tokenFor({ id: fixture.ids.hrA, name: 'hrA', role: 'hr_manager', company_id: fixture.companyA });
-  tokHrB = tokenFor({ id: fixture.ids.hrB, name: 'hrB', role: 'hr_manager', company_id: fixture.companyB });
   tokEmpA = tokenFor({ id: fixture.ids.empA, name: 'empA', role: 'employee', company_id: fixture.companyA });
   tokAdminB = tokenFor({ id: fixture.ids.adminB, name: 'adminB', role: 'admin', company_id: fixture.companyB });
   tokPlatform = tokenFor({ id: fixture.ids.hrA, name: 'plat', role: 'admin', company_id: null }); // platform admin (no company)
@@ -66,12 +75,9 @@ beforeAll(async () => {
   const [candB] = await pool.query('INSERT INTO candidates SET ?', { first_name: tag, last_name: 'CandB', company_id: fixture.companyB, status: 'Active' });
   fixture.ids.candB = candB.insertId;
 
-  const [vacB] = await pool.query('INSERT INTO vacancies SET ?', { title: `${tag} VacB`, company_id: fixture.companyB, created_by: fixture.ids.hrB, status: 'Open' });
-  fixture.ids.vacB = vacB.insertId;
-
   const [docB] = await pool.query('INSERT INTO company_documents SET ?', {
     company_id: fixture.companyB, category: 'General', file_name: `${tag}.txt`,
-    file_type: 'text/plain', file_size: 4, file_data: Buffer.from('test'), uploaded_by: fixture.ids.hrB,
+    file_type: 'text/plain', file_size: 4, file_data: Buffer.from('test'), uploaded_by: fixture.ids.adminB,
   });
   fixture.ids.docB = docB.insertId;
 
@@ -92,10 +98,9 @@ afterAll(async () => {
     if (ids.createdCandidate) await pool.query('DELETE FROM candidates WHERE id = ?', [ids.createdCandidate]);
     await pool.query('DELETE FROM asset_assignments WHERE id = ?', [ids.asgB]);
     await pool.query('DELETE FROM company_documents WHERE id = ?', [ids.docB]);
-    await pool.query('DELETE FROM vacancies WHERE id = ?', [ids.vacB]);
     await pool.query('DELETE FROM candidates WHERE id = ?', [ids.candB]);
     await pool.query('DELETE FROM employees WHERE id IN (?, ?)', [ids.empRecA, ids.empRecB]);
-    await pool.query('DELETE FROM users WHERE id IN (?, ?, ?, ?)', [ids.hrA, ids.hrB, ids.empA, ids.adminB]);
+    await pool.query('DELETE FROM users WHERE id IN (?, ?, ?)', [ids.hrA, ids.empA, ids.adminB]);
     await pool.query('DELETE FROM audit_logs WHERE company_id IN (?, ?)', [companyA, companyB]);
     await pool.query('DELETE FROM companies WHERE id IN (?, ?)', [companyA, companyB]);
   } catch (e) {
@@ -105,9 +110,40 @@ afterAll(async () => {
   }
 }, 30000);
 
-describe('List scoping', () => {
-  it('hrA /employees returns only company A rows (no company B employee)', async () => {
-    const res = await request.get('/api/employees?limit=100').set(bearer(tokHrA));
+describe('Cross-company roles see the whole organization', () => {
+  it('hr_manager with no entity selected sees employees from EVERY company', async () => {
+    const res = await request.get('/api/employees?limit=200').set(bearer(tokHrA));
+    expect(res.status).toBe(200);
+    const ids = res.body.data.map((e) => e.id);
+    expect(ids).toContain(fixture.ids.empRecA);
+    expect(ids).toContain(fixture.ids.empRecB); // company B is visible — single-org model
+  });
+
+  it('selecting an entity narrows the result to that company only', async () => {
+    const res = await request.get(`/api/employees?company_id=${fixture.companyB}&limit=200`).set(bearer(tokHrA));
+    expect(res.status).toBe(200);
+    const ids = res.body.data.map((e) => e.id);
+    expect(ids).toContain(fixture.ids.empRecB);
+    expect(ids).not.toContain(fixture.ids.empRecA);
+    expect(res.body.data.every((e) => e.company_id === fixture.companyB)).toBe(true);
+  });
+
+  it('hr_manager can read a record in another company by id (cross-company)', async () => {
+    const res = await request.get(`/api/employees/${fixture.ids.empRecB}`).set(bearer(tokHrA));
+    expect(res.status).toBe(200);
+    expect(res.body.id).toBe(fixture.ids.empRecB);
+  });
+
+  it('hr_manager can reveal a company-B asset password (cross-company)', async () => {
+    const res = await request.get(`/api/assets/${fixture.ids.asgB}/reveal-password`).set(bearer(tokHrA));
+    expect(res.status).toBe(200);
+    expect(res.body.password).toBe('superSecretB');
+  });
+});
+
+describe('Employee self-service is pinned to its own company', () => {
+  it('employee only sees their own company employees', async () => {
+    const res = await request.get('/api/employees?limit=200').set(bearer(tokEmpA));
     expect(res.status).toBe(200);
     const ids = res.body.data.map((e) => e.id);
     expect(ids).toContain(fixture.ids.empRecA);
@@ -115,53 +151,36 @@ describe('List scoping', () => {
     expect(res.body.data.every((e) => e.company_id === fixture.companyA)).toBe(true);
   });
 
-  it('client-supplied company_id cannot widen scope', async () => {
-    const res = await request.get(`/api/employees?company_id=${fixture.companyB}&limit=100`).set(bearer(tokHrA));
+  it('client-supplied company_id cannot widen an employee beyond their company', async () => {
+    const res = await request.get(`/api/employees?company_id=${fixture.companyB}&limit=200`).set(bearer(tokEmpA));
     expect(res.status).toBe(200);
     expect(res.body.data.every((e) => e.company_id === fixture.companyA)).toBe(true);
   });
-});
 
-describe('IDOR — cross-company :id access returns 404', () => {
-  it('GET /employees/:id (B) as hrA → 404', async () => {
-    const res = await request.get(`/api/employees/${fixture.ids.empRecB}`).set(bearer(tokHrA));
-    expect(res.status).toBe(404);
-  });
-  it('GET /candidates/:id (B) as hrA → 404', async () => {
-    const res = await request.get(`/api/candidates/${fixture.ids.candB}`).set(bearer(tokHrA));
-    expect(res.status).toBe(404);
-  });
-  it('GET /vacancies/:id (B) as hrA → 404', async () => {
-    const res = await request.get(`/api/vacancies/${fixture.ids.vacB}`).set(bearer(tokHrA));
-    expect(res.status).toBe(404);
-  });
-  it('GET /documents/:id/download (B) as hrA → 404', async () => {
-    const res = await request.get(`/api/documents/${fixture.ids.docB}/download`).set(bearer(tokHrA));
-    expect(res.status).toBe(404);
-  });
-  it('GET /assets/:id/reveal-password (B) as hrA → 404 (no credential leak)', async () => {
-    const res = await request.get(`/api/assets/${fixture.ids.asgB}/reveal-password`).set(bearer(tokHrA));
-    expect(res.status).toBe(404);
-    expect(res.body.password).toBeUndefined();
-  });
-  it('PUT /vacancies/:id (B) as hrA → 404', async () => {
-    const res = await request.put(`/api/vacancies/${fixture.ids.vacB}`).set(bearer(tokHrA)).send({ title: 'hacked' });
+  it('employee cannot read a record in another company by id → 404', async () => {
+    const res = await request.get(`/api/employees/${fixture.ids.empRecB}`).set(bearer(tokEmpA));
     expect(res.status).toBe(404);
   });
 });
 
-describe('Write scoping', () => {
-  it('POST /candidates ignores body.company_id and writes under caller company', async () => {
+describe('Write scoping follows the selected entity', () => {
+  it('POST /candidates lands under the selected entity (body company_id)', async () => {
     const res = await request.post('/api/candidates').set(bearer(tokHrA))
       .send({ first_name: tag, last_name: 'Created', company_id: fixture.companyB });
     expect(res.status).toBe(201);
     fixture.ids.createdCandidate = res.body.id;
     const [[row]] = await pool.query('SELECT company_id FROM candidates WHERE id = ?', [res.body.id]);
-    expect(row.company_id).toBe(fixture.companyA);
+    expect(row.company_id).toBe(fixture.companyB);
+  });
+
+  it('POST /candidates with no entity and no body company_id is rejected (400)', async () => {
+    const res = await request.post('/api/candidates').set(bearer(tokHrA))
+      .send({ first_name: tag, last_name: 'NoCompany' });
+    expect(res.status).toBe(400);
   });
 });
 
-describe('Authorization', () => {
+describe('Permissions hold regardless of company visibility', () => {
   it('employee cannot escalate own role via PUT /users/:id', async () => {
     const res = await request.put(`/api/users/${fixture.ids.empA}`).set(bearer(tokEmpA)).send({ role: 'admin' });
     expect(res.status).toBe(403);
@@ -174,33 +193,38 @@ describe('Authorization', () => {
     expect(res.status).toBe(403);
   });
 
-  it('company-bound admin cannot delete another company employee (404)', async () => {
-    const res = await request.delete(`/api/employees/${fixture.ids.empRecA}`).set(bearer(tokAdminB));
-    expect(res.status).toBe(404);
+  it('hr_manager cannot delete (delete is admin-only)', async () => {
+    const res = await request.delete(`/api/employees/${fixture.ids.empRecA}`).set(bearer(tokHrA));
+    expect(res.status).toBe(403);
     const [[row]] = await pool.query('SELECT id FROM employees WHERE id = ?', [fixture.ids.empRecA]);
     expect(row).toBeTruthy(); // still exists
   });
 
-  it('company-bound admin cannot create a new company', async () => {
+  it('company-bound admin cannot create a new company (platform-admin only)', async () => {
     const res = await request.post('/api/companies').set(bearer(tokAdminB))
       .send({ name: `${tag}_X`, short_code: `${tag}X`.slice(0, 10), currency: 'AED' });
     expect(res.status).toBe(403);
   });
 });
 
-describe('Audit + companies scoping', () => {
-  it('hrA /audit never returns company B events', async () => {
-    const res = await request.get('/api/audit?limit=100').set(bearer(tokHrA));
+describe('Entity selection narrows audit + companies for cross-company roles', () => {
+  it('hr_manager /audit narrows to the selected entity', async () => {
+    const res = await request.get(`/api/audit?company_id=${fixture.companyB}&limit=100`).set(bearer(tokHrA));
     expect(res.status).toBe(200);
-    expect(res.body.data.every((row) => row.company_id !== fixture.companyB)).toBe(true);
+    expect(res.body.data.every((row) => row.company_id === fixture.companyB)).toBe(true);
   });
 
-  it('hrA /companies returns only company A; platform admin sees both', async () => {
-    const a = await request.get('/api/companies').set(bearer(tokHrA));
-    expect(a.status).toBe(200);
-    const aIds = a.body.map((c) => c.id);
-    expect(aIds).toContain(fixture.companyA);
-    expect(aIds).not.toContain(fixture.companyB);
+  it('hr_manager /companies sees every company; selecting one narrows it', async () => {
+    const all = await request.get('/api/companies').set(bearer(tokHrA));
+    expect(all.status).toBe(200);
+    const allIds = all.body.map((c) => c.id);
+    expect(allIds).toContain(fixture.companyA);
+    expect(allIds).toContain(fixture.companyB); // cross-company visibility
+
+    const narrowed = await request.get(`/api/companies?company_id=${fixture.companyA}`).set(bearer(tokHrA));
+    const nIds = narrowed.body.map((c) => c.id);
+    expect(nIds).toContain(fixture.companyA);
+    expect(nIds).not.toContain(fixture.companyB);
 
     const p = await request.get('/api/companies').set(bearer(tokPlatform));
     const pIds = p.body.map((c) => c.id);

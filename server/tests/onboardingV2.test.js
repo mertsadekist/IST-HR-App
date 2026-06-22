@@ -174,8 +174,9 @@ describe('Onboarding v2 — full gated lifecycle', () => {
 });
 
 describe('Onboarding v2 — authorization & isolation', () => {
-  it("HR of company B cannot read company A's onboarding (404)", async () => {
-    const res = await request.get(`/api/onboarding/v2/${f.ids.onb}`).set(auth(tokHrB));
+  it('HR scoped to company B cannot read a company A onboarding (404)', async () => {
+    // Single-org model: the selected entity narrows the record lookup.
+    const res = await request.get(`/api/onboarding/v2/${f.ids.onb}?company_id=${f.companyB}`).set(auth(tokHrB));
     expect(res.status).toBe(404);
   });
 

@@ -113,8 +113,9 @@ describe('Authorization & isolation', () => {
     expect(res.status).toBe(403);
   });
 
-  it("HR of company B cannot see company A's run (404)", async () => {
-    const res = await request.get(`/api/payroll/runs/${f.ids.runId}`).set(auth(tokHrB));
+  it('HR scoped to company B cannot see a company A run (404)', async () => {
+    // Single-org model: the selected entity narrows the run lookup.
+    const res = await request.get(`/api/payroll/runs/${f.ids.runId}?company_id=${f.companyB}`).set(auth(tokHrB));
     expect(res.status).toBe(404);
   });
 

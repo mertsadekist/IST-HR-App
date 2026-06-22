@@ -22,6 +22,28 @@ export default defineConfig({
       '@layout': path.resolve(__dirname, './src/layout'),
     }
   },
+  build: {
+    chunkSizeWarningLimit: 700,
+    rollupOptions: {
+      output: {
+        // Split heavy third-party libraries into their own long-term-cacheable
+        // chunks so the app/Dashboard entry stays under the size warning.
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return;
+          // Leave the lazy pdf libs UNASSIGNED: they are dynamically imported in
+          // utils/pdf.js, so rolldown keeps them in on-demand chunks that load
+          // only when a document is generated — never inflating the entry.
+          if (/[\\/]node_modules[\\/](html2canvas|jspdf|pdf-lib|canvg|fflate|@pdf-lib)/.test(id)) return;
+          if (/[\\/]node_modules[\\/](react|react-dom|react-router|react-router-dom|scheduler)[\\/]/.test(id)) return 'react-vendor';
+          if (/[\\/]node_modules[\\/](@reduxjs|react-redux|redux|immer|reselect)[\\/]/.test(id)) return 'redux-vendor';
+          if (/[\\/]node_modules[\\/](recharts|d3-|victory|internmap|decimal\.js)/.test(id)) return 'charts-vendor';
+          if (/[\\/]node_modules[\\/](i18next|react-i18next)/.test(id)) return 'i18n-vendor';
+          if (/[\\/]node_modules[\\/](lucide-react)/.test(id)) return 'icons-vendor';
+          return 'vendor';
+        },
+      },
+    },
+  },
   server: {
     port: 5173,
     proxy: {

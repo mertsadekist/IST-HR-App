@@ -93,10 +93,12 @@ describe('HR recording + summary', () => {
   });
 });
 
-describe('Tenant isolation', () => {
-  it('HR of company B cannot record attendance for company A employee (404)', async () => {
+describe('Entity scoping', () => {
+  it('HR scoped to company B cannot record attendance for a company A employee (404)', async () => {
+    // Single-org model: the selected entity (body company_id) narrows the
+    // employee lookup, so a company-A employee is out of scope for entity B.
     const res = await request.post('/api/attendance').set(auth(tokHrB)).send({
-      employee_id: f.ids.empA, work_date: `${month}-08`, status: 'Present',
+      employee_id: f.ids.empA, company_id: f.companyB, work_date: `${month}-08`, status: 'Present',
     });
     expect(res.status).toBe(404);
   });

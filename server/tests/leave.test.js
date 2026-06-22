@@ -114,8 +114,9 @@ describe('Self-service scoping & isolation', () => {
     expect(res.status).toBe(403);
   });
 
-  it("HR of company B cannot approve company A's request (404)", async () => {
-    const res = await request.put(`/api/leave/requests/${f.ids.req2}/approve`).set(auth(tokHrB)).send({});
+  it('HR scoped to company B cannot approve a company A request (404)', async () => {
+    // Single-org model: the selected entity narrows the request lookup.
+    const res = await request.put(`/api/leave/requests/${f.ids.req2}/approve?company_id=${f.companyB}`).set(auth(tokHrB)).send({});
     expect(res.status).toBe(404);
   });
 

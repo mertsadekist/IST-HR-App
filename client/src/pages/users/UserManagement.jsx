@@ -32,6 +32,7 @@ export default function UserManagement() {
   const { t } = useTranslation();
   const { items: companies } = useSelector((s) => s.companies);
   const { user: currentUser } = useSelector((s) => s.auth);
+  const isAdmin = currentUser?.role === 'admin'; // delete is admin-only
   const [users, setUsers] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -242,11 +243,13 @@ export default function UserManagement() {
                           <Button variant="ghost" size="icon" onClick={() => openEdit(user)} title={t('common.edit')}>
                             <Edit3 size={14} />
                           </Button>
-                          <Button variant="ghost" size="icon" onClick={() => handleDelete(user)}
-                            className={user.id === currentUser?.id ? 'opacity-30 cursor-not-allowed' : 'text-red-500 hover:!bg-red-50'}
-                            disabled={user.id === currentUser?.id} title={t('common.delete')}>
-                            <Trash2 size={14} />
-                          </Button>
+                          {isAdmin && (
+                            <Button variant="ghost" size="icon" onClick={() => handleDelete(user)}
+                              className={user.id === currentUser?.id ? 'opacity-30 cursor-not-allowed' : 'text-red-500 hover:!bg-red-50'}
+                              disabled={user.id === currentUser?.id} title={t('common.delete')}>
+                              <Trash2 size={14} />
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </tr>

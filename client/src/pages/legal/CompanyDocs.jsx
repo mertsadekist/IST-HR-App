@@ -34,6 +34,8 @@ export default function CompanyDocs() {
   const { t } = useTranslation();
   const { items: companies } = useSelector((s) => s.companies);
   const { currentCompanyId } = useSelector((s) => s.entity);
+  const { user } = useSelector((s) => s.auth);
+  const isAdmin = user?.role === 'admin'; // delete is admin-only
   const [documents, setDocuments] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -175,7 +177,7 @@ export default function CompanyDocs() {
                 </div>
                 <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button onClick={() => handleDownload(doc)} className="p-1.5 text-surface-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors" title="Download"><Download size={14} /></button>
-                  <button onClick={() => handleDelete(doc)} className="p-1.5 text-surface-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete"><Trash2 size={14} /></button>
+                  {isAdmin && <button onClick={() => handleDelete(doc)} className="p-1.5 text-surface-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete"><Trash2 size={14} /></button>}
                 </div>
               </div>
             </Card>

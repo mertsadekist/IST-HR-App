@@ -20,6 +20,7 @@ export default function DepartmentSettings() {
   const { t } = useTranslation();
   const dispatch = useDispatch();
   const { items: companies } = useSelector((s) => s.companies);
+  const isAdmin = useSelector((s) => s.auth.user?.role) === 'admin'; // delete is admin-only
   const [selectedCompany, setSelectedCompany] = useState('');
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -302,9 +303,11 @@ export default function DepartmentSettings() {
                   <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); openEdit(dept); }} title={t('common.edit')}>
                     <Edit3 size={13} />
                   </Button>
-                  <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleDelete(dept); }} className="text-red-500 hover:!bg-red-50" title={t('common.delete')}>
-                    <Trash2 size={13} />
-                  </Button>
+                  {isAdmin && (
+                    <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleDelete(dept); }} className="text-red-500 hover:!bg-red-50" title={t('common.delete')}>
+                      <Trash2 size={13} />
+                    </Button>
+                  )}
                 </div>
                 <ChevronRight size={14} className={`text-surface-300 transition-colors ${selectedDept?.id === dept.id ? 'text-brand-500' : ''}`} />
               </Card>
@@ -383,9 +386,11 @@ export default function DepartmentSettings() {
                       <Button variant="ghost" size="icon" onClick={() => openEditJob(job)} title={t('common.edit')}>
                         <Edit3 size={14} />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDeleteJob(job)} className="text-red-500 hover:!bg-red-50" title={t('common.delete')}>
-                        <Trash2 size={14} />
-                      </Button>
+                      {isAdmin && (
+                        <Button variant="ghost" size="icon" onClick={() => handleDeleteJob(job)} className="text-red-500 hover:!bg-red-50" title={t('common.delete')}>
+                          <Trash2 size={14} />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </Card>

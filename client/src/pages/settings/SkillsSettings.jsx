@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSelector } from 'react-redux';
 import * as skillsApi from '@api/skillsApi';
 import Card from '@components/ui/Card';
 import Button from '@components/ui/Button';
@@ -13,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 
 export default function SkillsSettings() {
   const { t } = useTranslation();
+  const isAdmin = useSelector((s) => s.auth.user?.role) === 'admin'; // delete is admin-only
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState({});
@@ -188,10 +190,12 @@ export default function SkillsSettings() {
                     className="p-1.5 text-surface-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors">
                     <Edit3 size={14} />
                   </button>
-                  <button onClick={(e) => { e.stopPropagation(); handleDeleteCat(cat); }}
-                    className="p-1.5 text-surface-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                    <Trash2 size={14} />
-                  </button>
+                  {isAdmin && (
+                    <button onClick={(e) => { e.stopPropagation(); handleDeleteCat(cat); }}
+                      className="p-1.5 text-surface-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                      <Trash2 size={14} />
+                    </button>
+                  )}
                 </div>
                 {expanded[cat.id] ? <ChevronDown size={16} className="text-surface-400" /> : <ChevronRight size={16} className="text-surface-400" />}
               </div>
@@ -206,12 +210,14 @@ export default function SkillsSettings() {
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-surface-100 text-surface-700 group hover:bg-surface-200 transition-colors"
                       >
                         {skill.name}
-                        <button
-                          onClick={() => handleDeleteSkill(skill.id)}
-                          className="opacity-0 group-hover:opacity-100 text-surface-400 hover:text-red-500 transition-all"
-                        >
-                          <Trash2 size={12} />
-                        </button>
+                        {isAdmin && (
+                          <button
+                            onClick={() => handleDeleteSkill(skill.id)}
+                            className="opacity-0 group-hover:opacity-100 text-surface-400 hover:text-red-500 transition-all"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        )}
                       </span>
                     ))}
                   </div>

@@ -17,6 +17,8 @@ export default function CVScorer() {
   const { t } = useTranslation();
   const { items: companies } = useSelector((s) => s.companies);
   const { currentCompanyId } = useSelector((s) => s.entity);
+  const { user } = useSelector((s) => s.auth);
+  const isAdmin = user?.role === 'admin'; // delete is admin-only
   const [profiles, setProfiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [results, setResults] = useState(null);
@@ -166,7 +168,7 @@ export default function CVScorer() {
                       <button onClick={() => setExpanded(isExpanded ? null : p.id)} className="p-2 text-surface-400 hover:text-surface-600 hover:bg-surface-100 rounded-lg transition-colors">
                         {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                       </button>
-                      <button onClick={() => handleDelete(p)} className="p-2 text-surface-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={14} /></button>
+                      {isAdmin && <button onClick={() => handleDelete(p)} className="p-2 text-surface-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={14} /></button>}
                     </div>
                   </div>
                 </div>

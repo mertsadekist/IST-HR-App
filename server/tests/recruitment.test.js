@@ -107,12 +107,20 @@ describe('Internal applicant management', () => {
     expect(res.body[0].stage).toBe('New Application');
   });
 
-  it("HR of company B cannot see company A's application (isolation)", async () => {
-    const res = await request.get(`/api/applications?vacancy_id=${f.ids.vacancy}`).set(auth(tokHrB));
+  it('cross-company HR scoped to its own entity does not see company A’s application', async () => {
+    // Single-org model: when HR-B selects its own entity, company A is excluded.
+    const res = await request.get(`/api/applications?vacancy_id=${f.ids.vacancy}&company_id=${f.companyB}`).set(auth(tokHrB));
     expect(res.status).toBe(200);
     expect(res.body.length).toBe(0);
-    const detail = await request.get(`/api/applications/${f.ids.application}`).set(auth(tokHrB));
+    const detail = await request.get(`/api/applications/${f.ids.application}?company_id=${f.companyB}`).set(auth(tokHrB));
     expect(detail.status).toBe(404);
+  });
+
+  it('with no entity selected, cross-company HR sees the whole organization', async () => {
+    // Single-org model: internal staff span every company when no entity is chosen.
+    const res = await request.get(`/api/applications?vacancy_id=${f.ids.vacancy}`).set(auth(tokHrB));
+    expect(res.status).toBe(200);
+    expect(res.body.some((a) => a.id === f.ids.application)).toBe(true);
   });
 
   it('moves stage, schedules interview, submits evaluation', async () => {

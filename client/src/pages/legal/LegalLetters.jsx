@@ -93,6 +93,8 @@ export default function LegalLetters() {
   const { t } = useTranslation();
   const { items: companies } = useSelector((s) => s.companies);
   const { currentCompanyId } = useSelector((s) => s.entity);
+  const { user } = useSelector((s) => s.auth);
+  const isAdmin = user?.role === 'admin'; // delete is admin-only
   const [templates, setTemplates] = useState([]);
   const [letters, setLetters] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -302,7 +304,7 @@ export default function LegalLetters() {
                           <button onClick={() => setViewLetter(l)} className="p-1.5 text-surface-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"><Eye size={14} /></button>
                           <button onClick={() => handlePrint(l)} className="p-1.5 text-surface-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title={t('common.print', 'Print')}><Printer size={14} /></button>
                           <button onClick={() => setSendLetter(l)} className="p-1.5 text-surface-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors" title={t('send_doc.send_pdf', 'Send by email (PDF)')}><Send size={14} /></button>
-                          <button onClick={() => handleDeleteLetter(l)} className="p-1.5 text-surface-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={14} /></button>
+                          {isAdmin && <button onClick={() => handleDeleteLetter(l)} className="p-1.5 text-surface-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={14} /></button>}
                         </div>
                       </td>
                     </tr>

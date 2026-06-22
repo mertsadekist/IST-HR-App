@@ -66,6 +66,7 @@ export default function SystemConfig() {
 // ==============================================
 function AtsStagesConfig() {
   const { t } = useTranslation();
+  const isAdmin = useSelector((s) => s.auth.user?.role) === 'admin'; // delete is admin-only
   const [stages, setStages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -180,7 +181,7 @@ function AtsStagesConfig() {
                 <button onClick={() => moveStage(idx, 'up')} disabled={idx === 0} className="p-1 text-surface-400 hover:text-surface-600 disabled:opacity-30"><ArrowUp size={14} /></button>
                 <button onClick={() => moveStage(idx, 'down')} disabled={idx === stages.length - 1} className="p-1 text-surface-400 hover:text-surface-600 disabled:opacity-30"><ArrowDown size={14} /></button>
                 <button onClick={() => openEdit(stage)} className="p-1.5 text-surface-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"><Edit3 size={13} /></button>
-                <button onClick={() => handleDelete(stage)} className="p-1.5 text-surface-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={13} /></button>
+                {isAdmin && <button onClick={() => handleDelete(stage)} className="p-1.5 text-surface-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={13} /></button>}
               </div>
             </Card>
           ))}
@@ -230,6 +231,7 @@ function AtsStagesConfig() {
 // ==============================================
 function TemplateConfig({ type, companies }) {
   const { t } = useTranslation();
+  const isAdmin = useSelector((s) => s.auth.user?.role) === 'admin'; // delete is admin-only
   const [selectedCompany, setSelectedCompany] = useState('');
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -362,7 +364,7 @@ function TemplateConfig({ type, companies }) {
                 </div>
                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <Button variant="ghost" size="icon" onClick={() => openEdit(tpl)} title="Edit"><Edit3 size={14} /></Button>
-                  <Button variant="ghost" size="icon" onClick={() => handleDelete(tpl)} className="text-red-500 hover:!bg-red-50" title="Delete"><Trash2 size={14} /></Button>
+                  {isAdmin && <Button variant="ghost" size="icon" onClick={() => handleDelete(tpl)} className="text-red-500 hover:!bg-red-50" title="Delete"><Trash2 size={14} /></Button>}
                 </div>
               </div>
             </Card>
@@ -424,6 +426,7 @@ function TemplateConfig({ type, companies }) {
 // ==============================================
 function LetterTemplatesConfig() {
   const { t } = useTranslation();
+  const isAdmin = useSelector((s) => s.auth.user?.role) === 'admin'; // delete is admin-only
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -517,7 +520,7 @@ function LetterTemplatesConfig() {
                 <div className="flex-1" />
                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button onClick={() => openEdit(tpl)} className="p-1.5 text-surface-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"><Edit3 size={13} /></button>
-                  <button onClick={() => handleDelete(tpl)} className="p-1.5 text-surface-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={13} /></button>
+                  {isAdmin && <button onClick={() => handleDelete(tpl)} className="p-1.5 text-surface-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={13} /></button>}
                 </div>
               </Card>
             );
