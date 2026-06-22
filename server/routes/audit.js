@@ -6,7 +6,45 @@ import { tenantScope, companyClause } from '../middleware/tenant.js';
 const router = Router();
 router.use(auth, tenantScope);
 
-// GET /api/audit?page=1&limit=50&module=X&user_id=X
+// datetime-local inputs send "YYYY-MM-DDTHH:mm" — normalise to a MySQL datetime.
+const normDate = (s) => String(s).replace('T', ' ');
+
+/**
+ * Builds the optional WHERE fragment shared by the list, export and count.
+ * Supported query params: module (exact), action (exact), user (name LIKE),
+ * user_id (exact), search/detail (detail LIKE), from / to (created_at range).
+ */
+function auditFilters(req) {
+  const clauses = [];
+  const params = [];
+  if (req.query.module) { clauses.push('module = ?'); params.push(req.query.module); }
+  if (req.query.action) { clauses.push('action = ?'); params.push(req.query.action); }
+  if (req.query.user) { clauses.push('user_name LIKE ?'); params.push(`%${req.query.user}%`); }
+  if (req.query.user_id) { clauses.push('user_id = ?'); params.push(req.query.user_id); }
+  if (req.query.search) { clauses.push('detail LIKE ?'); params.push(`%${req.query.search}%`); }
+  if (req.query.from) { clauses.push('created_at >= ?'); params.push(normDate(req.query.from)); }
+  if (req.query.to) { clauses.push('created_at <= ?'); params.push(normDate(req.query.to)); }
+  return { clause: clauses.length ? ' AND ' + clauses.join(' AND ') : '', params };
+}
+
+// GET /api/audit/facets — distinct modules & actions (company-scoped) for filter dropdowns
+router.get('/facets', async (req, res) => {
+  try {
+    const co = companyClause(req, 'company_id');
+    const [mods] = await pool.query(
+      'SELECT DISTINCT module FROM audit_logs WHERE 1=1' + co.clause + ' ORDER BY module', co.params
+    );
+    const [acts] = await pool.query(
+      'SELECT DISTINCT action FROM audit_logs WHERE 1=1' + co.clause + ' ORDER BY action', co.params
+    );
+    res.json({ modules: mods.map((r) => r.module), actions: acts.map((r) => r.action) });
+  } catch (err) {
+    console.error('GET /audit/facets error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/audit?page=1&limit=50&module=&action=&user=&search=&from=&to=
 router.get('/', async (req, res) => {
   try {
     const page = Math.max(parseInt(req.query.page) || 1, 1);
@@ -14,29 +52,15 @@ router.get('/', async (req, res) => {
     const offset = (page - 1) * limit;
 
     const co = companyClause(req, 'company_id');
-    let sql = 'SELECT * FROM audit_logs WHERE 1=1' + co.clause;
-    let countSql = 'SELECT COUNT(*) as total FROM audit_logs WHERE 1=1' + co.clause;
-    const params = [...co.params];
-    const countParams = [...co.params];
+    const f = auditFilters(req);
+    const where = ' WHERE 1=1' + co.clause + f.clause;
+    const baseParams = [...co.params, ...f.params];
 
-    if (req.query.module) {
-      sql += ' AND module = ?'; params.push(req.query.module);
-      countSql += ' AND module = ?'; countParams.push(req.query.module);
-    }
-    if (req.query.user_id) {
-      sql += ' AND user_id = ?'; params.push(req.query.user_id);
-      countSql += ' AND user_id = ?'; countParams.push(req.query.user_id);
-    }
-    if (req.query.search) {
-      sql += ' AND detail LIKE ?'; params.push(`%${req.query.search}%`);
-      countSql += ' AND detail LIKE ?'; countParams.push(`%${req.query.search}%`);
-    }
-
-    sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
-    params.push(limit, offset);
-
-    const [rows] = await pool.query(sql, params);
-    const [countResult] = await pool.query(countSql, countParams);
+    const [rows] = await pool.query(
+      'SELECT * FROM audit_logs' + where + ' ORDER BY created_at DESC LIMIT ? OFFSET ?',
+      [...baseParams, limit, offset]
+    );
+    const [countResult] = await pool.query('SELECT COUNT(*) as total FROM audit_logs' + where, baseParams);
 
     res.json({
       data: rows,
@@ -51,18 +75,15 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/audit/export — Export audit logs as JSON
+// GET /api/audit/export — Export the (optionally filtered) audit logs as JSON
 router.get('/export', async (req, res) => {
   try {
     const co = companyClause(req, 'company_id');
-    let sql = 'SELECT * FROM audit_logs WHERE 1=1' + co.clause;
-    const params = [...co.params];
-    if (req.query.module) { sql += ' AND module = ?'; params.push(req.query.module); }
-    if (req.query.user_id) { sql += ' AND user_id = ?'; params.push(req.query.user_id); }
-    if (req.query.from) { sql += ' AND created_at >= ?'; params.push(req.query.from); }
-    if (req.query.to) { sql += ' AND created_at <= ?'; params.push(req.query.to); }
-    sql += ' ORDER BY created_at DESC';
-    const [rows] = await pool.query(sql, params);
+    const f = auditFilters(req);
+    const [rows] = await pool.query(
+      'SELECT * FROM audit_logs WHERE 1=1' + co.clause + f.clause + ' ORDER BY created_at DESC',
+      [...co.params, ...f.params]
+    );
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Content-Disposition', `attachment; filename="audit_export_${new Date().toISOString().split('T')[0]}.json"`);
     res.json({ exported_at: new Date().toISOString(), count: rows.length, logs: rows });

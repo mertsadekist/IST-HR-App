@@ -792,9 +792,15 @@
   },
   "audit": {
     "action": "Action",
+    "all_actions": "All actions",
+    "all_modules": "All modules",
+    "clear_filters": "Clear filters",
     "details": "Details",
     "entries": "entries",
     "export_json": "Export JSON",
+    "filter_details": "Filter by details…",
+    "filter_user": "Filter by user…",
+    "from": "From",
     "module": "Module",
     "no_activity_desc": "System actions will be recorded here automatically",
     "no_activity_yet": "No activity yet",
@@ -803,6 +809,7 @@
     "subtitle": "Track all system actions and changes",
     "time": "Time",
     "title": "Audit Log",
+    "to": "To",
     "user": "User"
   },
   "email": {
