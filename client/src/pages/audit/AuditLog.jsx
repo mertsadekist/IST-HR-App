@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useSelector } from 'react-redux';
 import * as auditApi from '@api/auditApi';
 import Card from '@components/ui/Card';
 import Badge from '@components/ui/Badge';
@@ -21,7 +20,6 @@ const EMPTY_FILTERS = { user: '', module: '', action: '', from: '', to: '', sear
 
 export default function AuditLog() {
   const { t } = useTranslation();
-  const { currentCompanyId } = useSelector((s) => s.entity);
   const [logs, setLogs] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -30,23 +28,24 @@ export default function AuditLog() {
 
   const hasFilters = useMemo(() => Object.values(filters).some(Boolean), [filters]);
 
-  // Build the query params: drop empty values, scope to the selected company.
+  // Build the query params: drop empty values. The audit log is a global
+  // security trail — it is NOT scoped to the selected Entity, so rows with a
+  // NULL company_id (logins, system/pre-migration events) always appear.
   const params = useMemo(() => {
     const p = { limit: 200 };
-    if (currentCompanyId) p.company_id = currentCompanyId;
     for (const [k, v] of Object.entries(filters)) if (v) p[k] = v;
     return p;
-  }, [filters, currentCompanyId]);
+  }, [filters]);
 
   const set = (key, value) => setFilters((f) => ({ ...f, [key]: value }));
   const clearFilters = () => setFilters(EMPTY_FILTERS);
 
-  // Load the distinct module/action lists for the dropdowns (once per company).
+  // Load the distinct module/action lists for the dropdowns (once).
   useEffect(() => {
-    auditApi.getAuditFacets(currentCompanyId ? { company_id: currentCompanyId } : undefined)
+    auditApi.getAuditFacets()
       .then(({ data }) => setFacets({ modules: data.modules || [], actions: data.actions || [] }))
       .catch(() => { /* non-blocking */ });
-  }, [currentCompanyId]);
+  }, []);
 
   // Reload (debounced) whenever a filter or the company changes.
   useEffect(() => {
