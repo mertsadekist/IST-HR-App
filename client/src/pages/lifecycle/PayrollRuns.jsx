@@ -48,7 +48,7 @@ export default function PayrollRuns() {
 
   const approve = async (r) => { try { await payApi.approveRun(r.id); toast.success(t('payroll_runs.approved')); reloadDetail(); } catch (e) { toast.error(apiErr(e, t('common.operation_failed'))); } };
   const pay = async (r) => { try { await payApi.markPaid(r.id); toast.success(t('payroll_runs.marked_paid')); reloadDetail(); } catch (e) { toast.error(apiErr(e, t('common.operation_failed'))); } };
-  const del = async (r) => { const c = await confirmDelete(`payroll run ${r.period}`); if (!c.isConfirmed) return; try { await payApi.deleteRun(r.id); toast.success(t('common.deleted')); setOpenRun(null); setDetail(null); load(); } catch (e) { toast.error(apiErr(e, t('common.operation_failed'))); } };
+  const del = async (r) => { const c = await confirmDelete(`payroll run ${r.period}`); if (!c.isConfirmed) return; try { await payApi.deleteRun(r.id); toast.success(t('common.deleted')); if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); setOpenRun(null); setDetail(null); load(); } catch (e) { toast.error(apiErr(e, t('common.operation_failed'))); } };
 
   return (
     <div className="space-y-6 animate-fade-in">
