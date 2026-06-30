@@ -1196,6 +1196,7 @@
     "th_absence": "Absence",
     "run_generated": "Run generated: {{count}} employee(s), net {{net}}",
     "generate_failed": "Generate failed",
+    "select_company": "Select a company (Entity) first to generate payroll",
     "load_run_failed": "Failed to load run",
     "approved": "Run approved",
     "marked_paid": "Marked paid",

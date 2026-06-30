@@ -1196,6 +1196,7 @@
     "th_absence": "الغياب",
     "run_generated": "تم إنشاء الدورة: {{count}} موظف، الصافي {{net}}",
     "generate_failed": "فشل الإنشاء",
+    "select_company": "اختر شركة (كياناً) أولاً لإنشاء كشف الرواتب",
     "load_run_failed": "فشل تحميل الدورة",
     "approved": "تم اعتماد الدورة",
     "marked_paid": "تم وضعها كمدفوعة",

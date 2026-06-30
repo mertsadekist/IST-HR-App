@@ -1,6 +1,6 @@
 import api from './axios';
 
-export const getRuns = () => api.get('/payroll/runs');
+export const getRuns = (params) => api.get('/payroll/runs', { params });
 export const getRun = (id) => api.get(`/payroll/runs/${id}`);
 export const generateRun = (data) => api.post('/payroll/runs/generate', data);
 export const approveRun = (id) => api.put(`/payroll/runs/${id}/approve`);

@@ -31,15 +31,16 @@ export default function PayrollRuns() {
 
   const load = async () => {
     setLoading(true);
-    try { const { data } = await payApi.getRuns(); setRuns(data); } catch { toast.error(t('common.failed_load')); }
+    try { const { data } = await payApi.getRuns(currentCompanyId ? { company_id: currentCompanyId } : {}); setRuns(data); } catch { toast.error(t('common.failed_load')); }
     finally { setLoading(false); }
     try { const { data } = await payApi.myPayslips({}); setMyslips(data); } catch { /* ignore */ }
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [currentCompanyId]);
 
   const generate = async () => {
+    if (!currentCompanyId) { toast.error(t('payroll_runs.select_company')); return; }
     setGenerating(true);
-    try { const { data } = await payApi.generateRun({ period }); toast.success(t('payroll_runs.run_generated', { count: data.employee_count, net: data.total_net })); load(); }
+    try { const { data } = await payApi.generateRun({ period, company_id: currentCompanyId }); toast.success(t('payroll_runs.run_generated', { count: data.employee_count, net: data.total_net })); load(); }
     catch (e) { toast.error(apiErr(e, t('payroll_runs.generate_failed'))); } finally { setGenerating(false); }
   };
   const openDetail = async (r) => { setOpenRun(r); try { const { data } = await payApi.getRun(r.id); setDetail(data); } catch { toast.error(t('payroll_runs.load_run_failed')); } };
