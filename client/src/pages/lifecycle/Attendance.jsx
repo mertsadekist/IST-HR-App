@@ -16,6 +16,16 @@ const apiErr = (e, f) => e?.response?.data?.error || (e?.response?.data?.errors?
 const statusVariant = (s) => ({ Present: 'success', Late: 'warning', Absent: 'danger', 'Half Day': 'warning', 'On Leave': 'info', Holiday: 'info', Remote: 'info' }[s] || 'info');
 const STATUSES = ['Present', 'Absent', 'Late', 'Half Day', 'On Leave', 'Holiday', 'Remote'];
 const stLabel = (t, s) => t(`attendance.st_${String(s || '').toLowerCase().replace(/ /g, '_')}`, s);
+// work_hours is stored as decimal hours (8.8 = 8h48m); show it as "8h 48m".
+const fmtHM = (h) => {
+  if (h == null || h === '') return '—';
+  const n = Number(h);
+  if (Number.isNaN(n)) return '—';
+  let hh = Math.floor(n);
+  let mm = Math.round((n - hh) * 60);
+  if (mm === 60) { hh += 1; mm = 0; }
+  return `${hh}h ${String(mm).padStart(2, '0')}m`;
+};
 
 export default function Attendance() {
   const { t } = useTranslation();
@@ -101,7 +111,7 @@ export default function Attendance() {
             {summary.by_status?.map((s) => (
               <Badge key={s.status} variant={statusVariant(s.status)}>{stLabel(t, s.status)}: {s.count}</Badge>
             ))}
-            <Badge variant="brand">{t('attendance.total_hours')}: {summary.total_hours}</Badge>
+            <Badge variant="brand">{t('attendance.total_hours')}: {fmtHM(summary.total_hours)}</Badge>
           </div>
         )}
         <Button variant="ghost" size="sm" onClick={load} className="ml-auto"><RefreshCw size={14} /></Button>
@@ -140,7 +150,7 @@ export default function Attendance() {
                   <td className="p-3">{r.first_name} {r.last_name}</td>
                   <td className="p-3 text-center">{r.check_in || '—'}</td>
                   <td className="p-3 text-center">{r.check_out || '—'}</td>
-                  <td className="p-3 text-center">{r.work_hours ?? '—'}</td>
+                  <td className="p-3 text-center">{fmtHM(r.work_hours)}</td>
                   <td className="p-3 text-center"><Badge variant={statusVariant(r.status)} className="text-[10px]">{stLabel(t, r.status)}</Badge></td>
                 </tr>
               ))}
