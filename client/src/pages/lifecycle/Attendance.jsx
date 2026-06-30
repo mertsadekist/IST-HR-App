@@ -9,7 +9,7 @@ import Badge from '@components/ui/Badge';
 import Modal from '@components/ui/Modal';
 import EmptyState from '@components/ui/EmptyState';
 import { toast } from 'react-toastify';
-import { Clock, LogIn, LogOut, Plus, RefreshCw, Upload, Download, X, ChevronDown } from 'lucide-react';
+import { Clock, LogIn, LogOut, Plus, RefreshCw, Upload, Download, X, ChevronDown, Edit3 } from 'lucide-react';
 import dayjs from 'dayjs';
 
 const apiErr = (e, f) => e?.response?.data?.error || (e?.response?.data?.errors?.[0]?.message) || f;
@@ -41,6 +41,7 @@ export default function Attendance() {
   const [importModal, setImportModal] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [employees, setEmployees] = useState([]);
+  const [editRow, setEditRow] = useState(null);
 
   useEffect(() => {
     if (!isHR) return;
@@ -142,7 +143,7 @@ export default function Attendance() {
           <table className="w-full text-sm">
             <thead className="bg-surface-50 text-surface-500 text-xs"><tr>
               <th className="text-left p-3">{t('attendance.th_date')}</th><th className="text-left p-3">{t('attendance.th_employee')}</th>
-              <th className="p-3">{t('attendance.th_check_in')}</th><th className="p-3">{t('attendance.th_check_out')}</th><th className="p-3">{t('attendance.th_hours')}</th><th className="p-3">{t('attendance.th_status')}</th></tr></thead>
+              <th className="p-3">{t('attendance.th_check_in')}</th><th className="p-3">{t('attendance.th_check_out')}</th><th className="p-3">{t('attendance.th_hours')}</th><th className="p-3">{t('attendance.th_status')}</th>{isHR && <th className="p-3"></th>}</tr></thead>
             <tbody>
               {rows.map((r) => (
                 <tr key={r.id} className="border-t border-surface-50">
@@ -152,6 +153,12 @@ export default function Attendance() {
                   <td className="p-3 text-center">{r.check_out || '—'}</td>
                   <td className="p-3 text-center">{fmtHM(r.work_hours)}</td>
                   <td className="p-3 text-center"><Badge variant={statusVariant(r.status)} className="text-[10px]">{stLabel(t, r.status)}</Badge></td>
+                  {isHR && (
+                    <td className="p-3 text-center">
+                      <button onClick={() => setEditRow(r)} title={t('common.edit', 'Edit')}
+                        className="p-1.5 text-surface-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"><Edit3 size={14} /></button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -161,7 +168,46 @@ export default function Attendance() {
 
       <RecordModal open={recModal} onClose={() => setRecModal(false)} employees={employees} onSaved={() => { setRecModal(false); load(); }} />
       <ImportModal open={importModal} onClose={() => setImportModal(false)} onDone={load} />
+      {editRow && <EditAttendanceModal row={editRow} onClose={() => setEditRow(null)} onSaved={() => { setEditRow(null); load(); }} />}
     </div>
+  );
+}
+
+function EditAttendanceModal({ row, onClose, onSaved }) {
+  const { t } = useTranslation();
+  const [form, setForm] = useState({ check_in: row.check_in || '', check_out: row.check_out || '', status: row.status || 'Present', notes: row.notes || '' });
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const body = {
+        status: form.status,
+        notes: form.notes,
+        check_in: form.check_in ? `${row.work_date} ${form.check_in}:00` : null,
+        check_out: form.check_out ? `${row.work_date} ${form.check_out}:00` : null,
+      };
+      await attApi.update(row.id, body);
+      toast.success(t('attendance.updated'));
+      onSaved();
+    } catch (e) { toast.error(apiErr(e, t('attendance.update_failed'))); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <Modal open onClose={onClose} title={t('attendance.modal_edit')} size="md">
+      <div className="space-y-3">
+        <div className="text-sm text-surface-500">{row.first_name} {row.last_name} · {dayjs(row.work_date).format('MMM D, YYYY')}</div>
+        <div className="grid grid-cols-2 gap-3">
+          <div><label className="text-xs font-semibold text-surface-700">{t('attendance.f_check_in')}</label><input type="time" value={form.check_in} onChange={(e) => setForm((f) => ({ ...f, check_in: e.target.value }))} className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1" /></div>
+          <div><label className="text-xs font-semibold text-surface-700">{t('attendance.f_check_out')}</label><input type="time" value={form.check_out} onChange={(e) => setForm((f) => ({ ...f, check_out: e.target.value }))} className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1" /></div>
+        </div>
+        <div><label className="text-xs font-semibold text-surface-700">{t('attendance.f_status')}</label>
+          <select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))} className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1">{STATUSES.map((s) => <option key={s} value={s}>{stLabel(t, s)}</option>)}</select></div>
+        <div><label className="text-xs font-semibold text-surface-700">{t('attendance.f_notes')}</label><textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} rows={2} className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1 resize-none" /></div>
+        <div className="flex justify-end gap-2"><Button variant="secondary" onClick={onClose}>{t('common.close', 'Close')}</Button><Button onClick={save} loading={saving}>{t('common.save')}</Button></div>
+      </div>
+    </Modal>
   );
 }
 
