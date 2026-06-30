@@ -186,9 +186,36 @@ router.put('/:id', authorize('admin', 'hr_manager', 'hr_specialist'), validate({
     if (!Object.keys(data).length) return res.status(400).json({ error: 'No updatable fields provided' });
 
     const co = companyClause(req, 'company_id');
+    // Capture the current values first so the audit log can describe what changed.
+    const [[before]] = await pool.query(
+      `SELECT DATE_FORMAT(a.work_date, '%Y-%m-%d') AS work_date,
+              DATE_FORMAT(a.check_in, '%H:%i') AS check_in,
+              DATE_FORMAT(a.check_out, '%H:%i') AS check_out,
+              a.status, a.notes, e.first_name, e.last_name
+       FROM attendance a JOIN employees e ON a.employee_id = e.id
+       WHERE a.id = ?` + co.clause, [req.params.id, ...co.params]);
+    if (!before) return res.status(404).json({ error: 'Attendance record not found' });
+
     const [result] = await pool.query('UPDATE attendance SET ? WHERE id = ?' + co.clause, [data, req.params.id, ...co.params]);
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Attendance record not found' });
-    await addAudit(pool, req.user, 'Attendance', 'Updated', `Attendance #${req.params.id} updated`);
+
+    // Build a human-readable change list (old → new) for the audit detail.
+    const hm = (dt) => (dt ? String(dt).slice(11, 16) : null); // 'YYYY-MM-DD HH:mm:ss' → 'HH:mm'
+    const changes = [];
+    if (data.check_in !== undefined && (before.check_in || null) !== hm(data.check_in))
+      changes.push(`check-in ${before.check_in || '—'} → ${hm(data.check_in) || '—'}`);
+    if (data.check_out !== undefined && (before.check_out || null) !== hm(data.check_out))
+      changes.push(`check-out ${before.check_out || '—'} → ${hm(data.check_out) || '—'}`);
+    if (data.status !== undefined && before.status !== data.status)
+      changes.push(`status ${before.status} → ${data.status}`);
+    if (data.notes !== undefined && (before.notes || '') !== (data.notes || ''))
+      changes.push('notes updated');
+
+    const who = `${before.first_name} ${before.last_name}`.trim();
+    const detail = changes.length
+      ? `Attendance for ${who} on ${before.work_date}: ${changes.join(', ')}`
+      : `Attendance for ${who} on ${before.work_date}: no field changes`;
+    await addAudit(pool, req.user, 'Attendance', 'Updated', detail);
     res.json({ success: true });
   } catch (err) { console.error('PUT /attendance/:id error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
