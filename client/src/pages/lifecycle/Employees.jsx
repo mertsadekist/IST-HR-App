@@ -26,6 +26,8 @@ export default function Employees() {
   const [docsLoading, setDocsLoading] = useState(false);
   const [uploadCategory, setUploadCategory] = useState('General');
   const [uploading, setUploading] = useState(false);
+  const [attId, setAttId] = useState('');
+  const [savingAtt, setSavingAtt] = useState(false);
 
   useEffect(() => {
     loadEmployees();
@@ -52,6 +54,7 @@ export default function Employees() {
 
   const handleOpenProfile = async (emp) => {
     setSelectedEmp(emp);
+    setAttId(emp.attendance_id || '');
     setActiveTab('profile');
     setEmpDocs([]);
     setDocsLoading(true);
@@ -85,6 +88,20 @@ export default function Employees() {
       toast.update(toastId, { render: 'Failed to upload document', type: 'error', isLoading: false, autoClose: 3000 });
     } finally {
       setUploading(false);
+    }
+  };
+
+  const saveAttendanceId = async () => {
+    setSavingAtt(true);
+    try {
+      await employeesApi.updateEmployee(selectedEmp.id, { attendance_id: attId || null });
+      setSelectedEmp((p) => ({ ...p, attendance_id: attId }));
+      setEmployees((list) => list.map((e) => (e.id === selectedEmp.id ? { ...e, attendance_id: attId } : e)));
+      toast.success(t('employees.attendance_id_saved', 'Attendance ID saved'));
+    } catch {
+      toast.error(t('employees.attendance_id_save_failed', 'Failed to save Attendance ID'));
+    } finally {
+      setSavingAtt(false);
     }
   };
 
@@ -241,6 +258,15 @@ export default function Employees() {
                     <div className="flex justify-between"><span className="text-surface-500">Basic Salary:</span> <span className="font-semibold text-emerald-600">{selectedEmp.basic_salary ? `${Number(selectedEmp.basic_salary).toLocaleString()} AED` : 'N/A'}</span></div>
                     <div className="flex justify-between"><span className="text-surface-500">Full Salary:</span> <span className="font-semibold text-emerald-700">{selectedEmp.full_salary ? `${Number(selectedEmp.full_salary).toLocaleString()} AED` : 'N/A'}</span></div>
                     <div className="flex justify-between"><span className="text-surface-500">Join Date:</span> <span className="font-semibold text-surface-800">{selectedEmp.start_date ? dayjs(selectedEmp.start_date).format('MMM D, YYYY') : 'N/A'}</span></div>
+                  </div>
+                  <div className="pt-2 mt-1 border-t border-surface-200">
+                    <label className="block text-surface-500 text-xs mb-1">{t('employees.attendance_id', 'Attendance ID (device)')}</label>
+                    <div className="flex gap-2">
+                      <input value={attId} onChange={(e) => setAttId(e.target.value)} placeholder="e.g. 4035"
+                        className="flex-1 text-xs bg-white border border-surface-200 rounded-lg px-2 py-1.5" />
+                      <Button size="sm" onClick={saveAttendanceId} loading={savingAtt}>{t('common.save', 'Save')}</Button>
+                    </div>
+                    <p className="text-[10px] text-surface-400 mt-1">{t('employees.attendance_id_hint', 'Maps this employee to the time-clock device ID used by attendance import.')}</p>
                   </div>
                 </div>
               </div>

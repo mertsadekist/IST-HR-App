@@ -173,9 +173,10 @@ router.post('/', authorize('admin', 'hr_manager'), validate({
   start_date: { type: 'date' },
   basic_salary: { type: 'number', min: 0 },
   full_salary: { type: 'number', min: 0 },
+  attendance_id: { type: 'string', maxLen: 100 },
 }), async (req, res) => {
   try {
-    const { first_name, last_name, email, phone, nationality, department_id, job_title_text, start_date, basic_salary, full_salary } = req.body;
+    const { first_name, last_name, email, phone, nationality, department_id, job_title_text, start_date, basic_salary, full_salary, attendance_id } = req.body;
     const company_id = resolveWriteCompanyId(req, req.body.company_id);
     if (!first_name || !last_name || !company_id) {
       return res.status(400).json({ error: 'First name, last name and company are required' });
@@ -196,6 +197,7 @@ router.post('/', authorize('admin', 'hr_manager'), validate({
       start_date: start_date || new Date(),
       basic_salary: basic_salary || null,
       full_salary: full_salary || null,
+      attendance_id: attendance_id || null,
       status: 'Active',
     });
     await addAudit(pool, req.user, 'Employees', 'Created', `Employee ${first_name} ${last_name} created manually`);

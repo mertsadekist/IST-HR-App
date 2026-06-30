@@ -19,6 +19,8 @@ export const upload = multer({
       'image/webp',
       'application/vnd.ms-excel',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'text/csv',
+      'application/csv',
     ];
     if (allowedMimes.includes(file.mimetype)) {
       cb(null, true);

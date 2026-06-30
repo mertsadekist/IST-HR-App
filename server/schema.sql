@@ -237,6 +237,7 @@ CREATE TABLE IF NOT EXISTS employees (
     end_date        DATE NULL,
     basic_salary    DECIMAL(12, 2) NULL,
     full_salary     DECIMAL(12, 2) NULL,
+    attendance_id   VARCHAR(100) NULL,
     status          ENUM('Onboarding', 'Active', 'Offboarding', 'Exited') DEFAULT 'Onboarding',
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

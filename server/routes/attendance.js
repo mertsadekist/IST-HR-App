@@ -5,6 +5,8 @@ import { authorize } from '../middleware/rbac.js';
 import { addAudit } from '../services/auditService.js';
 import { tenantScope, companyClause, resolveWriteCompanyId } from '../middleware/tenant.js';
 import { validate } from '../middleware/validate.js';
+import { upload } from '../middleware/upload.js';
+import * as XLSX from 'xlsx';
 
 const router = Router();
 router.use(auth, tenantScope);
@@ -193,6 +195,143 @@ router.delete('/:id', authorize('admin'), async (req, res) => {
     await addAudit(pool, req.user, 'Attendance', 'Deleted', `Attendance #${req.params.id} deleted`);
     res.json({ success: true });
   } catch (err) { console.error('DELETE /attendance/:id error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// ─── HR: import a time-clock CSV/XLSX export ─────────────────────────────────
+// Device file: metadata rows, then header `First Name,Last Name,Name,ID,…,Check-In Record`.
+// The device only records entries, so per day: check-in = earliest swipe,
+// check-out = a fixed cutoff (default 19:00). Rows are upserted per (employee, date),
+// matched to employees by their attendance_id. Unmatched device IDs are reported.
+router.post('/import', authorize('admin', 'hr_manager', 'hr_specialist'), upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const checkoutTime = /^\d{1,2}:\d{2}$/.test(req.body.checkout_time || '') ? req.body.checkout_time : '19:00';
+    const lateAfter = /^\d{1,2}:\d{2}$/.test(req.body.late_after || '') ? req.body.late_after : null;
+
+    const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const matrix = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false, raw: false, defval: '' });
+
+    // Locate the header row, then map the columns we need by name.
+    const headerIdx = matrix.findIndex((r) => Array.isArray(r) && r.some((c) => String(c).trim() === 'ID') && r.some((c) => String(c).trim() === 'Check-In Record'));
+    if (headerIdx === -1) return res.status(422).json({ error: 'Unrecognized file — could not find the Time Card header (ID / Check-In Record).' });
+    const header = matrix[headerIdx].map((c) => String(c).trim());
+    const col = (name) => header.indexOf(name);
+    const ix = { id: col('ID'), date: col('Date'), swipes: col('Check-In Record'), name: col('Name') };
+    if (ix.id < 0 || ix.date < 0 || ix.swipes < 0) return res.status(422).json({ error: 'Missing required columns (ID, Date, Check-In Record).' });
+
+    // attendance_id -> employee, within the caller's authority (cross-company roles
+    // match across every company so a multi-company file imports in one pass).
+    let empSql = "SELECT id, company_id, attendance_id, first_name, last_name FROM employees WHERE attendance_id IS NOT NULL AND attendance_id <> ''";
+    const empParams = [];
+    if (!req.crossCompany) { empSql += ' AND company_id = ?'; empParams.push(req.companyId); }
+    const [emps] = await pool.query(empSql, empParams);
+    const byDevice = new Map(emps.map((e) => [String(e.attendance_id).trim(), e]));
+
+    // xlsx may keep the date as text ("2026-06-30") or reformat it to its default
+    // m/d/yy ("6/30/26"), or hand back a Date object for .xlsx — handle all three
+    // without new Date(string) so there is no timezone off-by-one.
+    const pad = (n) => String(n).padStart(2, '0');
+    const normDate = (v) => {
+      if (v instanceof Date) return `${v.getUTCFullYear()}-${pad(v.getUTCMonth() + 1)}-${pad(v.getUTCDate())}`;
+      const s = String(v).trim();
+      let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);            // ISO YYYY-MM-DD
+      if (m) return `${m[1]}-${pad(+m[2])}-${pad(+m[3])}`;
+      m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);           // m/d/yy (xlsx default)
+      if (m) { const y = m[3].length === 2 ? `20${m[3]}` : m[3]; return `${y}-${pad(+m[1])}-${pad(+m[2])}`; }
+      return null;
+    };
+
+    let imported = 0, updated = 0, skipped = 0;
+    const unmatched = new Map();
+    const errors = [];
+
+    for (let r = headerIdx + 1; r < matrix.length; r++) {
+      const row = matrix[r];
+      if (!Array.isArray(row) || !row.length) continue;
+      const deviceId = String(row[ix.id] ?? '').trim();
+      if (!deviceId) continue;
+      const date = normDate(row[ix.date]);
+      const swipesRaw = String(row[ix.swipes] ?? '').trim();
+      if (!date || !swipesRaw) { skipped++; continue; }
+
+      const emp = byDevice.get(deviceId);
+      if (!emp) {
+        const u = unmatched.get(deviceId) || { id: deviceId, name: ix.name >= 0 ? String(row[ix.name] ?? '').trim() : '', rows: 0 };
+        u.rows++; unmatched.set(deviceId, u);
+        continue;
+      }
+
+      const times = swipesRaw.split(';').map((s) => s.trim()).filter((s) => /^\d{1,2}:\d{2}/.test(s)).map((s) => s.slice(0, 5));
+      if (!times.length) { skipped++; continue; }
+      const firstIn = times.reduce((a, b) => (a <= b ? a : b));
+      const checkInDT = `${date} ${firstIn}:00`;
+      let checkOutDT = `${date} ${checkoutTime}:00`;
+      let workHours = Math.round(((new Date(checkOutDT) - new Date(checkInDT)) / 3600000) * 100) / 100;
+      if (workHours <= 0) { checkOutDT = null; workHours = null; } // first reading at/after the cutoff
+      const status = (lateAfter && firstIn > lateAfter) ? 'Late' : 'Present';
+      const notes = `Swipes: ${swipesRaw}`.slice(0, 500);
+
+      try {
+        const [result] = await pool.query(
+          `INSERT INTO attendance (company_id, employee_id, work_date, check_in, check_out, work_hours, status, notes, created_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE check_in=VALUES(check_in), check_out=VALUES(check_out),
+             work_hours=VALUES(work_hours), status=VALUES(status), notes=VALUES(notes)`,
+          [emp.company_id, emp.id, date, checkInDT, checkOutDT, workHours, status, notes, req.user.id]
+        );
+        if (result.affectedRows === 1) imported++; else updated++; // 2 rows affected = updated
+      } catch (e) {
+        errors.push({ row: r + 1, message: e.message });
+      }
+    }
+
+    await addAudit(pool, req.user, 'Attendance', 'Imported',
+      `Time-card import: ${imported} new, ${updated} updated, ${skipped} skipped, ${unmatched.size} unmatched device IDs`);
+    res.json({ imported, updated, skipped, unmatched: [...unmatched.values()], errors });
+  } catch (err) {
+    console.error('POST /attendance/import error:', err);
+    res.status(500).json({ error: err.message || 'Failed to import attendance file' });
+  }
+});
+
+// ─── HR: export attendance as CSV/XLSX (same scope/filters as the list) ───────
+router.get('/export', authorize('admin', 'hr_manager', 'hr_specialist'), async (req, res) => {
+  try {
+    const co = companyClause(req, 'a.company_id');
+    // DATE_FORMAT keeps the stored wall-clock times (no JS timezone shift).
+    let sql = `SELECT DATE_FORMAT(a.work_date, '%Y-%m-%d') AS work_date, e.attendance_id,
+                      e.first_name, e.last_name,
+                      DATE_FORMAT(a.check_in, '%H:%i') AS check_in,
+                      DATE_FORMAT(a.check_out, '%H:%i') AS check_out,
+                      a.work_hours, a.status, a.notes
+               FROM attendance a JOIN employees e ON a.employee_id = e.id WHERE 1=1` + co.clause;
+    const params = [...co.params];
+    if (req.query.employee_id) { sql += ' AND a.employee_id = ?'; params.push(req.query.employee_id); }
+    if (req.query.from) { sql += ' AND a.work_date >= ?'; params.push(req.query.from); }
+    if (req.query.to) { sql += ' AND a.work_date <= ?'; params.push(req.query.to); }
+    if (req.query.status) { sql += ' AND a.status = ?'; params.push(req.query.status); }
+    sql += ' ORDER BY a.work_date DESC, e.first_name';
+    const [rows] = await pool.query(sql, params);
+
+    const aoa = [['Date', 'Attendance ID', 'Employee', 'Check-In', 'Check-Out', 'Work Hours', 'Status', 'Notes']];
+    for (const r of rows) {
+      aoa.push([r.work_date || '', r.attendance_id || '', `${r.first_name} ${r.last_name}`,
+        r.check_in || '', r.check_out || '', r.work_hours ?? '', r.status, r.notes || '']);
+    }
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
+    const format = req.query.format === 'xlsx' ? 'xlsx' : 'csv';
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: format });
+    res.setHeader('Content-Type', format === 'xlsx'
+      ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="attendance_export_${new Date().toISOString().slice(0, 10)}.${format}"`);
+    res.send(buf);
+  } catch (err) {
+    console.error('GET /attendance/export error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 export default router;

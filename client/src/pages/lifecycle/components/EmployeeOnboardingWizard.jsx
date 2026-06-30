@@ -18,7 +18,7 @@ export default function EmployeeOnboardingWizard({ open, onClose, onComplete }) 
   const [formData, setFormData] = useState({
     first_name: '', last_name: '', email: '', phone: '', nationality: '',
     company_id: '', department_id: '', job_title_text: '',
-    basic_salary: '', full_salary: '', start_date: '',
+    basic_salary: '', full_salary: '', start_date: '', attendance_id: '',
     status: 'Active'
   });
   const [documents, setDocuments] = useState([]); // { category, file, parsed_data, original_name }
@@ -204,6 +204,7 @@ export default function EmployeeOnboardingWizard({ open, onClose, onComplete }) 
               <Input label="Full Salary (AED)" type="number" required value={formData.full_salary} onChange={e => setFormData({ ...formData, full_salary: e.target.value })} />
             </div>
             <Input label="Start Date" type="date" required value={formData.start_date} onChange={e => setFormData({ ...formData, start_date: e.target.value })} />
+            <Input label={t('employees.attendance_id', 'Attendance ID (device)')} value={formData.attendance_id} onChange={e => setFormData({ ...formData, attendance_id: e.target.value })} placeholder="e.g. 4035" />
           </div>
         );
       case 4:
