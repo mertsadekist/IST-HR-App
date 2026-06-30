@@ -138,8 +138,8 @@ export default function Attendance() {
                 <tr key={r.id} className="border-t border-surface-50">
                   <td className="p-3">{dayjs(r.work_date).format('MMM D, YYYY')}</td>
                   <td className="p-3">{r.first_name} {r.last_name}</td>
-                  <td className="p-3 text-center">{r.check_in ? dayjs(r.check_in).format('HH:mm') : '—'}</td>
-                  <td className="p-3 text-center">{r.check_out ? dayjs(r.check_out).format('HH:mm') : '—'}</td>
+                  <td className="p-3 text-center">{r.check_in || '—'}</td>
+                  <td className="p-3 text-center">{r.check_out || '—'}</td>
                   <td className="p-3 text-center">{r.work_hours ?? '—'}</td>
                   <td className="p-3 text-center"><Badge variant={statusVariant(r.status)} className="text-[10px]">{stLabel(t, r.status)}</Badge></td>
                 </tr>

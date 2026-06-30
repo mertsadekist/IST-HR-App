@@ -508,6 +508,11 @@
     "icon": "Icon"
   },
   "system_config": {
+    "general": "General",
+    "timezone": "Timezone",
+    "timezone_hint": "The timezone the system uses to display and record dates and times.",
+    "timezone_saved": "Timezone saved",
+    "timezone_save_failed": "Failed to save timezone",
     "ats_stages": "ATS Stages",
     "onboarding": "Onboarding Templates",
     "offboarding": "Offboarding Templates",

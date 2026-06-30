@@ -42,7 +42,13 @@ function lateFromCheckIn(dt) {
 router.get('/', async (req, res) => {
   try {
     const co = companyClause(req, 'a.company_id');
-    let sql = `SELECT a.*, e.first_name, e.last_name
+    // Return check_in/out as wall-clock strings (DATE_FORMAT) so the stored local
+    // time is shown verbatim — never shifted by the server/browser timezone.
+    let sql = `SELECT a.id, a.employee_id, a.company_id, a.work_hours, a.status, a.notes,
+                      DATE_FORMAT(a.work_date, '%Y-%m-%d') AS work_date,
+                      DATE_FORMAT(a.check_in, '%H:%i') AS check_in,
+                      DATE_FORMAT(a.check_out, '%H:%i') AS check_out,
+                      e.first_name, e.last_name
                FROM attendance a JOIN employees e ON a.employee_id = e.id
                WHERE 1=1` + co.clause;
     const params = [...co.params];

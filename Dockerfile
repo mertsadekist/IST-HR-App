@@ -20,7 +20,11 @@ FROM node:20-alpine AS runtime
 ENV NODE_ENV=production \
     PORT=3001 \
     UPLOADS_DIR=/data/uploads \
-    CLIENT_DIST=/app/client/dist
+    CLIENT_DIST=/app/client/dist \
+    TZ=Asia/Dubai
+
+# tzdata so named timezones (e.g. Asia/Dubai) resolve for the configurable app TZ.
+RUN apk add --no-cache tzdata
 
 WORKDIR /app/server
 # Install production dependencies only. `npm install` (not `npm ci`) so the build

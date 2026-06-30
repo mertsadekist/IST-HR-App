@@ -3,8 +3,41 @@ import pool from '../config/db.js';
 import { auth } from '../middleware/auth.js';
 import { authorize } from '../middleware/rbac.js';
 import { addAudit } from '../services/auditService.js';
+import { getAppSetting, setAppSetting } from '../services/appSettings.js';
 
 const router = Router();
+
+// ==============================================
+// GENERAL APP SETTINGS (timezone, …)
+// ==============================================
+
+// GET /api/settings/general — current app timezone
+router.get('/general', auth, async (req, res) => {
+  try {
+    const timezone = await getAppSetting('timezone', process.env.TZ || 'Asia/Dubai');
+    res.json({ timezone });
+  } catch (err) {
+    console.error('GET /settings/general error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /api/settings/general — set the app timezone (admin); applied live + persisted
+router.put('/general', auth, authorize('admin'), async (req, res) => {
+  try {
+    const { timezone } = req.body;
+    if (!timezone || typeof timezone !== 'string' || timezone.length > 100) {
+      return res.status(422).json({ error: 'A valid timezone is required' });
+    }
+    await setAppSetting('timezone', timezone);
+    process.env.TZ = timezone; // apply to subsequent date handling without a restart
+    await addAudit(pool, req.user, 'Settings', 'Timezone', `App timezone set to ${timezone}`);
+    res.json({ success: true, timezone });
+  } catch (err) {
+    console.error('PUT /settings/general error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 // ==============================================
 // ATS STAGES

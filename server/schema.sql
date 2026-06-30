@@ -248,6 +248,13 @@ CREATE TABLE IF NOT EXISTS employees (
     UNIQUE KEY uq_emp_company_email (company_id, email)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Global key/value app settings (e.g. timezone)
+CREATE TABLE IF NOT EXISTS app_settings (
+    k           VARCHAR(100) PRIMARY KEY,
+    v           TEXT NULL,
+    updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ============================================
 -- 10. ONBOARDING
 -- ============================================

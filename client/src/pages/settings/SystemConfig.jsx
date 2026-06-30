@@ -25,6 +25,7 @@ export default function SystemConfig() {
   useEffect(() => { dispatch(fetchCompanies()); }, [dispatch]);
 
   const tabs = [
+    { id: 'general', label: t('system_config.general'), icon: '🕒' },
     { id: 'ats', label: t('system_config.ats_stages'), icon: '🎯' },
     { id: 'onboarding', label: t('system_config.onboarding'), icon: '📋' },
     { id: 'offboarding', label: t('system_config.offboarding'), icon: '🚪' },
@@ -52,12 +53,58 @@ export default function SystemConfig() {
         ))}
       </div>
 
+      {activeTab === 'general' && <GeneralConfig />}
       {activeTab === 'ats' && <AtsStagesConfig />}
       {activeTab === 'onboarding' && <TemplateConfig type="onboarding" companies={companies} />}
       {activeTab === 'offboarding' && <TemplateConfig type="offboarding" companies={companies} />}
       {activeTab === 'letters' && <LetterTemplatesConfig />}
       {activeTab === 'kpi' && <KpiTiersConfig />}
     </div>
+  );
+}
+
+// ==============================================
+// General (timezone) Configuration
+// ==============================================
+const TIMEZONES = [
+  'Asia/Dubai', 'Asia/Riyadh', 'Asia/Qatar', 'Asia/Kuwait', 'Asia/Bahrain', 'Asia/Muscat',
+  'Asia/Baghdad', 'Asia/Amman', 'Asia/Beirut', 'Africa/Cairo', 'Europe/Istanbul', 'Europe/London', 'UTC',
+];
+function GeneralConfig() {
+  const { t } = useTranslation();
+  const isAdmin = useSelector((s) => s.auth.user?.role) === 'admin';
+  const [tz, setTz] = useState('Asia/Dubai');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try { const { data } = await settingsApi.getGeneralSettings(); setTz(data.timezone || 'Asia/Dubai'); }
+      catch { /* ignore */ } finally { setLoading(false); }
+    })();
+  }, []);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await settingsApi.updateGeneralSettings({ timezone: tz });
+      toast.success(t('system_config.timezone_saved', 'Timezone saved'));
+    } catch {
+      toast.error(t('system_config.timezone_save_failed', 'Failed to save timezone'));
+    } finally { setSaving(false); }
+  };
+
+  const options = TIMEZONES.includes(tz) ? TIMEZONES : [tz, ...TIMEZONES];
+  return (
+    <Card className="!p-6 max-w-lg space-y-4">
+      <div>
+        <h3 className="font-semibold text-surface-800">{t('system_config.timezone', 'Timezone')}</h3>
+        <p className="text-sm text-surface-500 mt-1">{t('system_config.timezone_hint', 'The timezone the system uses to display and record dates and times.')}</p>
+      </div>
+      <Select value={tz} onChange={(e) => setTz(e.target.value)} disabled={!isAdmin || loading}
+        options={options.map((z) => ({ value: z, label: z }))} />
+      {isAdmin && <Button onClick={save} loading={saving}>{t('common.save', 'Save')}</Button>}
+    </Card>
   );
 }
 

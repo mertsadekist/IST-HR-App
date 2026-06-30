@@ -21,6 +21,9 @@ export const createOnboardingTemplate = (data) => api.post('/settings/onboarding
 export const updateOnboardingTemplate = (id, data) => api.put(`/settings/onboarding-templates/${id}`, data);
 export const deleteOnboardingTemplate = (id) => api.delete(`/settings/onboarding-templates/${id}`);
 
+export const getGeneralSettings = () => api.get('/settings/general');
+export const updateGeneralSettings = (data) => api.put('/settings/general', data);
+
 export const getOffboardingTemplates = (params) => api.get('/settings/offboarding-templates', { params });
 export const createOffboardingTemplate = (data) => api.post('/settings/offboarding-templates', data);
 export const updateOffboardingTemplate = (id, data) => api.put(`/settings/offboarding-templates/${id}`, data);
