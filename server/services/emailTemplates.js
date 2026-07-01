@@ -428,6 +428,8 @@ const templates = {
   employment_offer: (data) => {
     const row = (label, val) => (val !== undefined && val !== null && String(val) !== '')
       ? `<tr><td>${label}</td><td>${val}</td></tr>` : '';
+    // Presets carry multi-paragraph terms — preserve line breaks instead of squashing to one line.
+    const linebreak = (text) => String(text).split(/\n{2,}/).map((block) => `<p>${block.replace(/\n/g, '<br>')}</p>`).join('');
     return {
       subject: `Job Offer — ${data.job_title || 'Position'} at ${data.company || 'our company'}`,
       html: baseLayout(`
@@ -456,7 +458,7 @@ const templates = {
             ${row('Notice Period', data.notice_period)}
           </table>
         </div>
-        ${data.additional_terms ? `<p><strong>Additional Terms:</strong><br>${data.additional_terms}</p>` : ''}
+        ${data.additional_terms ? `<p><strong>Additional Terms:</strong></p>${linebreak(data.additional_terms)}` : ''}
         <p><strong>How to respond:</strong> Please confirm your acceptance or decline this offer by replying to this email
            ${data.offer_expiry_date ? `no later than <strong>${data.offer_expiry_date}</strong>` : 'at your earliest convenience'}.
            Upon acceptance, we will share the signed contract and next steps.</p>

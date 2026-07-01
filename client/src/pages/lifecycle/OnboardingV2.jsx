@@ -20,36 +20,13 @@ import dayjs from 'dayjs';
 import SendDocumentModal from '@components/email/SendDocumentModal';
 import { getCompany } from '@api/companiesApi';
 import { companyLetterhead } from '@utils/letterhead';
+import { buildOfferLetterHtml } from '@utils/offerLetter';
+import { OFFER_PRESETS } from '@/data/offerPresets';
 
 async function resolveCompanyLh(companyId) {
   if (!companyId) return null;
   try { const { data } = await getCompany(companyId); return companyLetterhead(data); }
   catch { return null; }
-}
-
-function buildOfferLetterHtml(o, detail) {
-  const esc = (s) => String(s == null ? '' : s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-  const fmt = (d) => (d ? dayjs(d).format('MMMM D, YYYY') : '');
-  const company = detail.company_name || '';
-  const rows = [
-    ['Position', o.job_title], ['Department', o.department], ['Work location', o.work_location],
-    ['Employment type', o.employment_type], ['Reporting manager', o.reporting_manager],
-    ['Joining date', fmt(o.joining_date)], ['Basic salary', o.basic_salary],
-    ['Probation period', o.probation_period], ['Working hours', o.working_hours], ['Notice period', o.notice_period],
-  ].filter(([, v]) => v != null && v !== '');
-  return `
-    <div style="font-size:14px;line-height:1.9;color:#111;">
-      <p style="text-align:right;margin:0 0 18px;">${fmt(new Date().toISOString())}</p>
-      <p>Dear <strong>${esc(detail.candidate_name || '')}</strong>,</p>
-      <h2 style="font-size:18px;margin:14px 0 10px;">Employment Offer${o.offer_number ? ` — ${esc(o.offer_number)}` : ''}</h2>
-      <p>We are pleased to offer you the position of <strong>${esc(o.job_title || '')}</strong>${o.department ? ` in the ${esc(o.department)} department` : ''} at <strong>${esc(company)}</strong>. The principal terms of your employment are set out below:</p>
-      <table style="width:100%;border-collapse:collapse;margin:14px 0;">
-        ${rows.map(([k, v]) => `<tr><td style="padding:6px 10px;border-bottom:1px solid #eee;font-weight:600;width:38%;color:#555;">${k}</td><td style="padding:6px 10px;border-bottom:1px solid #eee;">${esc(v)}</td></tr>`).join('')}
-      </table>
-      ${o.additional_terms ? `<p>${esc(o.additional_terms)}</p>` : ''}
-      <p>Please confirm your acceptance by signing and returning this letter${o.offer_expiry_date ? ` by <strong>${fmt(o.offer_expiry_date)}</strong>` : ''}.</p>
-      <p style="margin-top:30px;">Sincerely,<br>[Authorized Signatory]<br><strong>${esc(company)}</strong></p>
-    </div>`;
 }
 
 const STAGES = [
@@ -404,6 +381,8 @@ const OFFER_FORM = [
   ['joining_date', 'ob.of_joining_date', 'date', true], ['basic_salary', 'ob.of_basic_salary', 'number', true],
   ['offer_expiry_date', 'ob.of_offer_expiry', 'date', true], ['probation_period', 'ob.of_probation', 'text'],
   ['working_hours', 'ob.of_working_hours', 'text'], ['notice_period', 'ob.of_notice', 'text'],
+  ['commission_structure', 'ob.of_commission', 'text'], ['leave_policy', 'ob.of_leave_policy', 'text'],
+  ['benefits', 'ob.of_benefits', 'text'], ['visa_responsibility', 'ob.of_visa', 'text'], ['medical_insurance', 'ob.of_medical', 'text'],
 ];
 const EMP_TYPES = ['Full-time', 'Part-time', 'Contract', 'Temporary'];
 function OffersPanel({ detail, reload }) {
@@ -439,6 +418,10 @@ function OffersPanel({ detail, reload }) {
     try { await obApi.createOffer(detail.id, form); toast.success(t('ob.offer_created')); setShowForm(false); setForm({ employment_type: 'Full-time' }); reload(); }
     catch (e) { toast.error(apiErr(e, t('ob.create_offer_failed'))); }
     finally { setSaving(false); }
+  };
+  const applyPreset = (preset) => {
+    const { key, label, ...fields } = preset;
+    setForm((f) => ({ ...f, employment_type: 'Full-time', ...fields }));
   };
   const buildOfferEmailData = (o) => ({
     candidate_name: o.candidate_name || [detail.profile?.first_name, detail.profile?.last_name].filter(Boolean).join(' ') || 'Candidate',
@@ -477,20 +460,38 @@ function OffersPanel({ detail, reload }) {
       )}
 
       {showForm && (
-        <div className="p-3 rounded-xl border border-surface-100 bg-surface-50/50 grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {OFFER_FORM.map(([k, label, type, req]) => (
-            <div key={k}>
-              <label className="text-xs font-semibold text-surface-700">{t(label)}{req && <span className="text-red-500"> *</span>}</label>
-              {type === 'select' ? (
-                <select value={form[k] || 'Full-time'} onChange={(e) => setForm((f) => ({ ...f, [k]: e.target.value }))} className="w-full text-sm bg-white border border-surface-200 rounded-lg px-3 py-2 mt-1">
-                  {EMP_TYPES.map((o) => <option key={o} value={o}>{t(`ob.et_${slug(o)}`, o)}</option>)}
-                </select>
-              ) : (
-                <input type={type} value={form[k] || ''} onChange={(e) => setForm((f) => ({ ...f, [k]: e.target.value }))} className="w-full text-sm bg-white border border-surface-200 rounded-lg px-3 py-2 mt-1" />
-              )}
+        <div className="p-3 rounded-xl border border-surface-100 bg-surface-50/50 space-y-3">
+          <div>
+            <label className="text-xs font-semibold text-surface-700 block mb-1">{t('ob.use_preset')}</label>
+            <div className="flex flex-wrap gap-1.5">
+              {OFFER_PRESETS.map((p) => (
+                <button key={p.key} type="button" onClick={() => applyPreset(p)}
+                  className="text-xs px-2.5 py-1 rounded-lg border border-surface-200 bg-white hover:bg-brand-50 hover:border-brand-200 hover:text-brand-700 transition-colors">
+                  {p.label}
+                </button>
+              ))}
             </div>
-          ))}
-          <div className="sm:col-span-2"><Button size="sm" onClick={create} loading={saving}>{t('ob.save_draft_offer')}</Button></div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {OFFER_FORM.map(([k, label, type, req]) => (
+              <div key={k}>
+                <label className="text-xs font-semibold text-surface-700">{t(label)}{req && <span className="text-red-500"> *</span>}</label>
+                {type === 'select' ? (
+                  <select value={form[k] || 'Full-time'} onChange={(e) => setForm((f) => ({ ...f, [k]: e.target.value }))} className="w-full text-sm bg-white border border-surface-200 rounded-lg px-3 py-2 mt-1">
+                    {EMP_TYPES.map((o) => <option key={o} value={o}>{t(`ob.et_${slug(o)}`, o)}</option>)}
+                  </select>
+                ) : (
+                  <input type={type} value={form[k] || ''} onChange={(e) => setForm((f) => ({ ...f, [k]: e.target.value }))} className="w-full text-sm bg-white border border-surface-200 rounded-lg px-3 py-2 mt-1" />
+                )}
+              </div>
+            ))}
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-surface-700">{t('ob.of_additional_terms')}</label>
+            <textarea value={form.additional_terms || ''} onChange={(e) => setForm((f) => ({ ...f, additional_terms: e.target.value }))} rows={8}
+              className="w-full text-sm bg-white border border-surface-200 rounded-lg px-3 py-2 mt-1 font-mono" />
+          </div>
+          <Button size="sm" onClick={create} loading={saving}>{t('ob.save_draft_offer')}</Button>
         </div>
       )}
 
@@ -537,7 +538,7 @@ function OffersPanel({ detail, reload }) {
             <div className="flex justify-end gap-2 pt-1">
               <Button size="sm" variant="secondary" onClick={async () => {
                 const lh = await resolveCompanyLh(detail.company_id);
-                const html = lh ? buildOfferLetterHtml(preview.offer, detail) : preview.html;
+                const html = lh ? buildOfferLetterHtml(preview.offer, { companyName: detail.company_name, candidateName: detail.candidate_name }) : preview.html;
                 setSendDoc({ html, title: `Employment Offer ${preview.offerNumber || ''}`.trim(), lh });
               }}>
                 <Send size={13} /> {t('ob.send_as_pdf')}

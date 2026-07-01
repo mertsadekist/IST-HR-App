@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Kanban, Users, FileText, Target, UserCheck,
   Laptop, TrendingUp, DoorOpen, Scale, FileArchive, Calculator,
   BarChart3, ClipboardList, Trophy, Network, UserCog, Settings,
-  Sparkles, ChevronDown, X, Package, Shield, Mail,
+  Sparkles, ChevronDown, X, Package, Shield, Mail, Send,
   CalendarDays, Clock, Banknote, Inbox, HelpCircle
 } from 'lucide-react';
 import { cn } from '@utils/cn';
@@ -112,6 +112,7 @@ export default function Sidebar({ isOpen, onClose }) {
       items: [
         { path: '/employees', icon: Users, label: t('nav.employees', 'Employees') },
         { path: '/onboarding', icon: UserCheck, label: t('nav.onboarding') },
+        { path: '/quick-offer', icon: Send, label: t('nav.quick_offer', 'Quick Offer') },
         { path: '/leave', icon: CalendarDays, label: t('nav.leave', 'Leave') },
         { path: '/attendance', icon: Clock, label: t('nav.attendance', 'Attendance') },
         { path: '/payroll-runs', icon: Banknote, label: t('nav.payroll_runs', 'Payroll Runs') },
