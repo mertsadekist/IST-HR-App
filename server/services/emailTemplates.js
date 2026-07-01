@@ -532,6 +532,56 @@ const templates = {
     `, data.company),
   }),
 
+  // ==================== SALARY REVIEW ====================
+  salary_review_submitted: (data) => ({
+    subject: `Salary review ${data.review_year} needs your approval — ${data.company || 'Company'}`,
+    html: baseLayout(`
+      <h2>Salary Review Awaiting Your Approval 💰</h2>
+      <p>Dear <strong>${data.name}</strong>,</p>
+      <p>A salary review has been prepared and is awaiting your decision.</p>
+      <div class="highlight">
+        <table class="info-table">
+          <tr><td>Review Year</td><td><strong>${data.review_year}</strong></td></tr>
+          <tr><td>Employees</td><td>${data.employee_count}</td></tr>
+          <tr><td>Status</td><td><span class="badge badge-amber">Awaiting Approval</span></td></tr>
+        </table>
+      </div>
+      <p>Please open Salary Reviews in the HR system to review the proposed changes and approve or reject.</p>
+      <p>Best regards,<br><strong>IST HR System</strong></p>
+    `, data.company),
+  }),
+
+  salary_review_decision: (data) => ({
+    subject: `Salary review ${data.review_year} ${String(data.decision || '').toLowerCase()} — ${data.company || 'Company'}`,
+    html: baseLayout(`
+      <h2>Salary Review ${data.decision === 'Approved' ? 'Approved ✅' : 'Rejected ❌'}</h2>
+      <p>Dear <strong>${data.name}</strong>,</p>
+      <p>The salary review you prepared for <strong>${data.review_year}</strong> has been
+        <span class="badge ${data.decision === 'Approved' ? 'badge-green' : 'badge-red'}">${data.decision}</span>.</p>
+      ${data.note ? `<div class="highlight"><strong>Note from the approver:</strong><br>${String(data.note).replace(/\n/g, '<br>')}</div>` : ''}
+      ${data.decision === 'Rejected' ? '<p>You can revise and resubmit the review from Salary Reviews.</p>' : '<p>Approved raises will apply automatically to payroll on each employee’s effective date.</p>'}
+      <p>Best regards,<br><strong>IST HR System</strong></p>
+    `, data.company),
+  }),
+
+  salary_increase_effective: (data) => ({
+    subject: `Your salary has been updated — ${data.company || 'Company'}`,
+    html: baseLayout(`
+      <h2>Salary Update Effective Today 🎉</h2>
+      <p>Dear <strong>${data.name}</strong>,</p>
+      <p>Your salary revision is now in effect.</p>
+      <div class="highlight">
+        <table class="info-table">
+          ${data.new_basic_salary ? `<tr><td>New Basic Salary</td><td><strong>${data.new_basic_salary}</strong></td></tr>` : ''}
+          ${data.new_full_salary ? `<tr><td>New Full Salary</td><td><strong>${data.new_full_salary}</strong></td></tr>` : ''}
+          <tr><td>Effective Date</td><td>${data.effective_date || new Date().toLocaleDateString()}</td></tr>
+        </table>
+      </div>
+      <p>This will be reflected starting with your next payroll run. Congratulations!</p>
+      <p>Best regards,<br><strong>HR Department</strong></p>
+    `, data.company),
+  }),
+
   // ==================== CUSTOM ====================
   custom: (data) => ({
     subject: data.subject || 'Message from HR',

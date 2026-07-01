@@ -1,24 +1,16 @@
-import pool from './db.js';
+// Idempotent migration: annual Salary Review feature — companies.salary_review_approver_id
+// + the salary_reviews / salary_review_items / salary_review_actions /
+// salary_review_documents tables. Safe to re-run.
+import pool from './config/db.js';
 
-// Idempotent, self-healing column guards applied at boot, so a redeploy never
-// needs a manual migration step for these additive columns. Fails soft: a guard
-// error is logged but never crashes the server.
-const COLUMN_GUARDS = [
-  { table: 'employees', column: 'attendance_id', ddl: 'ALTER TABLE employees ADD COLUMN attendance_id VARCHAR(100) NULL' },
-  {
-    table: 'companies', column: 'salary_review_approver_id',
-    ddl: 'ALTER TABLE companies ADD COLUMN salary_review_approver_id INT NULL, ADD FOREIGN KEY (salary_review_approver_id) REFERENCES users(id) ON DELETE SET NULL',
-  },
-];
+async function columnExists(table, col) {
+  const [r] = await pool.query(
+    `SELECT COUNT(*) c FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?`,
+    [table, col]);
+  return r[0].c > 0;
+}
 
-// Tiny key/value store for global app settings (e.g. timezone).
-const TABLE_GUARDS = [
-  `CREATE TABLE IF NOT EXISTS app_settings (
-     k VARCHAR(100) PRIMARY KEY,
-     v TEXT NULL,
-     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
-  // Annual Salary Review — see server/apply_salary_reviews.mjs for full context.
+const TABLES = [
   `CREATE TABLE IF NOT EXISTS salary_reviews (
      id              INT AUTO_INCREMENT PRIMARY KEY,
      company_id      INT NOT NULL,
@@ -95,22 +87,21 @@ const TABLE_GUARDS = [
    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 ];
 
-export async function ensureSchema() {
-  for (const ddl of TABLE_GUARDS) {
-    try { await pool.query(ddl); } catch (e) { console.error('ensureSchema(table) failed:', e.message); }
+try {
+  if (!(await columnExists('companies', 'salary_review_approver_id'))) {
+    await pool.query('ALTER TABLE companies ADD COLUMN salary_review_approver_id INT NULL AFTER status, ADD FOREIGN KEY (salary_review_approver_id) REFERENCES users(id) ON DELETE SET NULL');
+    console.log('companies.salary_review_approver_id added');
+  } else {
+    console.log('companies.salary_review_approver_id already present');
   }
-  for (const g of COLUMN_GUARDS) {
-    try {
-      const [r] = await pool.query(
-        'SELECT COUNT(*) c FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?',
-        [g.table, g.column]
-      );
-      if (r[0].c === 0) {
-        await pool.query(g.ddl);
-        console.log(`🔧 ensureSchema: added ${g.table}.${g.column}`);
-      }
-    } catch (e) {
-      console.error(`ensureSchema(${g.table}.${g.column}) failed:`, e.message);
-    }
+  for (const ddl of TABLES) {
+    await pool.query(ddl);
   }
+  console.log('salary_reviews / salary_review_items / salary_review_actions / salary_review_documents ready');
+  console.log('SALARY_REVIEWS MIGRATION OK');
+} catch (e) {
+  console.error('MIGRATION ERROR:', e.message);
+  process.exitCode = 1;
+} finally {
+  await pool.end();
 }

@@ -115,6 +115,7 @@ export default function Sidebar({ isOpen, onClose }) {
         { path: '/leave', icon: CalendarDays, label: t('nav.leave', 'Leave') },
         { path: '/attendance', icon: Clock, label: t('nav.attendance', 'Attendance') },
         { path: '/payroll-runs', icon: Banknote, label: t('nav.payroll_runs', 'Payroll Runs') },
+        { path: '/salary-reviews', icon: TrendingUp, label: t('nav.salary_reviews', 'Salary Reviews') },
         { path: '/assets', icon: Laptop, label: t('nav.assets') },
         { path: '/inventory', icon: Package, label: t('nav.inventory', 'Inventory') },
         { path: '/performance', icon: TrendingUp, label: t('nav.performance', 'Performance') },

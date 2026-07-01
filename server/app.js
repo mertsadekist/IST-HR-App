@@ -50,6 +50,7 @@ import payrollRoutes from './routes/payroll.js';
 import notificationsRoutes from './routes/notifications.js';
 import publicRoutes from './routes/public.js';
 import applicationsRoutes from './routes/applications.js';
+import salaryReviewsRoutes from './routes/salaryReviews.js';
 
 const app = express();
 
@@ -133,6 +134,7 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/payroll', payrollRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/applications', applicationsRoutes);
+app.use('/api/salary-reviews', salaryReviewsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

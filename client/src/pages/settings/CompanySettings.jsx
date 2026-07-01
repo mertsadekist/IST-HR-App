@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchCompanies } from '@store/slices/companiesSlice';
 import * as companiesApi from '@api/companiesApi';
+import * as usersApi from '@api/usersApi';
 import Card from '@components/ui/Card';
 import Button from '@components/ui/Button';
 import Badge from '@components/ui/Badge';
@@ -31,17 +32,23 @@ export default function CompanySettings() {
   const [lhMargins, setLhMargins] = useState({ top: 50, bottom: 40, left: 18, right: 18 });
   const [lhBusy, setLhBusy] = useState(false);
   const lhInputRef = useRef(null);
+  const [approverUsers, setApproverUsers] = useState([]);
 
   function emptyForm() {
     return {
       name: '', short_code: '', currency: 'AED', address: '', phone: '',
       email: '', website: '', industry: '', crm_platform: '',
       color_primary: '#6D28D9', color_secondary: '#1D1245', status: 'Active',
-      logo: '',
+      logo: '', salary_review_approver_id: '',
     };
   }
 
   useEffect(() => { dispatch(fetchCompanies()); }, [dispatch]);
+  // Admin-only user list, used to pick the per-company Salary Review approver.
+  useEffect(() => {
+    if (!isAdmin) return;
+    usersApi.getUsers().then(({ data }) => setApproverUsers(data.filter((u) => ['admin', 'hr_manager'].includes(u.role)))).catch(() => {});
+  }, [isAdmin]);
 
   const openAdd = () => { setEditing(null); setForm(emptyForm()); setModalOpen(true); };
   const openEdit = (company) => {
@@ -56,6 +63,7 @@ export default function CompanySettings() {
       color_secondary: company.color_secondary || '#1D1245',
       status: company.status || 'Active',
       logo: company.logo || '',
+      salary_review_approver_id: company.salary_review_approver_id ? String(company.salary_review_approver_id) : '',
     });
     try {
       setLhMargins(company.letterhead_margins ? JSON.parse(company.letterhead_margins) : { top: 50, bottom: 40, left: 18, right: 18 });
@@ -410,6 +418,19 @@ export default function CompanySettings() {
               <p className="text-xs text-surface-400">{form.short_code || 'CODE'} · {form.currency} · {form.industry || 'Industry'}</p>
             </div>
           </div>
+
+          {/* Salary Review approver — existing company only (needs users to pick from) */}
+          {editing && (
+            <div className="border-t border-surface-100 pt-4">
+              <label className="block text-sm font-medium text-surface-700 mb-1.5">{t('company_settings.salary_review_approver', 'Salary Review Approver')}</label>
+              <select value={form.salary_review_approver_id} onChange={(e) => update('salary_review_approver_id', e.target.value)}
+                className="w-full px-3 py-2.5 text-sm bg-white border border-surface-200 rounded-xl input-focus transition-all">
+                <option value="">{t('company_settings.no_approver', 'None — any admin may approve')}</option>
+                {approverUsers.map((u) => <option key={u.id} value={String(u.id)}>{u.name} ({u.role})</option>)}
+              </select>
+              <p className="text-[10px] text-surface-400 mt-1">{t('company_settings.salary_review_approver_hint', 'This person approves annual salary reviews for this company through the system.')}</p>
+            </div>
+          )}
 
           {/* Letterhead (A4 background for generated documents) — existing company only */}
           {editing && (

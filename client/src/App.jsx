@@ -55,6 +55,7 @@ const OnboardingV2Page = lazy(() => import('@pages/lifecycle/OnboardingV2'));
 const LeavePage = lazy(() => import('@pages/lifecycle/Leave'));
 const AttendancePage = lazy(() => import('@pages/lifecycle/Attendance'));
 const PayrollRunsPage = lazy(() => import('@pages/lifecycle/PayrollRuns'));
+const SalaryReviewsPage = lazy(() => import('@pages/lifecycle/SalaryReviews'));
 const AssetsPage = lazy(() => import('@pages/lifecycle/Assets'));
 const PerformancePage = lazy(() => import('@pages/lifecycle/Performance'));
 const OffboardingPage = lazy(() => import('@pages/lifecycle/Offboarding'));
@@ -112,6 +113,7 @@ export default function App() {
                 <Route path="/leave" element={<LeavePage />} />
                 <Route path="/attendance" element={<AttendancePage />} />
                 <Route path="/payroll-runs" element={<PayrollRunsPage />} />
+                <Route path="/salary-reviews" element={<SalaryReviewsPage />} />
                 <Route path="/assets" element={<AssetsPage />} />
                 <Route path="/inventory" element={<InventoryPage />} />
                 <Route path="/performance" element={<PerformancePage />} />

@@ -92,10 +92,20 @@ router.post('/', authorize('admin'), validate({
 router.put('/:id', authorize('admin'), async (req, res) => {
   try {
     const co = companyClause(req, 'id');
-    const { name, short_code, currency, address, phone, email, website, industry, crm_platform, color_primary, color_secondary, status, logo } = req.body;
+    const { name, short_code, currency, address, phone, email, website, industry, crm_platform, color_primary, color_secondary, status, logo, salary_review_approver_id } = req.body;
+
+    // The approver gains real approval authority (see PUT /salary-reviews/:id/decision),
+    // so restrict the pick to admin/hr_manager accounts even if called outside the UI.
+    if (salary_review_approver_id) {
+      const [[approverUser]] = await pool.query('SELECT role FROM users WHERE id = ?', [salary_review_approver_id]);
+      if (!approverUser || !['admin', 'hr_manager'].includes(approverUser.role)) {
+        return res.status(422).json({ error: 'Salary Review Approver must be an admin or hr_manager user' });
+      }
+    }
+
     const [result] = await pool.query(
-      'UPDATE companies SET name=?, short_code=?, currency=?, address=?, phone=?, email=?, website=?, industry=?, crm_platform=?, color_primary=?, color_secondary=?, status=?, logo=? WHERE id=?' + co.clause,
-      [name, short_code?.toUpperCase(), currency, address, phone, email, website, industry, crm_platform, color_primary, color_secondary, status, logo, req.params.id, ...co.params]
+      'UPDATE companies SET name=?, short_code=?, currency=?, address=?, phone=?, email=?, website=?, industry=?, crm_platform=?, color_primary=?, color_secondary=?, status=?, logo=?, salary_review_approver_id=? WHERE id=?' + co.clause,
+      [name, short_code?.toUpperCase(), currency, address, phone, email, website, industry, crm_platform, color_primary, color_secondary, status, logo, salary_review_approver_id || null, req.params.id, ...co.params]
     );
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Company not found' });
     await addAudit(pool, req.user, 'Companies', 'Updated', `Company #${req.params.id} updated`);
