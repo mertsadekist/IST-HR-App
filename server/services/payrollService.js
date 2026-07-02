@@ -5,7 +5,9 @@
  *  - basic        : monthly basic salary
  *  - full         : monthly full/gross salary (basic + allowances). Falls back to basic.
  *  - allowances   : full - basic (never negative)
- *  - daily rate   : basic / 30 (consistent with the EOSB engine)
+ *  - daily rate   : full (gross) / 30 — unpaid/absence days deduct against gross pay,
+ *                   not just the basic component. (The EOSB engine still uses basic/30,
+ *                   since UAE gratuity is legally computed on basic salary.)
  *  - deductions   : (unpaid leave days + unauthorized absence days) × daily rate, + extraDeductions
  *  - net          : gross - deductions (floored at 0)
  *
@@ -25,7 +27,7 @@ export function computePayrollItem({
   const basic = Math.max(0, Number(basicSalary) || 0);
   const full = Math.max(basic, Number(fullSalary) || basic); // full is never below basic
   const allowances = round2(full - basic);
-  const dailyRate = basic / 30;
+  const dailyRate = full / 30;
 
   const unpaid = Math.max(0, Number(unpaidLeaveDays) || 0);
   const absence = Math.max(0, Number(absenceDays) || 0);

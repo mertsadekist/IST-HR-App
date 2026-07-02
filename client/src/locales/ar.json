@@ -1064,6 +1064,7 @@
     "tab_requests": "الطلبات",
     "tab_balances": "الأرصدة",
     "tab_types": "الأنواع",
+    "tab_report": "التقرير",
     "no_requests": "لا توجد طلبات إجازة",
     "cancel": "إلغاء",
     "days": "يوم/أيام",
@@ -1109,7 +1110,16 @@
     "st_pending": "قيد الانتظار",
     "st_approved": "موافَق عليه",
     "st_rejected": "مرفوض",
-    "st_cancelled": "ملغى"
+    "st_cancelled": "ملغى",
+    "report_select_employee": "اختر موظفًا…",
+    "report_year": "السنة",
+    "report_summary_title": "الملخص السنوي",
+    "report_detail_title": "التفاصيل الكاملة",
+    "th_dates": "التواريخ",
+    "th_reason": "السبب",
+    "th_decided_by": "تم البتّ بواسطة",
+    "no_report_selection": "اختر موظفًا لعرض تقرير إجازاته الكامل خلال السنة",
+    "no_report_requests": "لا توجد طلبات إجازة لهذا الموظف في هذه السنة"
   },
   "attendance": {
     "title": "الحضور",

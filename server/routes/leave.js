@@ -135,6 +135,54 @@ router.get('/requests', async (req, res) => {
   } catch (err) { console.error('GET /leave/requests error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
+// ─── Annual report (one employee, full-year summary + detail) ────────────────
+router.get('/report', async (req, res) => {
+  try {
+    let employeeId = req.query.employee_id ? Number(req.query.employee_id) : null;
+    if (!isHR(req)) {
+      employeeId = await myEmployeeId(req.user.id);
+      if (!employeeId) return res.json({ employee: null, year: null, summary: [], requests: [] });
+    }
+    if (!employeeId) return res.status(400).json({ error: 'employee_id is required' });
+    const year = Number(req.query.year) || new Date().getFullYear();
+
+    const co = companyClause(req, 'company_id');
+    const [[emp]] = await pool.query(
+      'SELECT id, first_name, last_name, company_id FROM employees WHERE id = ?' + co.clause,
+      [employeeId, ...co.params]
+    );
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+
+    const [summary] = await pool.query(
+      `SELECT lt.id AS leave_type_id, lt.name, lt.color, lt.is_paid,
+              COALESCE(lb.entitled, lt.default_days) AS entitled,
+              COALESCE(lb.used, 0) AS used
+       FROM leave_types lt
+       LEFT JOIN leave_balances lb ON lb.leave_type_id = lt.id AND lb.employee_id = ? AND lb.year = ?
+       WHERE lt.status = 'Active' AND (lt.company_id = ? OR lt.company_id IS NULL)
+       ORDER BY lt.company_id IS NULL DESC, lt.name`,
+      [employeeId, year, emp.company_id]
+    );
+
+    // DATE_FORMAT keeps the plain calendar date (no Date-object timezone shift on serialization).
+    const [requests] = await pool.query(
+      `SELECT lr.id, lr.company_id, lr.employee_id, lr.leave_type_id,
+              DATE_FORMAT(lr.start_date, '%Y-%m-%d') AS start_date,
+              DATE_FORMAT(lr.end_date, '%Y-%m-%d') AS end_date,
+              lr.days, lr.reason, lr.status, lr.decided_by, lr.decided_at, lr.decision_note, lr.created_by, lr.created_at,
+              lt.name AS leave_type_name, lt.color, u.name AS decided_by_name
+       FROM leave_requests lr
+       JOIN leave_types lt ON lr.leave_type_id = lt.id
+       LEFT JOIN users u ON lr.decided_by = u.id
+       WHERE lr.employee_id = ? AND YEAR(lr.start_date) = ?
+       ORDER BY lr.start_date`,
+      [employeeId, year]
+    );
+
+    res.json({ employee: emp, year, summary, requests });
+  } catch (err) { console.error('GET /leave/report error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
 // Create a request. Employees create for themselves; HR may specify employee_id.
 router.post('/requests', validate({
   leave_type_id: { required: true, type: 'integer' },

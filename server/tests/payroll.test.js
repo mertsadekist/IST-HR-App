@@ -10,12 +10,12 @@ describe('Payroll item computation', () => {
     expect(r.net).toBe(10000);
   });
 
-  it('unpaid leave deducts daily rate × days (basic/30)', () => {
-    // daily = 6000/30 = 200; 3 unpaid days → 600 deduction
+  it('unpaid leave deducts daily rate × days (gross/30)', () => {
+    // daily = 10000/30 = 333.33; 3 unpaid days → 1000 deduction
     const r = computePayrollItem({ basicSalary: 6000, fullSalary: 10000, unpaidLeaveDays: 3 });
-    expect(r.daily_rate).toBe(200);
-    expect(r.deductions).toBe(600);
-    expect(r.net).toBe(9400);
+    expect(r.daily_rate).toBe(333.33);
+    expect(r.deductions).toBe(1000);
+    expect(r.net).toBe(9000);
   });
 
   it('absence days and extra deductions stack', () => {

@@ -21,7 +21,7 @@ beforeAll(async () => {
   const [b] = await pool.query('INSERT INTO companies SET ?', { name: `${tag}_B`, short_code: `${tag}B`.slice(0, 10), currency: 'AED', status: 'Active' });
   f.companyA = a.insertId; f.companyB = b.insertId;
 
-  // Employee A: basic 6000, full 10000 → daily 200
+  // Employee A: basic 6000, full 10000 → daily 10000/30 = 333.33 (gross-based)
   const [empA] = await pool.query('INSERT INTO employees SET ?', { first_name: tag, last_name: 'EmpA', company_id: f.companyA, status: 'Active', basic_salary: 6000, full_salary: 10000 });
   f.ids.empA = empA.insertId;
 
@@ -36,12 +36,12 @@ beforeAll(async () => {
   const [[unpaid]] = await pool.query("SELECT id FROM leave_types WHERE company_id IS NULL AND name = 'Unpaid Leave' LIMIT 1");
   unpaidTypeId = unpaid.id;
 
-  // 2 approved unpaid-leave days in the period (deduction 2 * 200 = 400)
+  // 2 approved unpaid-leave days in the period (deduction 2 * (10000/30) = 666.67)
   await pool.query('INSERT INTO leave_requests SET ?', {
     company_id: f.companyA, employee_id: f.ids.empA, leave_type_id: unpaidTypeId,
     start_date: `${period}-10`, end_date: `${period}-11`, days: 2, status: 'Approved',
   });
-  // 1 absence day in the period (deduction 1 * 200 = 200)
+  // 1 absence day in the period (deduction 1 * (10000/30) = 333.33)
   await pool.query('INSERT INTO attendance SET ?', {
     company_id: f.companyA, employee_id: f.ids.empA, work_date: `${period}-15`, status: 'Absent',
   });
@@ -66,17 +66,17 @@ describe('Payroll lifecycle', () => {
     expect(res.status).toBe(201);
     f.ids.runId = res.body.id;
     expect(res.body.employee_count).toBeGreaterThanOrEqual(1);
-    // gross 10000; deductions = (2 unpaid + 1 absence) * 200 = 600; net 9400
+    // gross 10000; deductions = (2 unpaid + 1 absence) * (10000/30) = 1000; net 9000
     expect(Number(res.body.total_gross)).toBe(10000);
-    expect(Number(res.body.total_deductions)).toBe(600);
-    expect(Number(res.body.total_net)).toBe(9400);
+    expect(Number(res.body.total_deductions)).toBe(1000);
+    expect(Number(res.body.total_net)).toBe(9000);
   });
 
   it('run detail lists the employee item with correct net', async () => {
     const res = await request.get(`/api/payroll/runs/${f.ids.runId}`).set(auth(tokAdminA));
     expect(res.status).toBe(200);
     const item = res.body.items.find((i) => i.employee_id === f.ids.empA);
-    expect(Number(item.net)).toBe(9400);
+    expect(Number(item.net)).toBe(9000);
     expect(Number(item.unpaid_leave_days)).toBe(2);
     expect(Number(item.absence_days)).toBe(1);
   });

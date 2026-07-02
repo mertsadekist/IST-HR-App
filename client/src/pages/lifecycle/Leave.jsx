@@ -71,7 +71,7 @@ export default function Leave() {
       </div>
 
       <div className="flex gap-1 border-b border-surface-100">
-        {['requests', ...(isHR ? ['balances', 'types'] : [])].map((tb) => (
+        {['requests', ...(isHR ? ['balances', 'types', 'report'] : [])].map((tb) => (
           <button key={tb} onClick={() => setTab(tb)}
             className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-all ${tab === tb ? 'border-brand-600 text-brand-700' : 'border-transparent text-surface-500 hover:text-surface-700'}`}>{t(`leave.tab_${tb}`)}</button>
         ))}
@@ -162,6 +162,8 @@ export default function Leave() {
         </Card>
       )}
 
+      {tab === 'report' && isHR && <ReportTab employees={employees} />}
+
       <RequestModal open={reqModal} onClose={() => setReqModal(false)} types={types} isHR={isHR} employees={employees} onSaved={() => { setReqModal(false); loadAll(); }} />
       <BalanceModal open={balModal} onClose={() => setBalModal(false)} types={types} employees={employees} onSaved={() => { setBalModal(false); loadAll(); }} />
       <TypeModal open={typeModal} onClose={() => setTypeModal(false)} onSaved={() => { setTypeModal(false); loadAll(); }} />
@@ -170,6 +172,98 @@ export default function Leave() {
 }
 
 function Skel() { return <div className="space-y-2">{[1, 2, 3].map((i) => <div key={i} className="card p-4 animate-pulse"><div className="h-4 bg-surface-200 rounded w-1/3" /></div>)}</div>; }
+
+function ReportTab({ employees = [] }) {
+  const { t } = useTranslation();
+  const [employeeId, setEmployeeId] = useState('');
+  const [year, setYear] = useState(new Date().getFullYear());
+  const [report, setReport] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!employeeId) { setReport(null); return; }
+    let cancelled = false;
+    setLoading(true);
+    leaveApi.getReport({ employee_id: employeeId, year })
+      .then(({ data }) => { if (!cancelled) setReport(data); })
+      .catch((e) => { if (!cancelled) toast.error(apiErr(e, t('common.failed_load'))); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employeeId, year]);
+
+  return (
+    <Card className="!p-0 overflow-hidden">
+      <div className="p-4 border-b border-surface-100 flex items-end gap-3 flex-wrap">
+        <div>
+          <label className="text-xs font-semibold text-surface-700 block mb-1">{t('leave.th_employee')}</label>
+          <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} className="text-sm border border-surface-200 rounded-lg px-3 py-2 min-w-[220px]">
+            <option value="">{t('leave.report_select_employee')}</option>
+            {employees.map((emp) => <option key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs font-semibold text-surface-700 block mb-1">{t('leave.report_year')}</label>
+          <input type="number" value={year} onChange={(e) => setYear(Number(e.target.value) || new Date().getFullYear())} className="text-sm border border-surface-200 rounded-lg px-3 py-2 w-28" />
+        </div>
+      </div>
+
+      {!employeeId ? (
+        <EmptyState icon={<CalendarDays className="w-6 h-6 text-surface-400" />} title={t('leave.no_report_selection')} />
+      ) : loading ? (
+        <div className="p-4"><Skel /></div>
+      ) : report && (
+        <div className="divide-y divide-surface-100">
+          <div>
+            <h4 className="text-sm font-semibold text-surface-800 px-4 pt-4">{t('leave.report_summary_title')}</h4>
+            <table className="w-full text-sm">
+              <thead className="bg-surface-50 text-surface-500 text-xs"><tr>
+                <th className="text-left p-3">{t('leave.th_type')}</th><th className="p-3">{t('leave.th_entitled')}</th>
+                <th className="p-3">{t('leave.th_used')}</th><th className="p-3">{t('leave.th_remaining')}</th></tr></thead>
+              <tbody>
+                {report.summary.map((s) => (
+                  <tr key={s.leave_type_id} className="border-t border-surface-50">
+                    <td className="p-3"><span className="inline-flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full" style={{ background: s.color || '#7c3aed' }} />{s.name}</span></td>
+                    <td className="p-3 text-center">{s.entitled}</td>
+                    <td className="p-3 text-center">{s.used}</td>
+                    <td className="p-3 text-center font-semibold text-brand-600">{Math.max(0, s.entitled - s.used)}</td>
+                  </tr>
+                ))}
+                {report.summary.length === 0 && <tr><td colSpan={4} className="p-6 text-center text-surface-400 text-sm">{t('leave.no_balances')}</td></tr>}
+              </tbody>
+            </table>
+          </div>
+
+          <div>
+            <h4 className="text-sm font-semibold text-surface-800 px-4 pt-4">{t('leave.report_detail_title')}</h4>
+            {report.requests.length === 0 ? (
+              <p className="text-xs text-surface-400 p-4">{t('leave.no_report_requests')}</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="bg-surface-50 text-surface-500 text-xs"><tr>
+                  <th className="text-left p-3">{t('leave.th_type')}</th><th className="text-left p-3">{t('leave.th_dates')}</th>
+                  <th className="p-3">{t('leave.days')}</th><th className="p-3">{t('common.status')}</th>
+                  <th className="text-left p-3">{t('leave.th_reason')}</th><th className="text-left p-3">{t('leave.th_decided_by')}</th></tr></thead>
+                <tbody>
+                  {report.requests.map((r) => (
+                    <tr key={r.id} className="border-t border-surface-50">
+                      <td className="p-3"><span className="inline-flex items-center gap-2"><span className="w-2 h-2 rounded-full" style={{ background: r.color || '#7c3aed' }} />{r.leave_type_name}</span></td>
+                      <td className="p-3">{dayjs(r.start_date).format('MMM D')} → {dayjs(r.end_date).format('MMM D, YYYY')}</td>
+                      <td className="p-3 text-center">{r.days}</td>
+                      <td className="p-3 text-center"><Badge variant={statusVariant(r.status)} className="text-[10px]">{stLabel(t, r.status)}</Badge></td>
+                      <td className="p-3 text-surface-500">{r.reason || '—'}</td>
+                      <td className="p-3 text-surface-500">{r.decided_by_name ? `${r.decided_by_name}${r.decided_at ? ` · ${dayjs(r.decided_at).format('MMM D, YYYY')}` : ''}` : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
 
 function RequestModal({ open, onClose, types, isHR, employees = [], onSaved }) {
   const { t } = useTranslation();

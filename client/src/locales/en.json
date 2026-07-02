@@ -1064,6 +1064,7 @@
     "tab_requests": "Requests",
     "tab_balances": "Balances",
     "tab_types": "Types",
+    "tab_report": "Report",
     "no_requests": "No leave requests",
     "cancel": "Cancel",
     "days": "day(s)",
@@ -1109,7 +1110,16 @@
     "st_pending": "Pending",
     "st_approved": "Approved",
     "st_rejected": "Rejected",
-    "st_cancelled": "Cancelled"
+    "st_cancelled": "Cancelled",
+    "report_select_employee": "Select an employee…",
+    "report_year": "Year",
+    "report_summary_title": "Annual Summary",
+    "report_detail_title": "Full Detail",
+    "th_dates": "Dates",
+    "th_reason": "Reason",
+    "th_decided_by": "Decided by",
+    "no_report_selection": "Select an employee to see their full-year leave report",
+    "no_report_requests": "No leave requests for this employee in this year"
   },
   "attendance": {
     "title": "Attendance",
