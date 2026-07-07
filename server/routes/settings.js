@@ -4,6 +4,7 @@ import { auth } from '../middleware/auth.js';
 import { authorize } from '../middleware/rbac.js';
 import { addAudit } from '../services/auditService.js';
 import { getAppSetting, setAppSetting } from '../services/appSettings.js';
+import { tenantScope, companyClause, resolveWriteCompanyId } from '../middleware/tenant.js';
 
 const router = Router();
 
@@ -360,6 +361,85 @@ router.delete('/onboarding-templates/:id', auth, authorize('admin'), async (req,
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+// ==============================================
+// ONBOARDING v2 CHECKLIST TEMPLATES (documents + visa/residency steps)
+// The real, load-bearing "Onboarding Templates" — seeded per-record by
+// seedDocuments()/seedVisa() in server/routes/onboardingV2.js. Editing these
+// only affects onboarding records that haven't yet reached that stage; already
+// -seeded onboarding_documents/onboarding_visa_steps rows are never touched.
+// ==============================================
+function checklistTemplateRoutes(table, keyColumn) {
+  const sub = Router();
+  sub.use(auth, tenantScope);
+
+  sub.get('/', async (req, res) => {
+    try {
+      const co = companyClause(req, 'company_id');
+      const [rows] = await pool.query(`SELECT * FROM ${table} WHERE 1=1${co.clause} ORDER BY sort_order, id`, co.params);
+      res.json(rows);
+    } catch (err) {
+      console.error(`GET /settings/.../${table} error:`, err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  sub.post('/', authorize('admin', 'hr_manager'), async (req, res) => {
+    try {
+      const company_id = resolveWriteCompanyId(req, req.body.company_id);
+      if (!company_id) return res.status(422).json({ error: 'company_id is required' });
+      const { label, required } = req.body;
+      if (!label || !String(label).trim()) return res.status(422).json({ error: 'label is required' });
+      const [[{ n }]] = await pool.query(`SELECT COALESCE(MAX(sort_order), -1) + 1 n FROM ${table} WHERE company_id = ?`, [company_id]);
+      const key = req.body[keyColumn] || String(label).trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 60);
+      const [r] = await pool.query(`INSERT INTO ${table} SET ?`, {
+        company_id, [keyColumn]: key, label: String(label).trim(), required: required !== false, sort_order: n,
+      });
+      await addAudit(pool, req.user, 'Settings', 'Onboarding Checklist Item Added', `"${label}" added to ${table}`);
+      res.status(201).json({ id: r.insertId });
+    } catch (err) {
+      console.error(`POST /settings/.../${table} error:`, err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  sub.put('/:id', authorize('admin', 'hr_manager'), async (req, res) => {
+    try {
+      const co = companyClause(req, 'company_id');
+      const { label, required, sort_order } = req.body;
+      const patch = {};
+      if (label !== undefined) patch.label = String(label).trim();
+      if (required !== undefined) patch.required = !!required;
+      if (sort_order !== undefined) patch.sort_order = Number(sort_order);
+      if (!Object.keys(patch).length) return res.status(400).json({ error: 'Nothing to update' });
+      const [result] = await pool.query(`UPDATE ${table} SET ? WHERE id = ?${co.clause}`, [patch, req.params.id, ...co.params]);
+      if (result.affectedRows === 0) return res.status(404).json({ error: 'Item not found' });
+      await addAudit(pool, req.user, 'Settings', 'Onboarding Checklist Item Updated', `#${req.params.id} updated in ${table}`);
+      res.json({ success: true });
+    } catch (err) {
+      console.error(`PUT /settings/.../${table}/:id error:`, err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  sub.delete('/:id', authorize('admin'), async (req, res) => {
+    try {
+      const co = companyClause(req, 'company_id');
+      const [result] = await pool.query(`DELETE FROM ${table} WHERE id = ?${co.clause}`, [req.params.id, ...co.params]);
+      if (result.affectedRows === 0) return res.status(404).json({ error: 'Item not found' });
+      await addAudit(pool, req.user, 'Settings', 'Onboarding Checklist Item Deleted', `#${req.params.id} deleted from ${table}`);
+      res.json({ success: true });
+    } catch (err) {
+      console.error(`DELETE /settings/.../${table}/:id error:`, err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  return sub;
+}
+
+router.use('/onboarding-document-templates', checklistTemplateRoutes('onboarding_document_templates', 'doc_key'));
+router.use('/onboarding-visa-templates', checklistTemplateRoutes('onboarding_visa_templates', 'step_key'));
 
 // ==============================================
 // OFFBOARDING STEP TEMPLATES

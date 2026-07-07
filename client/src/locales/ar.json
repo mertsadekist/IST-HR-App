@@ -544,7 +544,20 @@
     "tier_name": "اسم المستوى",
     "min_hires": "الحد الأدنى للتعيينات",
     "max_hires": "الحد الأقصى للتعيينات",
-    "commission_per_hire": "العمولة لكل تعيين"
+    "commission_per_hire": "العمولة لكل تعيين",
+    "onboarding_checklist_hint": "تحديد قوائم المستندات ومتطلبات التأشيرة/الإقامة التي يتم إنشاؤها تلقائيًا مع كل عملية تهيئة جديدة.",
+    "onboarding_stages_title": "مراحل عملية التهيئة",
+    "onboarding_stages_hint": "مسار العمل الثابت الذي تمر به كل عملية تهيئة (غير قابل للتعديل من هنا).",
+    "onboarding_docs_title": "المستندات المطلوبة",
+    "onboarding_docs_hint": "يتم إنشاؤها تلقائيًا عند وصول العملية إلى مرحلة تجميع المستندات.",
+    "onboarding_visa_title": "خطوات التأشيرة والإقامة",
+    "onboarding_visa_hint": "يتم إنشاؤها تلقائيًا عند وصول العملية إلى مرحلة التأشيرة/الإقامة.",
+    "add_item": "إضافة عنصر",
+    "edit_item": "تعديل العنصر",
+    "item_label": "التسمية",
+    "item_required": "إلزامي",
+    "no_checklist_items": "لا توجد عناصر معرَّفة",
+    "checklist_label_required": "التسمية مطلوبة"
   },
   "company_settings": {
     "add_company": "إضافة شركة",

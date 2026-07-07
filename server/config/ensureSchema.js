@@ -93,6 +93,29 @@ const TABLE_GUARDS = [
      FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE SET NULL,
      INDEX idx_doc_item (salary_review_item_id)
    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  // Admin-configurable Onboarding v2 checklists — see server/apply_onboarding_checklist_templates.mjs.
+  `CREATE TABLE IF NOT EXISTS onboarding_document_templates (
+     id          INT AUTO_INCREMENT PRIMARY KEY,
+     company_id  INT NOT NULL,
+     doc_key     VARCHAR(60) NOT NULL,
+     label       VARCHAR(200) NOT NULL,
+     required    BOOLEAN NOT NULL DEFAULT TRUE,
+     sort_order  INT NOT NULL DEFAULT 0,
+     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+     INDEX idx_doc_tpl_company (company_id)
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  `CREATE TABLE IF NOT EXISTS onboarding_visa_templates (
+     id          INT AUTO_INCREMENT PRIMARY KEY,
+     company_id  INT NOT NULL,
+     step_key    VARCHAR(60) NOT NULL,
+     label       VARCHAR(200) NOT NULL,
+     required    BOOLEAN NOT NULL DEFAULT TRUE,
+     sort_order  INT NOT NULL DEFAULT 0,
+     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+     INDEX idx_visa_tpl_company (company_id)
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 ];
 
 export async function ensureSchema() {

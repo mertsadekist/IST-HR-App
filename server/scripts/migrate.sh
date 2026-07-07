@@ -17,4 +17,5 @@ node apply_recruitment.mjs
 node apply_letterheads.mjs
 node apply_attendance_id.mjs
 node apply_salary_reviews.mjs
+node apply_onboarding_checklist_templates.mjs
 echo "✅ All migrations applied."

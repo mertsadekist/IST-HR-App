@@ -544,7 +544,20 @@
     "tier_name": "Tier Name",
     "min_hires": "Min Hires",
     "max_hires": "Max Hires",
-    "commission_per_hire": "Commission per Hire"
+    "commission_per_hire": "Commission per Hire",
+    "onboarding_checklist_hint": "Configure the document and visa/residency checklists seeded for each new onboarding record.",
+    "onboarding_stages_title": "Onboarding Stages",
+    "onboarding_stages_hint": "The fixed pipeline every onboarding record moves through (not editable here).",
+    "onboarding_docs_title": "Document Requirements",
+    "onboarding_docs_hint": "Seeded automatically when a record reaches the Documents Collection stage.",
+    "onboarding_visa_title": "Visa & Residency Steps",
+    "onboarding_visa_hint": "Seeded automatically when a record reaches the Visa / Residency stage.",
+    "add_item": "Add Item",
+    "edit_item": "Edit Item",
+    "item_label": "Label",
+    "item_required": "Required",
+    "no_checklist_items": "No items configured",
+    "checklist_label_required": "Label is required"
   },
   "company_settings": {
     "add_company": "Add Company",

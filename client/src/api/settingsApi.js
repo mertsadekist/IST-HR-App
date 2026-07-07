@@ -28,3 +28,13 @@ export const getOffboardingTemplates = (params) => api.get('/settings/offboardin
 export const createOffboardingTemplate = (data) => api.post('/settings/offboarding-templates', data);
 export const updateOffboardingTemplate = (id, data) => api.put(`/settings/offboarding-templates/${id}`, data);
 export const deleteOffboardingTemplate = (id) => api.delete(`/settings/offboarding-templates/${id}`);
+
+export const getOnboardingDocumentTemplates = (params) => api.get('/settings/onboarding-document-templates', { params });
+export const createOnboardingDocumentTemplate = (data) => api.post('/settings/onboarding-document-templates', data);
+export const updateOnboardingDocumentTemplate = (id, data) => api.put(`/settings/onboarding-document-templates/${id}`, data);
+export const deleteOnboardingDocumentTemplate = (id, params) => api.delete(`/settings/onboarding-document-templates/${id}`, { params });
+
+export const getOnboardingVisaTemplates = (params) => api.get('/settings/onboarding-visa-templates', { params });
+export const createOnboardingVisaTemplate = (data) => api.post('/settings/onboarding-visa-templates', data);
+export const updateOnboardingVisaTemplate = (id, data) => api.put(`/settings/onboarding-visa-templates/${id}`, data);
+export const deleteOnboardingVisaTemplate = (id, params) => api.delete(`/settings/onboarding-visa-templates/${id}`, { params });

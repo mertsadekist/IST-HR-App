@@ -70,13 +70,17 @@ async function loadAggregate(record) {
   const [[bank]] = await pool.query('SELECT * FROM onboarding_bank_details WHERE onboarding_id = ?', [id]);
   return { record, profile, approval, offers, signedOffer, documents, visaSteps, bank };
 }
-const DEFAULT_DOCS = [
+// Used only as a last-resort fallback if a company somehow has zero rows in
+// onboarding_document_templates/onboarding_visa_templates (e.g. the migration
+// backfill hasn't run yet). The admin-configurable tables are the real source
+// of truth — see Settings → System Config → Onboarding Templates.
+const FALLBACK_DOCS = [
   ['photo', 'Personal Photo', 1], ['passport', 'Passport Copy', 1], ['emirates_id', 'Emirates ID', 0],
   ['national_id', 'National ID', 0], ['visa_copy', 'Visa Copy', 0], ['education_cert', 'Educational Certificates', 1],
   ['experience_cert', 'Experience Certificates', 0], ['employment_form', 'Signed Employment Forms', 1],
   ['emergency_contact', 'Emergency Contact Form', 1], ['personal_info', 'Personal Information Form', 1],
 ];
-const DEFAULT_VISA = [
+const FALLBACK_VISA = [
   ['visa_docs', 'Required Visa Documents', 1], ['application', 'Application Submission', 1],
   ['medical', 'Medical Test', 1], ['emirates_id', 'Emirates ID Application', 1],
   ['stamping', 'Residency Stamping', 1], ['labour_contract', 'Labour Contract (MoHRE)', 1],
@@ -85,15 +89,25 @@ const DEFAULT_VISA = [
 async function seedDocuments(record) {
   const [existing] = await pool.query('SELECT id FROM onboarding_documents WHERE onboarding_id = ?', [record.id]);
   if (existing.length) return;
-  for (const [doc_key, label, required] of DEFAULT_DOCS) {
+  const [tpl] = await pool.query(
+    'SELECT doc_key, label, required FROM onboarding_document_templates WHERE company_id = ? ORDER BY sort_order, id',
+    [record.company_id]
+  );
+  const list = tpl.length ? tpl.map((t) => [t.doc_key, t.label, t.required]) : FALLBACK_DOCS;
+  for (const [doc_key, label, required] of list) {
     await pool.query('INSERT INTO onboarding_documents SET ?', { onboarding_id: record.id, company_id: record.company_id, doc_key, label, required, status: 'Missing' });
   }
 }
 async function seedVisa(record) {
   const [existing] = await pool.query('SELECT id FROM onboarding_visa_steps WHERE onboarding_id = ?', [record.id]);
   if (existing.length) return;
+  const [tpl] = await pool.query(
+    'SELECT step_key, label, required FROM onboarding_visa_templates WHERE company_id = ? ORDER BY sort_order, id',
+    [record.company_id]
+  );
+  const list = tpl.length ? tpl.map((t) => [t.step_key, t.label, t.required]) : FALLBACK_VISA;
   let i = 0;
-  for (const [step_key, label, required] of DEFAULT_VISA) {
+  for (const [step_key, label, required] of list) {
     await pool.query('INSERT INTO onboarding_visa_steps SET ?', { onboarding_id: record.id, company_id: record.company_id, step_key, label, required, sort_order: i++, status: 'Not Started' });
   }
 }

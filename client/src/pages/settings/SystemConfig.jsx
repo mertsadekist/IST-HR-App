@@ -55,8 +55,8 @@ export default function SystemConfig() {
 
       {activeTab === 'general' && <GeneralConfig />}
       {activeTab === 'ats' && <AtsStagesConfig />}
-      {activeTab === 'onboarding' && <TemplateConfig type="onboarding" companies={companies} />}
-      {activeTab === 'offboarding' && <TemplateConfig type="offboarding" companies={companies} />}
+      {activeTab === 'onboarding' && <OnboardingChecklistConfig companies={companies} />}
+      {activeTab === 'offboarding' && <TemplateConfig companies={companies} />}
       {activeTab === 'letters' && <LetterTemplatesConfig />}
       {activeTab === 'kpi' && <KpiTiersConfig />}
     </div>
@@ -274,9 +274,169 @@ function AtsStagesConfig() {
 }
 
 // ==============================================
-// Onboarding / Offboarding Template Config
+// Onboarding v2 Checklist Config (documents + visa/residency steps) — the real,
+// load-bearing "Onboarding Templates". Edits only affect onboarding records
+// that haven't yet reached the relevant stage; already-seeded records are
+// never touched (server/routes/onboardingV2.js: seedDocuments/seedVisa are
+// idempotent and only run once, at the DOCUMENTS_COLLECTION/VISA_RESIDENCY
+// stage transition).
 // ==============================================
-function TemplateConfig({ type, companies }) {
+const ONBOARDING_STAGE_KEYS = [
+  'draft', 'cv_uploaded', 'under_hr_review', 'hr_approved', 'offer_sent', 'offer_accepted',
+  'signed_offer_uploaded', 'documents_collection', 'visa_residency', 'bank_details',
+  'ready_for_employment', 'completed',
+];
+function OnboardingChecklistConfig({ companies }) {
+  const { t } = useTranslation();
+  const [selectedCompany, setSelectedCompany] = useState('');
+
+  useEffect(() => { if (companies.length > 0 && !selectedCompany) setSelectedCompany(String(companies[0].id)); }, [companies, selectedCompany]);
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h3 className="font-semibold text-surface-900">{t('system_config.onboarding')}</h3>
+          <p className="text-xs text-surface-400 mt-0.5">{t('system_config.onboarding_checklist_hint')}</p>
+        </div>
+        <Select value={selectedCompany} onChange={(e) => setSelectedCompany(e.target.value)}
+          options={companies.map((c) => ({ value: String(c.id), label: `${c.name} (${c.short_code})` }))} className="!w-64" />
+      </div>
+
+      <Card className="!p-4">
+        <h4 className="text-sm font-semibold text-surface-800 mb-1">{t('system_config.onboarding_stages_title')}</h4>
+        <p className="text-xs text-surface-400 mb-3">{t('system_config.onboarding_stages_hint')}</p>
+        <div className="flex flex-wrap gap-2">
+          {ONBOARDING_STAGE_KEYS.map((s, i) => (
+            <span key={s} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface-50 border border-surface-100 text-xs text-surface-600">
+              <span className="w-4 h-4 rounded-full bg-brand-100 text-brand-700 text-[10px] font-bold flex items-center justify-center shrink-0">{i + 1}</span>
+              {t(`ob.stage.${s}`)}
+            </span>
+          ))}
+        </div>
+      </Card>
+
+      {selectedCompany && (
+        <>
+          <ChecklistSection
+            companyId={selectedCompany}
+            title={t('system_config.onboarding_docs_title')}
+            hint={t('system_config.onboarding_docs_hint')}
+            api={{
+              get: settingsApi.getOnboardingDocumentTemplates, create: settingsApi.createOnboardingDocumentTemplate,
+              update: settingsApi.updateOnboardingDocumentTemplate, del: settingsApi.deleteOnboardingDocumentTemplate,
+            }}
+          />
+          <ChecklistSection
+            companyId={selectedCompany}
+            title={t('system_config.onboarding_visa_title')}
+            hint={t('system_config.onboarding_visa_hint')}
+            api={{
+              get: settingsApi.getOnboardingVisaTemplates, create: settingsApi.createOnboardingVisaTemplate,
+              update: settingsApi.updateOnboardingVisaTemplate, del: settingsApi.deleteOnboardingVisaTemplate,
+            }}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
+function ChecklistSection({ companyId, title, hint, api }) {
+  const { t } = useTranslation();
+  const isAdmin = useSelector((s) => s.auth.user?.role) === 'admin'; // delete is admin-only
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ label: '', required: true });
+
+  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [companyId]);
+
+  const load = async () => {
+    setLoading(true);
+    try { const { data } = await api.get({ company_id: companyId }); setItems(data); }
+    catch { toast.error(t('common.failed_load')); }
+    finally { setLoading(false); }
+  };
+
+  const openAdd = () => { setEditing(null); setForm({ label: '', required: true }); setModalOpen(true); };
+  const openEdit = (item) => { setEditing(item); setForm({ label: item.label, required: !!item.required }); setModalOpen(true); };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    if (!form.label.trim()) { toast.error(t('system_config.checklist_label_required')); return; }
+    setSaving(true);
+    try {
+      if (editing) await api.update(editing.id, { label: form.label.trim(), required: form.required, company_id: Number(companyId) });
+      else await api.create({ company_id: Number(companyId), label: form.label.trim(), required: form.required });
+      toast.success(t('common.saved'));
+      setModalOpen(false);
+      load();
+    } catch { toast.error(t('common.error')); } finally { setSaving(false); }
+  };
+
+  const handleDelete = async (item) => {
+    const result = await confirmDelete(`"${item.label}"`);
+    if (!result.isConfirmed) return;
+    try { await api.del(item.id, { company_id: companyId }); toast.success(t('common.deleted')); load(); }
+    catch { toast.error(t('common.delete_failed')); }
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <div>
+          <h4 className="text-sm font-semibold text-surface-800">{title}</h4>
+          <p className="text-[11px] text-surface-400">{hint}</p>
+        </div>
+        <Button size="sm" onClick={openAdd}><Plus size={14} /> {t('system_config.add_item')}</Button>
+      </div>
+
+      {loading ? (
+        <div className="space-y-1.5">{[1, 2].map((i) => <div key={i} className="card p-3 animate-pulse"><div className="h-3 bg-surface-200 rounded w-1/3" /></div>)}</div>
+      ) : items.length === 0 ? (
+        <Card><EmptyState icon={<ListChecks className="w-5 h-5 text-surface-400" />} title={t('system_config.no_checklist_items')} /></Card>
+      ) : (
+        <div className="space-y-1.5">
+          {items.map((item) => (
+            <Card key={item.id} className="!p-3 flex items-center gap-3 group">
+              <span className="font-medium text-sm text-surface-800 flex-1 min-w-0">{item.label}</span>
+              <span className={item.required ? 'text-[10px] font-semibold text-red-500' : 'text-[10px] text-surface-400'}>
+                {t(item.required ? 'ob.required' : 'ob.optional')}
+              </span>
+              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onClick={() => openEdit(item)} className="p-1.5 text-surface-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"><Edit3 size={13} /></button>
+                {isAdmin && <button onClick={() => handleDelete(item)} className="p-1.5 text-surface-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={13} /></button>}
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? t('system_config.edit_item') : t('system_config.add_item')} size="sm">
+        <form onSubmit={handleSave} className="space-y-4">
+          <Input label={t('system_config.item_label')} required value={form.label} onChange={(e) => setForm((p) => ({ ...p, label: e.target.value }))} />
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={form.required} onChange={(e) => setForm((p) => ({ ...p, required: e.target.checked }))}
+              className="w-4 h-4 rounded border-surface-300 text-brand-600" />
+            <span className="text-sm text-surface-700">{t('system_config.item_required')}</span>
+          </label>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button type="button" variant="secondary" onClick={() => setModalOpen(false)}>{t('common.cancel')}</Button>
+            <Button type="submit" loading={saving}>{editing ? t('common.save') : t('common.add')}</Button>
+          </div>
+        </form>
+      </Modal>
+    </div>
+  );
+}
+
+// ==============================================
+// Offboarding Template Config
+// ==============================================
+function TemplateConfig({ companies }) {
   const { t } = useTranslation();
   const isAdmin = useSelector((s) => s.auth.user?.role) === 'admin'; // delete is admin-only
   const [selectedCompany, setSelectedCompany] = useState('');
@@ -290,18 +450,12 @@ function TemplateConfig({ type, companies }) {
   useEffect(() => { if (companies.length > 0 && !selectedCompany) setSelectedCompany(String(companies[0].id)); }, [companies, selectedCompany]);
   useEffect(() => { if (selectedCompany) loadTemplates(); }, [selectedCompany]);
 
-  const isOnboarding = type === 'onboarding';
-  const apiGet = isOnboarding ? settingsApi.getOnboardingTemplates : settingsApi.getOffboardingTemplates;
-  const apiCreate = isOnboarding ? settingsApi.createOnboardingTemplate : settingsApi.createOffboardingTemplate;
-  const apiUpdate = isOnboarding ? settingsApi.updateOnboardingTemplate : settingsApi.updateOffboardingTemplate;
-  const apiDelete = isOnboarding ? settingsApi.deleteOnboardingTemplate : settingsApi.deleteOffboardingTemplate;
-
   const loadTemplates = async () => {
     setLoading(true);
     try {
-      const { data } = await apiGet({ company_id: selectedCompany });
+      const { data } = await settingsApi.getOffboardingTemplates({ company_id: selectedCompany });
       setTemplates(data);
-    } catch { toast.error(`Failed to load ${type} templates`); }
+    } catch { toast.error(t('common.failed_load')); }
     finally { setLoading(false); }
   };
 
@@ -332,10 +486,10 @@ function TemplateConfig({ type, companies }) {
         checklist_items: form.checklist_items.filter(i => i.trim()),
       };
       if (editing) {
-        await apiUpdate(editing.id, payload);
+        await settingsApi.updateOffboardingTemplate(editing.id, payload);
         toast.success(t('toasts.t_template_step_updated'));
       } else {
-        await apiCreate(payload);
+        await settingsApi.createOffboardingTemplate(payload);
         toast.success(t('toasts.t_template_step_created'));
       }
       setModalOpen(false);
@@ -346,7 +500,7 @@ function TemplateConfig({ type, companies }) {
   const handleDelete = async (tpl) => {
     const result = await confirmDelete(`step "${tpl.name}"`);
     if (result.isConfirmed) {
-      try { await apiDelete(tpl.id); toast.success(t('toasts.t_template_step_deleted')); loadTemplates(); }
+      try { await settingsApi.deleteOffboardingTemplate(tpl.id); toast.success(t('toasts.t_template_step_deleted')); loadTemplates(); }
       catch (err) { toast.error(t('common.delete_failed')); }
     }
   };
@@ -359,8 +513,8 @@ function TemplateConfig({ type, companies }) {
     <>
       <div className="flex items-center justify-between mb-3">
         <div>
-          <h3 className="font-semibold text-surface-900">{isOnboarding ? t('system_config.onboarding') : t('system_config.offboarding')}</h3>
-          <p className="text-xs text-surface-400 mt-0.5">Define the workflow steps that are created for each new {isOnboarding ? 'onboarding' : 'offboarding'} record</p>
+          <h3 className="font-semibold text-surface-900">{t('system_config.offboarding')}</h3>
+          <p className="text-xs text-surface-400 mt-0.5">Define the workflow steps that are created for each new offboarding record</p>
         </div>
         <div className="flex items-center gap-3">
           <Select
@@ -379,8 +533,8 @@ function TemplateConfig({ type, companies }) {
         <Card>
           <EmptyState
             icon={<ListChecks className="w-6 h-6 text-surface-400" />}
-            title={`No ${type} templates yet`}
-            description={`Define the steps for the ${type} workflow`}
+            title="No offboarding templates yet"
+            description="Define the steps for the offboarding workflow"
             action={<Button onClick={openAdd}><Plus size={16} /> {t('system_config.add_template')}</Button>}
           />
         </Card>
