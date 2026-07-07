@@ -365,11 +365,44 @@ router.delete('/onboarding-templates/:id', auth, authorize('admin'), async (req,
 // ==============================================
 // ONBOARDING v2 CHECKLIST TEMPLATES (documents + visa/residency steps)
 // The real, load-bearing "Onboarding Templates" — seeded per-record by
-// seedDocuments()/seedVisa() in server/routes/onboardingV2.js. Editing these
-// only affects onboarding records that haven't yet reached that stage; already
-// -seeded onboarding_documents/onboarding_visa_steps rows are never touched.
+// seedDocuments()/seedVisa() in server/routes/onboardingV2.js.
+//
+// Label/required edits (and brand-new items) ARE propagated live to already
+// -seeded onboarding_documents/onboarding_visa_steps rows for records that are
+// still active (not COMPLETED/REJECTED/CANCELLED) — but ONLY the label/required
+// columns; upload status, file references and verification are never touched.
+// Deleting a template item never deletes already-seeded rows (would destroy
+// real uploaded-file/verification history) — it only stops future seeding.
 // ==============================================
-function checklistTemplateRoutes(table, keyColumn) {
+async function propagateChecklistUpdate(instanceTable, keyColumn, companyId, key, patch) {
+  const sets = [];
+  const params = [];
+  if (patch.label !== undefined) { sets.push('t.label = ?'); params.push(patch.label); }
+  if (patch.required !== undefined) { sets.push('t.required = ?'); params.push(patch.required); }
+  if (!sets.length) return;
+  params.push(companyId, key);
+  await pool.query(
+    `UPDATE ${instanceTable} t JOIN onboarding_records o ON o.id = t.onboarding_id
+     SET ${sets.join(', ')}
+     WHERE t.company_id = ? AND t.${keyColumn} = ? AND o.stage NOT IN ('COMPLETED', 'REJECTED', 'CANCELLED')`,
+    params
+  );
+}
+async function propagateNewChecklistItem(instanceTable, keyColumn, companyId, key, label, required) {
+  const [records] = await pool.query(
+    `SELECT o.id FROM onboarding_records o
+     WHERE o.company_id = ? AND o.stage NOT IN ('COMPLETED', 'REJECTED', 'CANCELLED')
+       AND EXISTS (SELECT 1 FROM ${instanceTable} t WHERE t.onboarding_id = o.id)
+       AND NOT EXISTS (SELECT 1 FROM ${instanceTable} t2 WHERE t2.onboarding_id = o.id AND t2.${keyColumn} = ?)`,
+    [companyId, key]
+  );
+  const extra = instanceTable === 'onboarding_visa_steps' ? { sort_order: 999, status: 'Not Started' } : { status: 'Missing' };
+  for (const r of records) {
+    await pool.query(`INSERT INTO ${instanceTable} SET ?`, { onboarding_id: r.id, company_id: companyId, [keyColumn]: key, label, required, ...extra });
+  }
+}
+
+function checklistTemplateRoutes(table, keyColumn, instanceTable) {
   const sub = Router();
   sub.use(auth, tenantScope);
 
@@ -391,10 +424,13 @@ function checklistTemplateRoutes(table, keyColumn) {
       const { label, required } = req.body;
       if (!label || !String(label).trim()) return res.status(422).json({ error: 'label is required' });
       const [[{ n }]] = await pool.query(`SELECT COALESCE(MAX(sort_order), -1) + 1 n FROM ${table} WHERE company_id = ?`, [company_id]);
-      const key = req.body[keyColumn] || String(label).trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 60);
+      const trimmedLabel = String(label).trim();
+      const isRequired = required !== false;
+      const key = req.body[keyColumn] || trimmedLabel.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 60);
       const [r] = await pool.query(`INSERT INTO ${table} SET ?`, {
-        company_id, [keyColumn]: key, label: String(label).trim(), required: required !== false, sort_order: n,
+        company_id, [keyColumn]: key, label: trimmedLabel, required: isRequired, sort_order: n,
       });
+      await propagateNewChecklistItem(instanceTable, keyColumn, company_id, key, trimmedLabel, isRequired);
       await addAudit(pool, req.user, 'Settings', 'Onboarding Checklist Item Added', `"${label}" added to ${table}`);
       res.status(201).json({ id: r.insertId });
     } catch (err) {
@@ -406,14 +442,18 @@ function checklistTemplateRoutes(table, keyColumn) {
   sub.put('/:id', authorize('admin', 'hr_manager'), async (req, res) => {
     try {
       const co = companyClause(req, 'company_id');
+      const [[before]] = await pool.query(`SELECT company_id, ${keyColumn} AS k FROM ${table} WHERE id = ?${co.clause}`, [req.params.id, ...co.params]);
+      if (!before) return res.status(404).json({ error: 'Item not found' });
+
       const { label, required, sort_order } = req.body;
       const patch = {};
       if (label !== undefined) patch.label = String(label).trim();
       if (required !== undefined) patch.required = !!required;
       if (sort_order !== undefined) patch.sort_order = Number(sort_order);
       if (!Object.keys(patch).length) return res.status(400).json({ error: 'Nothing to update' });
-      const [result] = await pool.query(`UPDATE ${table} SET ? WHERE id = ?${co.clause}`, [patch, req.params.id, ...co.params]);
-      if (result.affectedRows === 0) return res.status(404).json({ error: 'Item not found' });
+
+      await pool.query(`UPDATE ${table} SET ? WHERE id = ?`, [patch, req.params.id]);
+      await propagateChecklistUpdate(instanceTable, keyColumn, before.company_id, before.k, patch);
       await addAudit(pool, req.user, 'Settings', 'Onboarding Checklist Item Updated', `#${req.params.id} updated in ${table}`);
       res.json({ success: true });
     } catch (err) {
@@ -438,8 +478,8 @@ function checklistTemplateRoutes(table, keyColumn) {
   return sub;
 }
 
-router.use('/onboarding-document-templates', checklistTemplateRoutes('onboarding_document_templates', 'doc_key'));
-router.use('/onboarding-visa-templates', checklistTemplateRoutes('onboarding_visa_templates', 'step_key'));
+router.use('/onboarding-document-templates', checklistTemplateRoutes('onboarding_document_templates', 'doc_key', 'onboarding_documents'));
+router.use('/onboarding-visa-templates', checklistTemplateRoutes('onboarding_visa_templates', 'step_key', 'onboarding_visa_steps'));
 
 // ==============================================
 // OFFBOARDING STEP TEMPLATES
