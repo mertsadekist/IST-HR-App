@@ -640,15 +640,53 @@ function sumAllowances(raw) {
   return 0;
 }
 
-// Creates (or re-activates) the Employees-section record for a completed onboarding.
-// Idempotent: if already linked, just re-activates; if an employee with the same
-// company+email exists, links to it instead of creating a duplicate.
+// Best-effort match of a free-text department name (offers store department
+// as text) to this company's departments list (employees store department_id
+// as an FK) — there's no way to force an exact link without an existing row.
+async function resolveDepartmentId(companyId, deptText) {
+  const name = deptText ? String(deptText).trim() : '';
+  if (!name) return null;
+  const [[dept]] = await pool.query(
+    'SELECT id FROM departments WHERE company_id = ? AND LOWER(TRIM(name)) = LOWER(?) LIMIT 1',
+    [companyId, name]
+  );
+  return dept?.id || null;
+}
+
+// Creates (or re-activates + backfills) the Employees-section record for a
+// completed onboarding. Idempotent: if already linked, re-activates and fills
+// in any still-empty employment fields from the accepted offer; if an
+// employee with the same company+email exists, links to it (same backfill)
+// instead of creating a duplicate; otherwise creates a fresh employee.
 async function finalizeEmployee(record, agg, user) {
   const profile = agg.profile || {};
   const accepted = (agg.offers || []).find((o) => o.status === 'Accepted');
 
+  const basic = accepted?.basic_salary != null ? Number(accepted.basic_salary) : null;
+  const allowances = accepted ? sumAllowances(accepted.allowances) : 0;
+  const fullSalary = basic != null ? basic + allowances : null;
+  const jobTitleText = accepted?.job_title || profile.current_job_title || null;
+  const departmentId = await resolveDepartmentId(record.company_id, accepted?.department);
+  const joiningDate = accepted?.joining_date || null;
+
+  // Only fills columns that are currently empty, so a prior manual HR edit on
+  // the employee record is never overwritten by a later onboarding completion.
+  async function backfillEmployee(employeeId) {
+    const [[emp]] = await pool.query(
+      'SELECT job_title_id, job_title_text, department_id, basic_salary, full_salary, start_date FROM employees WHERE id = ?', [employeeId]
+    );
+    if (!emp) return;
+    const patch = { status: 'Active' };
+    if (!emp.job_title_id && !emp.job_title_text && jobTitleText) patch.job_title_text = jobTitleText;
+    if (!emp.department_id && departmentId) patch.department_id = departmentId;
+    if (emp.basic_salary == null && basic != null) patch.basic_salary = basic;
+    if (emp.full_salary == null && fullSalary != null) patch.full_salary = fullSalary;
+    if (!emp.start_date && joiningDate) patch.start_date = joiningDate;
+    await pool.query('UPDATE employees SET ? WHERE id = ?', [patch, employeeId]);
+  }
+
   if (record.employee_id) {
-    await pool.query("UPDATE employees SET status = 'Active' WHERE id = ?", [record.employee_id]);
+    await backfillEmployee(record.employee_id);
     return record.employee_id;
   }
 
@@ -656,24 +694,20 @@ async function finalizeEmployee(record, agg, user) {
   if (profile.email) {
     const [[existing]] = await pool.query('SELECT id FROM employees WHERE company_id = ? AND email = ? LIMIT 1', [record.company_id, profile.email]);
     if (existing) {
-      await pool.query("UPDATE employees SET status = 'Active' WHERE id = ?", [existing.id]);
+      await backfillEmployee(existing.id);
       await pool.query('UPDATE onboarding_records SET employee_id = ? WHERE id = ?', [existing.id, record.id]);
       record.employee_id = existing.id;
-      await logEvent(record, user, 'employee_linked', `Linked to existing employee #${existing.id} and activated`);
+      await logEvent(record, user, 'employee_linked', `Linked to existing employee #${existing.id}, activated, and backfilled from the accepted offer`);
       return existing.id;
     }
   }
-
-  const basic = accepted?.basic_salary != null ? Number(accepted.basic_salary) : null;
-  const allowances = accepted ? sumAllowances(accepted.allowances) : 0;
-  const fullSalary = basic != null ? basic + allowances : null;
 
   const [r] = await pool.query('INSERT INTO employees SET ?', {
     company_id: record.company_id, candidate_id: record.candidate_id || null,
     first_name: profile.first_name || 'New', last_name: profile.last_name || 'Employee',
     email: profile.email || null, phone: profile.phone || null, nationality: profile.nationality || null,
-    job_title_text: accepted?.job_title || profile.current_job_title || null,
-    start_date: accepted?.joining_date || new Date(),
+    job_title_text: jobTitleText, department_id: departmentId,
+    start_date: joiningDate || new Date(),
     basic_salary: basic, full_salary: fullSalary,
     status: 'Active',
   });

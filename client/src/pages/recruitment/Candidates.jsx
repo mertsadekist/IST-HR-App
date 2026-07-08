@@ -11,7 +11,7 @@ import Modal from '@components/ui/Modal';
 import Input from '@components/ui/Input';
 import Select from '@components/ui/Select';
 import EmptyState from '@components/ui/EmptyState';
-import { confirmDelete } from '@utils/confirm';
+import { confirmDelete, confirmAction } from '@utils/confirm';
 import { toast } from 'react-toastify';
 import { Plus, Edit3, Trash2, Users, Search, ChevronLeft, ChevronRight, Mail, Phone, Globe, Star, ArrowRight, Sparkles, Loader2, User, Clock, FileText, Brain, Upload, Tag } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -68,8 +68,9 @@ export default function Candidates() {
       const [stgRes] = await Promise.all([settingsApi.getAtsStages()]);
       setStages(stgRes.data);
 
-      const params = currentCompanyId ? { company_id: currentCompanyId, status: 'Open' } : { status: 'Open' };
-      const vacRes = await vacanciesApi.getVacancies({ ...params, limit: 100 });
+      // Not scoped to currentCompanyId: the edit form can reassign a candidate to
+      // any company, so its vacancy dropdown needs every company's open vacancies.
+      const vacRes = await vacanciesApi.getVacancies({ status: 'Open', limit: 100 });
       setVacancies(vacRes.data.data || []);
     } catch { /* ignore */ }
   };
@@ -124,6 +125,11 @@ export default function Candidates() {
     if (!form.first_name || !form.last_name || !form.company_id) {
       toast.error(t('toasts.t_first_name_last_name_and_company_are_required'));
       return;
+    }
+    if (editing && String(editing.company_id) !== String(form.company_id)) {
+      const targetName = companies.find(c => String(c.id) === form.company_id)?.name || form.company_id;
+      const res = await confirmAction(t('recruitment.confirm_move_company_title'), t('recruitment.confirm_move_company_desc', { company: targetName }));
+      if (!res?.isConfirmed) return;
     }
     setSaving(true);
     try {
@@ -192,6 +198,13 @@ export default function Candidates() {
   };
 
   const update = (field, value) => setForm(p => ({ ...p, [field]: value }));
+
+  // Changing the company invalidates any vacancy pick from the old company
+  // (a vacancy always belongs to exactly one company).
+  const handleCompanyChange = (value) => setForm(p => {
+    const stillValid = p.vacancy_id && vacancies.some(v => String(v.id) === p.vacancy_id && v.company_id === parseInt(value));
+    return { ...p, company_id: value, vacancy_id: stillValid ? p.vacancy_id : '' };
+  });
 
   const openProfile = (c) => {
     setProfileCandidate(c);
@@ -487,7 +500,7 @@ export default function Candidates() {
           </div>
           <div className="grid grid-cols-3 gap-4">
             <Input label={t('recruitment.nationality')} placeholder={t('recruitment.nationality_placeholder', 'e.g. UAE')} value={form.nationality} onChange={(e) => update('nationality', e.target.value)} />
-            <Select label={t('recruitment.company')} required value={form.company_id} onChange={(e) => update('company_id', e.target.value)}
+            <Select label={t('recruitment.company')} required value={form.company_id} onChange={(e) => handleCompanyChange(e.target.value)}
               options={companies.map(c => ({ value: String(c.id), label: c.name }))} placeholder={t('recruitment.select_company')} />
             <Input label={t('recruitment.applied_date')} type="date" value={form.applied_date} onChange={(e) => update('applied_date', e.target.value)} />
           </div>

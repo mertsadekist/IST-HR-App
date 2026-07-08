@@ -25,10 +25,15 @@ const upload = multer({
 const router = Router();
 router.use(auth, tenantScope);
 
-// Verifies a candidate exists within the caller's company; returns row or null.
-async function getScopedCandidate(req, candidateId) {
-  const co = companyClause(req, 'company_id');
-  const [[c]] = await pool.query('SELECT * FROM candidates WHERE id = ?' + co.clause, [candidateId, ...co.params]);
+// Verifies a candidate exists, scoped only by the "browsing" entity filter
+// (query string) — never by the request body. A PUT body may legitimately
+// carry a *different* company_id when reassigning a candidate to another
+// company, and that must never cause a false "not found" on the lookup.
+async function getCandidateForWrite(req, candidateId) {
+  const hasQueryScope = req.query.company_id != null;
+  const sql = 'SELECT * FROM candidates WHERE id = ?' + (hasQueryScope ? ' AND company_id = ?' : '');
+  const params = hasQueryScope ? [candidateId, req.query.company_id] : [candidateId];
+  const [[c]] = await pool.query(sql, params);
   return c || null;
 }
 
@@ -191,13 +196,34 @@ router.post('/', authorize('admin', 'hr_manager', 'recruiter'), validate({
   }
 });
 
-// PUT /api/candidates/:id (company-scoped; cannot re-tenant)
+// PUT /api/candidates/:id — company reassignment is supported. Moving a
+// candidate to a different company clears an inconsistent vacancy_id (a
+// vacancy always belongs to one company) unless the request also supplies a
+// new vacancy_id that belongs to the target company. current_stage_id is left
+// untouched since ATS stages are global across the organization.
 router.put('/:id', authorize('admin', 'hr_manager', 'recruiter'), async (req, res) => {
   try {
-    const { skills: candidateSkills, company_id, ...data } = req.body;
-    if (!(await getScopedCandidate(req, req.params.id))) {
-      return res.status(404).json({ error: 'Candidate not found' });
+    const { skills: candidateSkills, ...data } = req.body;
+    const existing = await getCandidateForWrite(req, req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Candidate not found' });
+
+    let movingCompany = false;
+    if (data.company_id !== undefined) {
+      data.company_id = Number(data.company_id);
+      movingCompany = data.company_id !== existing.company_id;
     }
+
+    if (movingCompany) {
+      const [[targetCompany]] = await pool.query('SELECT id, name FROM companies WHERE id = ? AND deleted_at IS NULL', [data.company_id]);
+      if (!targetCompany) return res.status(422).json({ error: 'Target company not found' });
+
+      const effectiveVacancyId = data.vacancy_id !== undefined ? data.vacancy_id : existing.vacancy_id;
+      if (effectiveVacancyId) {
+        const [[vac]] = await pool.query('SELECT company_id FROM vacancies WHERE id = ?', [effectiveVacancyId]);
+        if (!vac || vac.company_id !== data.company_id) data.vacancy_id = null; // avoid a cross-company reference
+      }
+    }
+
     await pool.query('UPDATE candidates SET ? WHERE id = ?', [data, req.params.id]);
 
     if (candidateSkills !== undefined) {
@@ -209,9 +235,13 @@ router.put('/:id', authorize('admin', 'hr_manager', 'recruiter'), async (req, re
       }
     }
 
-    await addAudit(pool, req.user, 'Candidates', 'Updated', `Candidate #${req.params.id} updated`);
+    const detail = movingCompany
+      ? `Candidate #${req.params.id} updated and moved from company #${existing.company_id} to #${data.company_id}`
+      : `Candidate #${req.params.id} updated`;
+    await addAudit(pool, req.user, 'Candidates', 'Updated', detail);
     res.json({ success: true });
   } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'A candidate with this email already exists in the target company' });
     console.error('PUT /candidates/:id error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -222,7 +252,7 @@ router.put('/:id/move', authorize('admin', 'hr_manager', 'recruiter'), async (re
   const conn = await pool.getConnection();
   try {
     // The candidate must belong to the caller's company
-    if (!(await getScopedCandidate(req, req.params.id))) {
+    if (!(await getCandidateForWrite(req, req.params.id))) {
       return res.status(404).json({ error: 'Candidate not found' });
     }
     await conn.beginTransaction();
@@ -324,7 +354,7 @@ router.post('/parse-cv', authorize('admin', 'hr_manager', 'recruiter'), upload.s
 // POST /api/candidates/:id/parse — (re)read the stored CV text and refresh ai_analysis
 router.post('/:id/parse', authorize('admin', 'hr_manager', 'recruiter'), async (req, res) => {
   try {
-    const candidate = await getScopedCandidate(req, req.params.id);
+    const candidate = await getCandidateForWrite(req, req.params.id);
     if (!candidate) return res.status(404).json({ error: 'Candidate not found' });
     const text = candidate.cv_text;
     if (!text || text.trim().length < 20) {
@@ -351,7 +381,7 @@ router.post('/:id/parse', authorize('admin', 'hr_manager', 'recruiter'), async (
 router.post('/:id/upload-cv', authorize('admin', 'hr_manager', 'recruiter'), upload.single('cv'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    if (!(await getScopedCandidate(req, req.params.id))) {
+    if (!(await getCandidateForWrite(req, req.params.id))) {
       return res.status(404).json({ error: 'Candidate not found' });
     }
 

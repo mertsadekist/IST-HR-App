@@ -3,10 +3,11 @@ import { useSelector } from 'react-redux';
 import Card from '@components/ui/Card';
 import Button from '@components/ui/Button';
 import Badge from '@components/ui/Badge';
-import { Users, Plus, Mail, Phone, Building2, Briefcase, FileText, Upload, Download, Calendar, DollarSign, Globe, Loader2 } from 'lucide-react';
+import { Users, Plus, Mail, Phone, Building2, Briefcase, FileText, Upload, Download, Calendar, DollarSign, Globe, Loader2, Pencil, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import api from '@api/axios';
 import * as employeesApi from '@api/employeesApi';
+import * as departmentsApi from '@api/departmentsApi';
 import EmployeeOnboardingWizard from './components/EmployeeOnboardingWizard';
 import Modal from '@components/ui/Modal';
 import { toast } from 'react-toastify';
@@ -28,6 +29,10 @@ export default function Employees() {
   const [uploading, setUploading] = useState(false);
   const [attId, setAttId] = useState('');
   const [savingAtt, setSavingAtt] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [editForm, setEditForm] = useState({});
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [departments, setDepartments] = useState([]);
 
   useEffect(() => {
     loadEmployees();
@@ -56,6 +61,7 @@ export default function Employees() {
     setSelectedEmp(emp);
     setAttId(emp.attendance_id || '');
     setActiveTab('profile');
+    setEditMode(false);
     setEmpDocs([]);
     setDocsLoading(true);
     try {
@@ -65,6 +71,50 @@ export default function Employees() {
       console.error('Failed to load documents', err);
     } finally {
       setDocsLoading(false);
+    }
+  };
+
+  const startEditProfile = async () => {
+    setEditForm({
+      first_name: selectedEmp.first_name || '', last_name: selectedEmp.last_name || '',
+      email: selectedEmp.email || '', phone: selectedEmp.phone || '', nationality: selectedEmp.nationality || '',
+      department_id: selectedEmp.department_id ? String(selectedEmp.department_id) : '',
+      job_title_text: selectedEmp.job_title_text || selectedEmp.job_title_name || '',
+      basic_salary: selectedEmp.basic_salary ?? '', full_salary: selectedEmp.full_salary ?? '',
+      start_date: selectedEmp.start_date ? dayjs(selectedEmp.start_date).format('YYYY-MM-DD') : '',
+      status: selectedEmp.status || 'Active',
+    });
+    try {
+      const { data } = await departmentsApi.getDepartments({ company_id: selectedEmp.company_id });
+      setDepartments(data.data || data || []);
+    } catch { /* ignore */ }
+    setEditMode(true);
+  };
+
+  const saveProfile = async () => {
+    if (!editForm.first_name || !editForm.last_name) {
+      toast.error(t('employees.first_last_required', 'First and last name are required'));
+      return;
+    }
+    setSavingProfile(true);
+    try {
+      const patch = {
+        ...editForm,
+        department_id: editForm.department_id ? Number(editForm.department_id) : null,
+        basic_salary: editForm.basic_salary === '' ? null : Number(editForm.basic_salary),
+        full_salary: editForm.full_salary === '' ? null : Number(editForm.full_salary),
+        start_date: editForm.start_date || null,
+      };
+      await employeesApi.updateEmployee(selectedEmp.id, patch);
+      const { data } = await employeesApi.getEmployee(selectedEmp.id);
+      setSelectedEmp(data);
+      setEmployees((list) => list.map((e) => (e.id === selectedEmp.id ? { ...e, ...data } : e)));
+      setEditMode(false);
+      toast.success(t('employees.profile_saved', 'Employee details saved'));
+    } catch (err) {
+      toast.error(err.response?.data?.error || t('employees.profile_save_failed', 'Failed to save employee details'));
+    } finally {
+      setSavingProfile(false);
     }
   };
 
@@ -231,18 +281,41 @@ export default function Employees() {
 
             {/* Tab Content */}
             {activeTab === 'profile' ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-3">
+                <div className="flex justify-end">
+                  {editMode ? (
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="secondary" onClick={() => setEditMode(false)}><X size={14} /> {t('common.cancel', 'Cancel')}</Button>
+                      <Button size="sm" onClick={saveProfile} loading={savingProfile}>{t('common.save', 'Save')}</Button>
+                    </div>
+                  ) : (
+                    <Button size="sm" variant="secondary" onClick={startEditProfile}><Pencil size={14} /> {t('common.edit', 'Edit')}</Button>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-3 bg-surface-50 p-4 rounded-xl border border-surface-200">
                   <h3 className="font-bold text-surface-900 text-sm border-b pb-1.5 flex items-center gap-1.5">
                     <Users size={16} className="text-brand-600" />
                     Personal Info / معلومات شخصية
                   </h3>
+                  {editMode ? (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <input value={editForm.first_name} onChange={(e) => setEditForm(f => ({ ...f, first_name: e.target.value }))} placeholder={t('recruitment.first_name', 'First name')} className="text-xs bg-white border border-surface-200 rounded-lg px-2 py-1.5" />
+                        <input value={editForm.last_name} onChange={(e) => setEditForm(f => ({ ...f, last_name: e.target.value }))} placeholder={t('recruitment.last_name', 'Last name')} className="text-xs bg-white border border-surface-200 rounded-lg px-2 py-1.5" />
+                      </div>
+                      <input value={editForm.email} onChange={(e) => setEditForm(f => ({ ...f, email: e.target.value }))} type="email" placeholder={t('recruitment.email', 'Email')} className="w-full text-xs bg-white border border-surface-200 rounded-lg px-2 py-1.5" />
+                      <input value={editForm.phone} onChange={(e) => setEditForm(f => ({ ...f, phone: e.target.value }))} placeholder={t('recruitment.phone', 'Phone')} className="w-full text-xs bg-white border border-surface-200 rounded-lg px-2 py-1.5" />
+                      <input value={editForm.nationality} onChange={(e) => setEditForm(f => ({ ...f, nationality: e.target.value }))} placeholder={t('recruitment.nationality', 'Nationality')} className="w-full text-xs bg-white border border-surface-200 rounded-lg px-2 py-1.5" />
+                    </div>
+                  ) : (
                   <div className="space-y-2 text-xs">
                     <div className="flex justify-between"><span className="text-surface-500">Name:</span> <span className="font-semibold text-surface-800">{selectedEmp.first_name} {selectedEmp.last_name}</span></div>
                     <div className="flex justify-between"><span className="text-surface-500">Email:</span> <span className="font-semibold text-surface-800">{selectedEmp.email || 'N/A'}</span></div>
                     <div className="flex justify-between"><span className="text-surface-500">Phone:</span> <span className="font-semibold text-surface-800">{selectedEmp.phone || 'N/A'}</span></div>
                     <div className="flex justify-between"><span className="text-surface-500">Nationality:</span> <span className="font-semibold text-surface-800">{selectedEmp.nationality || 'N/A'}</span></div>
                   </div>
+                  )}
                 </div>
 
                 <div className="space-y-3 bg-surface-50 p-4 rounded-xl border border-surface-200">
@@ -250,6 +323,24 @@ export default function Employees() {
                     <Briefcase size={16} className="text-brand-600" />
                     Employment Details / تفاصيل العمل
                   </h3>
+                  {editMode ? (
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center text-xs"><span className="text-surface-500">Company:</span> <span className="font-semibold text-surface-800">{selectedEmp.company_name || 'N/A'}</span></div>
+                      <select value={editForm.department_id} onChange={(e) => setEditForm(f => ({ ...f, department_id: e.target.value }))} className="w-full text-xs bg-white border border-surface-200 rounded-lg px-2 py-1.5">
+                        <option value="">{t('employees.no_department', 'No department')}</option>
+                        {departments.map(d => <option key={d.id} value={String(d.id)}>{d.name}</option>)}
+                      </select>
+                      <input value={editForm.job_title_text} onChange={(e) => setEditForm(f => ({ ...f, job_title_text: e.target.value }))} placeholder={t('employees.job_title', 'Job title')} className="w-full text-xs bg-white border border-surface-200 rounded-lg px-2 py-1.5" />
+                      <select value={editForm.status} onChange={(e) => setEditForm(f => ({ ...f, status: e.target.value }))} className="w-full text-xs bg-white border border-surface-200 rounded-lg px-2 py-1.5">
+                        {['Onboarding', 'Active', 'Offboarding', 'Exited'].map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input value={editForm.basic_salary} onChange={(e) => setEditForm(f => ({ ...f, basic_salary: e.target.value }))} type="number" placeholder={t('employees.basic_salary', 'Basic salary')} className="text-xs bg-white border border-surface-200 rounded-lg px-2 py-1.5" />
+                        <input value={editForm.full_salary} onChange={(e) => setEditForm(f => ({ ...f, full_salary: e.target.value }))} type="number" placeholder={t('employees.full_salary', 'Full salary')} className="text-xs bg-white border border-surface-200 rounded-lg px-2 py-1.5" />
+                      </div>
+                      <input value={editForm.start_date} onChange={(e) => setEditForm(f => ({ ...f, start_date: e.target.value }))} type="date" className="w-full text-xs bg-white border border-surface-200 rounded-lg px-2 py-1.5" />
+                    </div>
+                  ) : (
                   <div className="space-y-2 text-xs">
                     <div className="flex justify-between"><span className="text-surface-500">Company:</span> <span className="font-semibold text-surface-800">{selectedEmp.company_name || 'N/A'}</span></div>
                     <div className="flex justify-between"><span className="text-surface-500">Department:</span> <span className="font-semibold text-surface-800">{selectedEmp.department_name || 'N/A'}</span></div>
@@ -259,6 +350,7 @@ export default function Employees() {
                     <div className="flex justify-between"><span className="text-surface-500">Full Salary:</span> <span className="font-semibold text-emerald-700">{selectedEmp.full_salary ? `${Number(selectedEmp.full_salary).toLocaleString()} AED` : 'N/A'}</span></div>
                     <div className="flex justify-between"><span className="text-surface-500">Join Date:</span> <span className="font-semibold text-surface-800">{selectedEmp.start_date ? dayjs(selectedEmp.start_date).format('MMM D, YYYY') : 'N/A'}</span></div>
                   </div>
+                  )}
                   <div className="pt-2 mt-1 border-t border-surface-200">
                     <label className="block text-surface-500 text-xs mb-1">{t('employees.attendance_id', 'Attendance ID (device)')}</label>
                     <div className="flex gap-2">
@@ -268,6 +360,7 @@ export default function Employees() {
                     </div>
                     <p className="text-[10px] text-surface-400 mt-1">{t('employees.attendance_id_hint', 'Maps this employee to the time-clock device ID used by attendance import.')}</p>
                   </div>
+                </div>
                 </div>
               </div>
             ) : (
