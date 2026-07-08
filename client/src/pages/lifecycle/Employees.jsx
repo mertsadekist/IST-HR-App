@@ -33,6 +33,8 @@ export default function Employees() {
   const [editForm, setEditForm] = useState({});
   const [savingProfile, setSavingProfile] = useState(false);
   const [departments, setDepartments] = useState([]);
+  const [creatingLogin, setCreatingLogin] = useState(false);
+  const [newLoginCreds, setNewLoginCreds] = useState(null);
 
   useEffect(() => {
     loadEmployees();
@@ -62,6 +64,7 @@ export default function Employees() {
     setAttId(emp.attendance_id || '');
     setActiveTab('profile');
     setEditMode(false);
+    setNewLoginCreds(null);
     setEmpDocs([]);
     setDocsLoading(true);
     try {
@@ -115,6 +118,21 @@ export default function Employees() {
       toast.error(err.response?.data?.error || t('employees.profile_save_failed', 'Failed to save employee details'));
     } finally {
       setSavingProfile(false);
+    }
+  };
+
+  const createLogin = async () => {
+    setCreatingLogin(true);
+    try {
+      const { data } = await employeesApi.createEmployeeLogin(selectedEmp.id);
+      setNewLoginCreds({ username: data.username, password: data.password });
+      setSelectedEmp((p) => ({ ...p, user_id: data.user_id, username: data.username }));
+      setEmployees((list) => list.map((e) => (e.id === selectedEmp.id ? { ...e, user_id: data.user_id } : e)));
+      toast.success(t('employees.login_created', 'Login account created'));
+    } catch (err) {
+      toast.error(err.response?.data?.error || t('employees.login_create_failed', 'Failed to create login'));
+    } finally {
+      setCreatingLogin(false);
     }
   };
 
@@ -359,6 +377,20 @@ export default function Employees() {
                       <Button size="sm" onClick={saveAttendanceId} loading={savingAtt}>{t('common.save', 'Save')}</Button>
                     </div>
                     <p className="text-[10px] text-surface-400 mt-1">{t('employees.attendance_id_hint', 'Maps this employee to the time-clock device ID used by attendance import.')}</p>
+                  </div>
+                  <div className="pt-2 mt-1 border-t border-surface-200">
+                    <label className="block text-surface-500 text-xs mb-1">{t('employees.login_account', 'Portal Login')}</label>
+                    {selectedEmp.user_id ? (
+                      <p className="text-[11px] text-emerald-600 font-medium">{t('employees.has_login', 'Has a login account')} ({selectedEmp.username})</p>
+                    ) : newLoginCreds ? (
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 text-[11px] space-y-1">
+                        <p className="font-semibold text-amber-800">{t('employees.login_created_hint', 'Share these with the employee now — the password will not be shown again:')}</p>
+                        <p>{t('employees.username', 'Username')}: <span className="font-mono font-semibold">{newLoginCreds.username}</span></p>
+                        <p>{t('employees.password', 'Password')}: <span className="font-mono font-semibold">{newLoginCreds.password}</span></p>
+                      </div>
+                    ) : (
+                      <Button size="sm" variant="secondary" onClick={createLogin} loading={creatingLogin}>{t('employees.create_login', 'Create Login Account')}</Button>
+                    )}
                   </div>
                 </div>
                 </div>

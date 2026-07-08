@@ -137,11 +137,12 @@ router.get('/', async (req, res) => {
     const co = companyClause(req, 'e.company_id');
     const coCount = companyClause(req, 'company_id');
     let sql = `SELECT e.*, c.name as company_name, c.short_code, c.color_primary,
-               d.name as department_name, jt.title as job_title_name
+               d.name as department_name, jt.title as job_title_name, u.id as user_id, u.username
                FROM employees e
                LEFT JOIN companies c ON e.company_id = c.id
                LEFT JOIN departments d ON e.department_id = d.id
-               LEFT JOIN job_titles jt ON e.job_title_id = jt.id WHERE 1=1` + co.clause;
+               LEFT JOIN job_titles jt ON e.job_title_id = jt.id
+               LEFT JOIN users u ON u.employee_id = e.id WHERE 1=1` + co.clause;
     let countSql = 'SELECT COUNT(*) as total FROM employees WHERE 1=1' + coCount.clause;
     const params = [...co.params], countParams = [...coCount.params];
     if (req.query.status) { sql += ' AND e.status = ?'; params.push(req.query.status); countSql += ' AND status = ?'; countParams.push(req.query.status); }
@@ -157,11 +158,47 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const co = companyClause(req, 'e.company_id');
-    const [rows] = await pool.query(`SELECT e.*, c.name as company_name, c.short_code, d.name as department_name, jt.title as job_title_name
-      FROM employees e LEFT JOIN companies c ON e.company_id = c.id LEFT JOIN departments d ON e.department_id = d.id LEFT JOIN job_titles jt ON e.job_title_id = jt.id WHERE e.id = ?` + co.clause, [req.params.id, ...co.params]);
+    const [rows] = await pool.query(`SELECT e.*, c.name as company_name, c.short_code, d.name as department_name, jt.title as job_title_name, u.id as user_id, u.username
+      FROM employees e LEFT JOIN companies c ON e.company_id = c.id LEFT JOIN departments d ON e.department_id = d.id LEFT JOIN job_titles jt ON e.job_title_id = jt.id
+      LEFT JOIN users u ON u.employee_id = e.id WHERE e.id = ?` + co.clause, [req.params.id, ...co.params]);
     if (!rows.length) return res.status(404).json({ error: 'Employee not found' });
     res.json(rows[0]);
   } catch (err) { console.error('GET /employees/:id error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// POST /api/employees/:id/create-login — for employees who exist without ever
+// getting portal credentials (e.g. onboarded via the Onboarding v2 pipeline,
+// which — unlike the quick "Add Employee" wizard — never creates a login).
+// Generates a one-time random username/password (same scheme as the wizard's
+// optional create_user step) and returns them for HR to hand to the employee.
+router.post('/:id/create-login', authorize('admin', 'hr_manager'), async (req, res) => {
+  try {
+    const emp = await getScopedEmployee(req, req.params.id);
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+    if (!emp.email) return res.status(422).json({ error: 'Employee has no email on file — add one before creating a login' });
+
+    const [[existing]] = await pool.query('SELECT id FROM users WHERE employee_id = ?', [emp.id]);
+    if (existing) return res.status(409).json({ error: 'This employee already has a login account' });
+
+    const base = emp.email.split('@')[0].replace(/[^a-zA-Z0-9._-]/g, '');
+    let username, userId, tempPassword;
+    for (let attempt = 0; attempt < 5 && !userId; attempt++) {
+      username = `${base}${Math.floor(Math.random() * 900) + 100}`;
+      tempPassword = Math.random().toString(36).slice(-8);
+      const passwordHash = await bcrypt.hash(tempPassword, 10);
+      try {
+        const [r] = await pool.query(
+          'INSERT INTO users (username, password_hash, name, email, role, company_id, department_id, employee_id, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [username, passwordHash, `${emp.first_name} ${emp.last_name}`, emp.email, 'employee', emp.company_id, emp.department_id, emp.id, true]
+        );
+        userId = r.insertId;
+      } catch (e) { if (e.code !== 'ER_DUP_ENTRY') throw e; }
+    }
+    if (!userId) return res.status(500).json({ error: 'Could not generate a unique username, try again' });
+
+    await addAudit(pool, req.user, 'Employees', 'Login Created', `Login account created for employee ${emp.first_name} ${emp.last_name}`);
+    res.status(201).json({ user_id: userId, username, password: tempPassword });
+  } catch (err) { console.error('POST /employees/:id/create-login error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
 // POST /api/employees — Create employee manually
