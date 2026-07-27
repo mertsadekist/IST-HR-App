@@ -216,6 +216,96 @@ router.post('/:id/create-login', authorize('admin', 'hr_manager'), async (req, r
   } catch (err) { console.error('POST /employees/:id/create-login error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
+// GET /api/employees/:id/history — everything on record for one employee,
+// normalized into a single date-sorted timeline for the printable report:
+// onboarding milestones, documents received, company assets handed over, and
+// leave taken. Each entry is { source, occurred_at, type, description, actor }.
+router.get('/:id/history', async (req, res) => {
+  try {
+    const emp = await getScopedEmployee(req, req.params.id);
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+
+    // DATE columns are formatted in SQL: mysql2 hands them back as JS Dates at
+    // local midnight, so serializing them to ISO would shift them a day back.
+    const [[header]] = await pool.query(
+      `SELECT e.id, e.first_name, e.last_name, e.email, e.phone, e.nationality,
+              DATE_FORMAT(e.start_date, '%Y-%m-%d') AS start_date,
+              e.status, e.labour_contract_status,
+              DATE_FORMAT(e.labour_contract_issued_at, '%Y-%m-%d') AS labour_contract_issued_at,
+              e.job_title_text, c.name AS company_name, d.name AS department_name, jt.title AS job_title_name
+       FROM employees e
+       LEFT JOIN companies c ON e.company_id = c.id
+       LEFT JOIN departments d ON e.department_id = d.id
+       LEFT JOIN job_titles jt ON e.job_title_id = jt.id
+       WHERE e.id = ?`, [emp.id]);
+
+    // Onboarding milestones (linked through the onboarding record, not the employee).
+    const [obEvents] = await pool.query(
+      `SELECT ev.event_type, ev.detail, ev.user_name, ev.created_at
+       FROM onboarding_events ev
+       JOIN onboarding_records r ON r.id = ev.onboarding_id
+       WHERE r.employee_id = ? ORDER BY ev.created_at`, [emp.id]);
+
+    const [docs] = await pool.query(
+      'SELECT category, file_name, created_at FROM employee_documents WHERE employee_id = ? ORDER BY created_at', [emp.id]);
+
+    // Assets/accounts currently or previously issued to the employee.
+    const [assets] = await pool.query(
+      `SELECT name, asset_type, identifier, status,
+              DATE_FORMAT(issued_date, '%Y-%m-%d') AS issued_date,
+              DATE_FORMAT(returned_date, '%Y-%m-%d') AS returned_date
+       FROM asset_assignments WHERE employee_id = ? ORDER BY COALESCE(issued_date, created_at)`, [emp.id]);
+
+    // Physical handover trail (equipment/furniture), with who performed it.
+    const [assetHistory] = await pool.query(
+      `SELECT h.action, DATE_FORMAT(h.action_date, '%Y-%m-%d') AS action_date,
+              h.condition_at_action, h.notes, u.name AS actor,
+              COALESCE(inv.brand, '') AS brand, COALESCE(inv.model, '') AS model, inv.asset_code
+       FROM asset_assignment_history h
+       LEFT JOIN users u ON h.assigned_by = u.id
+       LEFT JOIN asset_inventory inv ON h.inventory_id = inv.id
+       WHERE h.employee_id = ? ORDER BY h.action_date`, [emp.id]);
+
+    const [leave] = await pool.query(
+      `SELECT DATE_FORMAT(lr.start_date, '%Y-%m-%d') AS start_date,
+              DATE_FORMAT(lr.end_date, '%Y-%m-%d') AS end_date,
+              lr.days, lr.status, lr.reason, lt.name AS leave_type, u.name AS decided_by_name
+       FROM leave_requests lr
+       JOIN leave_types lt ON lr.leave_type_id = lt.id
+       LEFT JOIN users u ON lr.decided_by = u.id
+       WHERE lr.employee_id = ? ORDER BY lr.start_date`, [emp.id]);
+
+    const d = (v) => (v ? String(v).slice(0, 10) : null);
+    const timeline = [
+      ...obEvents.map((e) => ({
+        source: 'Onboarding', occurred_at: e.created_at, type: e.event_type, description: e.detail, actor: e.user_name || null,
+      })),
+      ...docs.map((x) => ({
+        source: 'Document', occurred_at: x.created_at, type: x.category, description: x.file_name, actor: null,
+      })),
+      ...assets.map((a) => ({
+        source: 'Asset', occurred_at: a.issued_date, type: a.asset_type,
+        description: [a.name, a.identifier].filter(Boolean).join(' — ') + (a.returned_date ? ` (returned ${d(a.returned_date)})` : ''),
+        actor: null,
+      })),
+      ...assetHistory.map((h) => ({
+        source: 'Asset', occurred_at: h.action_date, type: h.action,
+        description: [[h.brand, h.model].filter(Boolean).join(' '), h.asset_code, h.condition_at_action, h.notes].filter(Boolean).join(' · '),
+        actor: h.actor || null,
+      })),
+      ...leave.map((l) => ({
+        source: 'Leave', occurred_at: l.start_date, type: l.leave_type,
+        description: `${d(l.start_date)} → ${d(l.end_date)} · ${l.days} day(s) · ${l.status}${l.reason ? ` · ${l.reason}` : ''}`,
+        actor: l.decided_by_name || null,
+      })),
+    ].filter((x) => x.occurred_at)
+      .sort((a, b) => new Date(a.occurred_at) - new Date(b.occurred_at))
+      .map((x) => ({ ...x, occurred_at: typeof x.occurred_at === 'string' ? x.occurred_at : x.occurred_at.toISOString() }));
+
+    res.json({ employee: header, timeline, counts: { onboarding: obEvents.length, documents: docs.length, assets: assets.length + assetHistory.length, leave: leave.length } });
+  } catch (err) { console.error('GET /employees/:id/history error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
 // ==================== Profile photo ====================
 
 // Turns multer rejections (wrong type, too large) into a 4xx instead of letting

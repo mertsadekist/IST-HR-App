@@ -11,6 +11,7 @@ export const uploadEmployeePhoto = (id, formData) => api.post(`/employees/${id}/
 });
 export const getEmployeePhotoBytes = (id) => api.get(`/employees/${id}/photo`, { responseType: 'blob' });
 export const deleteEmployeePhoto = (id) => api.delete(`/employees/${id}/photo`);
+export const getEmployeeHistory = (id) => api.get(`/employees/${id}/history`);
 export const getEmployeeDocuments = (id) => api.get(`/employees/${id}/documents`);
 export const uploadEmployeeDocument = (id, formData) => api.post(`/employees/${id}/documents`, formData, {
   headers: { 'Content-Type': 'multipart/form-data' }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useSelector } from 'react-redux';
 import Card from '@components/ui/Card';
 import Button from '@components/ui/Button';
@@ -9,6 +9,8 @@ import api from '@api/axios';
 import * as employeesApi from '@api/employeesApi';
 import * as departmentsApi from '@api/departmentsApi';
 import EmployeeOnboardingWizard from './components/EmployeeOnboardingWizard';
+import EmployeeHistoryReport from './components/EmployeeHistoryReport';
+import { printElementWithLetterhead, waitForPaint } from '@utils/printDoc';
 import Modal from '@components/ui/Modal';
 import { toast } from 'react-toastify';
 import dayjs from 'dayjs';
@@ -38,6 +40,9 @@ export default function Employees() {
   const [newLoginCreds, setNewLoginCreds] = useState(null);
   const [photoUrl, setPhotoUrl] = useState(null);
   const [photoBusy, setPhotoBusy] = useState(false);
+  const [historyData, setHistoryData] = useState(null);
+  const [exporting, setExporting] = useState(false);
+  const reportRef = useRef(null);
 
   // Official mail domains of the employee's own company (not the selected entity).
   const companyDomains = useMemo(() => {
@@ -161,6 +166,19 @@ export default function Employees() {
     } catch (err) {
       toast.error(err.response?.data?.error || t('employees.photo_save_failed'));
     } finally { setPhotoBusy(false); }
+  };
+
+  const exportHistory = async () => {
+    setExporting(true);
+    try {
+      const { data } = await employeesApi.getEmployeeHistory(selectedEmp.id);
+      setHistoryData(data);
+      await waitForPaint(); // let the off-screen report commit before capture
+      const name = `${selectedEmp.first_name}-${selectedEmp.last_name}`.replace(/\s+/g, '');
+      await printElementWithLetterhead(reportRef.current, selectedEmp.company_id, `employee-record-${name}.pdf`);
+    } catch (err) {
+      toast.error(err.response?.data?.error || err.message || t('employees.export_failed'));
+    } finally { setExporting(false); }
   };
 
   const createLogin = async () => {
@@ -374,14 +392,19 @@ export default function Employees() {
             {/* Tab Content */}
             {activeTab === 'profile' ? (
               <div className="space-y-3">
-                <div className="flex justify-end">
+                <div className="flex justify-end gap-2">
                   {editMode ? (
-                    <div className="flex gap-2">
+                    <>
                       <Button size="sm" variant="secondary" onClick={() => setEditMode(false)}><X size={14} /> {t('common.cancel', 'Cancel')}</Button>
                       <Button size="sm" onClick={saveProfile} loading={savingProfile}>{t('common.save', 'Save')}</Button>
-                    </div>
+                    </>
                   ) : (
-                    <Button size="sm" variant="secondary" onClick={startEditProfile}><Pencil size={14} /> {t('common.edit', 'Edit')}</Button>
+                    <>
+                      <Button size="sm" variant="secondary" onClick={exportHistory} loading={exporting}>
+                        <Download size={14} /> {t('employees.export_record')}
+                      </Button>
+                      <Button size="sm" variant="secondary" onClick={startEditProfile}><Pencil size={14} /> {t('common.edit', 'Edit')}</Button>
+                    </>
                   )}
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -576,6 +599,17 @@ export default function Employees() {
           </div>
         </Modal>
       )}
+
+      {/* Off-screen printable report — captured by html2canvas on export */}
+      <div style={{ position: 'fixed', left: '-9999px', top: 0, width: '800px' }} aria-hidden="true">
+        {historyData && (
+          <EmployeeHistoryReport
+            ref={reportRef}
+            data={historyData}
+            company={companies.find((c) => c.id === selectedEmp?.company_id)}
+          />
+        )}
+      </div>
     </div>
   );
 }

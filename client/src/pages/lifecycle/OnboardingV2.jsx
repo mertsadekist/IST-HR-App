@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { useTranslation } from 'react-i18next';
@@ -14,7 +14,7 @@ import { toast } from 'react-toastify';
 import { confirmAction } from '@utils/confirm';
 import {
   UserPlus, RefreshCw, Loader2, Check, Lock, Upload, FileText, Send, ChevronRight,
-  ShieldCheck, Sparkles, CircleDot, Ban, ArrowRight, Eye, Mail,
+  ShieldCheck, Sparkles, CircleDot, Ban, ArrowRight, Eye, Mail, Download,
 } from 'lucide-react';
 import dayjs from 'dayjs';
 import SendDocumentModal from '@components/email/SendDocumentModal';
@@ -22,6 +22,8 @@ import { getCompany } from '@api/companiesApi';
 import { companyLetterhead } from '@utils/letterhead';
 import { buildOfferLetterHtml } from '@utils/offerLetter';
 import { OFFER_PRESETS } from '@/data/offerPresets';
+import EmployeeHistoryReport from './components/EmployeeHistoryReport';
+import { printElementWithLetterhead, waitForPaint } from '@utils/printDoc';
 
 async function resolveCompanyLh(companyId) {
   if (!companyId) return null;
@@ -178,6 +180,8 @@ function DetailView({ detail, reload }) {
   const ci = idx(stage);
   const terminal = ['REJECTED', 'CANCELLED', 'COMPLETED'].includes(stage);
   const completeness = detail.profile?.profile_completeness || 0;
+  const [exporting, setExporting] = useState(false);
+  const reportRef = useRef(null);
 
   const advance = async () => {
     try {
@@ -186,6 +190,47 @@ function DetailView({ detail, reload }) {
       else toast.success(t('ob.advanced_to', { stage: stg(t, data.stage) }));
       reload();
     } catch (e) { toast.error(apiErr(e, t('ob.cannot_advance'))); }
+  };
+
+  // Built from the onboarding record itself rather than GET /employees/:id/history,
+  // so the Activity is exportable from the very first stage — long before an
+  // employee row exists. Same printable component as the Employees page.
+  const reportData = useMemo(() => {
+    const p = detail.profile || {};
+    const accepted = (detail.offers || []).find((o) => o.status === 'Accepted');
+    const timeline = [
+      ...(detail.events || []).map((e) => ({
+        source: 'Onboarding', occurred_at: e.created_at, type: e.event_type, description: e.detail, actor: e.user_name || null,
+      })),
+      ...(detail.documents || []).filter((d) => d.status && d.status !== 'Missing').map((d) => ({
+        source: 'Document', occurred_at: d.verified_at || d.updated_at || d.created_at, type: d.status,
+        description: d.label, actor: null,
+      })),
+    ].filter((x) => x.occurred_at).sort((a, b) => new Date(a.occurred_at) - new Date(b.occurred_at));
+    return {
+      employee: {
+        id: detail.employee_id || detail.id,
+        first_name: p.first_name, last_name: p.last_name, email: p.email, phone: p.phone,
+        nationality: p.nationality, company_name: detail.company_name,
+        job_title_text: accepted?.job_title || p.current_job_title,
+        department_name: accepted?.department || null,
+        start_date: accepted?.joining_date || null,
+        status: stg(t, stage),
+        labour_contract_status: null, // still in onboarding — never contracted yet
+      },
+      timeline,
+      counts: { onboarding: (detail.events || []).length, documents: (detail.documents || []).length, assets: 0, leave: 0 },
+    };
+  }, [detail, stage, t]);
+
+  const exportActivity = async () => {
+    setExporting(true);
+    try {
+      await waitForPaint();
+      const who = [detail.profile?.first_name, detail.profile?.last_name].filter(Boolean).join('-') || `onboarding-${detail.id}`;
+      await printElementWithLetterhead(reportRef.current, detail.company_id, `onboarding-record-${who}.pdf`);
+    } catch (e) { toast.error(e.message || t('ob.export_failed')); }
+    finally { setExporting(false); }
   };
 
   return (
@@ -201,18 +246,26 @@ function DetailView({ detail, reload }) {
           </div>
           <span className="text-xs text-surface-500">{t('ob.profile')}</span>
         </div>
-        {!terminal && (
-          <div className="ml-auto flex items-center gap-2">
-            {detail.missing_requirements?.length > 0 && (
-              <span className="text-[11px] text-amber-600 max-w-[280px] truncate" title={detail.missing_requirements.join(' · ')}>
-                {t('ob.requirements_pending', { n: detail.missing_requirements.length })}
-              </span>
-            )}
+        <div className="ml-auto flex items-center gap-2">
+          {!terminal && detail.missing_requirements?.length > 0 && (
+            <span className="text-[11px] text-amber-600 max-w-[280px] truncate" title={detail.missing_requirements.join(' · ')}>
+              {t('ob.requirements_pending', { n: detail.missing_requirements.length })}
+            </span>
+          )}
+          <Button size="sm" variant="secondary" onClick={exportActivity} loading={exporting}>
+            <Download size={14} /> {t('ob.export_record')}
+          </Button>
+          {!terminal && (
             <Button size="sm" onClick={advance} disabled={!detail.can_advance}>
               <ArrowRight size={14} /> {t('ob.advance')}
             </Button>
-          </div>
-        )}
+          )}
+        </div>
+      </div>
+
+      {/* Off-screen printable report — captured by html2canvas on export */}
+      <div style={{ position: 'fixed', left: '-9999px', top: 0, width: '800px' }} aria-hidden="true">
+        <EmployeeHistoryReport ref={reportRef} data={reportData} company={{ name: detail.company_name, short_code: detail.company_short_code }} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[200px_1fr] gap-4">

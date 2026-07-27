@@ -940,6 +940,8 @@
     "basic_salary": "Basic salary",
     "full_salary": "Full salary",
     "employee_profile": "Employee Profile",
+    "export_record": "Export Record",
+    "export_failed": "Failed to generate the report",
     "change_photo": "Click to change the profile photo",
     "photo_saved": "Profile photo updated",
     "photo_save_failed": "Failed to upload the photo",
@@ -1652,6 +1654,8 @@
     "bank_save_failed": "Failed to save bank details",
     "bank_verified": "Bank details verified",
     "activity": "Activity",
+    "export_record": "Export Record",
+    "export_failed": "Failed to generate the report",
     "stage": {
       "draft": "Draft",
       "cv_uploaded": "CV Uploaded",

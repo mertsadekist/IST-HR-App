@@ -940,6 +940,8 @@
     "basic_salary": "الراتب الأساسي",
     "full_salary": "الراتب الإجمالي",
     "employee_profile": "ملف الموظف",
+    "export_record": "تصدير السجل",
+    "export_failed": "فشل إنشاء التقرير",
     "change_photo": "اضغط لتغيير الصورة الشخصية",
     "photo_saved": "تم تحديث الصورة الشخصية",
     "photo_save_failed": "فشل رفع الصورة",
@@ -1652,6 +1654,8 @@
     "bank_save_failed": "فشل حفظ تفاصيل البنك",
     "bank_verified": "تم توثيق تفاصيل البنك",
     "activity": "النشاط",
+    "export_record": "تصدير السجل",
+    "export_failed": "فشل إنشاء التقرير",
     "stage": {
       "draft": "مسودّة",
       "cv_uploaded": "رُفعت السيرة",
