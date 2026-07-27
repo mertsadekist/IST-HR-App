@@ -16,6 +16,15 @@ const tokenFor = (u) => jwt.sign({ id: u.id, name: u.name, role: u.role, company
 const auth = (t) => ({ Authorization: `Bearer ${t}` });
 let tokHrA, tokEmpA, tokHrB, annualTypeId;
 
+// A decision now has to be documented: the written request must be on file and
+// the deciding manager named. Helper attaches a stand-in scan of the request.
+const PROOF_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+const attachRequestProof = (requestId, token) => request
+  .post(`/api/leave/requests/${requestId}/files`).set(auth(token))
+  .field('kind', 'request_proof')
+  .attach('file', PROOF_PNG, { filename: 'request.png', contentType: 'image/png' });
+const DECISION = { approver_name: 'Line Manager' };
+
 beforeAll(async () => {
   const [a] = await pool.query('INSERT INTO companies SET ?', { name: `${tag}_A`, short_code: `${tag}A`.slice(0, 10), currency: 'AED', status: 'Active' });
   const [b] = await pool.query('INSERT INTO companies SET ?', { name: `${tag}_B`, short_code: `${tag}B`.slice(0, 10), currency: 'AED', status: 'Active' });
@@ -71,8 +80,15 @@ describe('Leave lifecycle + balance', () => {
     expect(reqRes.body.days).toBe(3);
     f.ids.req1 = reqRes.body.id;
 
+    // A decision requires the written request on file + the deciding manager named
+    const noProof = await request.put(`/api/leave/requests/${f.ids.req1}/approve`).set(auth(tokHrA)).send(DECISION);
+    expect(noProof.status).toBe(422);
+    expect((await attachRequestProof(f.ids.req1, tokHrA)).status).toBe(201);
+    const noName = await request.put(`/api/leave/requests/${f.ids.req1}/approve`).set(auth(tokHrA)).send({});
+    expect(noName.status).toBe(422);
+
     // HR approves
-    const appr = await request.put(`/api/leave/requests/${f.ids.req1}/approve`).set(auth(tokHrA)).send({});
+    const appr = await request.put(`/api/leave/requests/${f.ids.req1}/approve`).set(auth(tokHrA)).send(DECISION);
     expect(appr.status).toBe(200);
 
     // Balance now shows used 3, remaining 7
@@ -88,7 +104,8 @@ describe('Leave lifecycle + balance', () => {
       .send({ leave_type_id: annualTypeId, start_date: '2026-06-01', end_date: '2026-06-20' });
     expect(reqRes.status).toBe(201);
     f.ids.req2 = reqRes.body.id;
-    const appr = await request.put(`/api/leave/requests/${f.ids.req2}/approve`).set(auth(tokHrA)).send({});
+    await attachRequestProof(f.ids.req2, tokHrA);
+    const appr = await request.put(`/api/leave/requests/${f.ids.req2}/approve`).set(auth(tokHrA)).send(DECISION);
     expect(appr.status).toBe(400);
     expect(appr.body.error).toMatch(/insufficient/i);
   });

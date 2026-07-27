@@ -10,3 +10,8 @@ export const createRequest = (data) => api.post('/leave/requests', data);
 export const approveRequest = (id, data) => api.put(`/leave/requests/${id}/approve`, data || {});
 export const rejectRequest = (id, data) => api.put(`/leave/requests/${id}/reject`, data || {});
 export const cancelRequest = (id) => api.put(`/leave/requests/${id}/cancel`);
+export const getRequestFiles = (id) => api.get(`/leave/requests/${id}/files`);
+export const uploadRequestFile = (id, formData) => api.post(`/leave/requests/${id}/files`, formData, {
+  headers: { 'Content-Type': 'multipart/form-data' }
+});
+export const downloadLeaveFile = (fileId) => api.get(`/leave/files/${fileId}/download`, { responseType: 'blob' });

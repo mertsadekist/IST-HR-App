@@ -23,6 +23,9 @@ const COLUMN_GUARDS = [
   // Employee profile picture (file on the uploads volume, not inline base64).
   { table: 'employees', column: 'photo_path', ddl: 'ALTER TABLE employees ADD COLUMN photo_path VARCHAR(512) NULL' },
   { table: 'employees', column: 'photo_type', ddl: 'ALTER TABLE employees ADD COLUMN photo_type VARCHAR(20) NULL' },
+  // Leave: who actually approved (may not be a system user), and Full/Half/None pay.
+  { table: 'leave_requests', column: 'approver_name', ddl: 'ALTER TABLE leave_requests ADD COLUMN approver_name VARCHAR(200) NULL' },
+  { table: 'leave_types', column: 'paid_mode', ddl: "ALTER TABLE leave_types ADD COLUMN paid_mode ENUM('Full','Half','None') NOT NULL DEFAULT 'Full'" },
 ];
 
 // Tiny key/value store for global app settings (e.g. timezone).
@@ -129,6 +132,23 @@ const TABLE_GUARDS = [
      created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
      FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
      INDEX idx_visa_tpl_company (company_id)
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  // Scanned proof attached to a leave request — see server/apply_leave_docs.mjs.
+  `CREATE TABLE IF NOT EXISTS leave_files (
+     id               INT AUTO_INCREMENT PRIMARY KEY,
+     leave_request_id INT NOT NULL,
+     company_id       INT NOT NULL,
+     kind             ENUM('request_proof','approval_proof') NOT NULL DEFAULT 'request_proof',
+     file_name        VARCHAR(255) NULL,
+     file_type        VARCHAR(100) NULL,
+     file_size        INT NULL,
+     storage_key      VARCHAR(500) NOT NULL,
+     uploaded_by      INT NULL,
+     uploaded_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     INDEX idx_leave_file_req (leave_request_id, kind),
+     FOREIGN KEY (leave_request_id) REFERENCES leave_requests(id) ON DELETE CASCADE,
+     FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+     FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE SET NULL
    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 ];
 

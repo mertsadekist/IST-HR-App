@@ -9,7 +9,7 @@ import Badge from '@components/ui/Badge';
 import Modal from '@components/ui/Modal';
 import EmptyState from '@components/ui/EmptyState';
 import { toast } from 'react-toastify';
-import { CalendarDays, Plus, RefreshCw, Check, X } from 'lucide-react';
+import { CalendarDays, Plus, RefreshCw, Check, X, Upload } from 'lucide-react';
 import dayjs from 'dayjs';
 
 const apiErr = (e, f) => e?.response?.data?.error || (e?.response?.data?.errors?.[0]?.message) || f;
@@ -29,6 +29,7 @@ export default function Leave() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
   const [reqModal, setReqModal] = useState(false);
+  const [decision, setDecision] = useState(null); // { request, action }
   const [balModal, setBalModal] = useState(false);
   const [typeModal, setTypeModal] = useState(false);
 
@@ -46,15 +47,15 @@ export default function Leave() {
   };
   useEffect(() => { loadAll(); /* eslint-disable-next-line */ }, [currentCompanyId, statusFilter]);
 
+  // Approve/reject open a modal: the server requires the written request on
+  // file plus the name of the manager who actually made the call.
   const decide = async (r, action) => {
-    try {
-      if (action === 'approve') await leaveApi.approveRequest(r.id);
-      else if (action === 'reject') {
-        const note = window.prompt(t('leave.rejection_note')) ?? '';
-        await leaveApi.rejectRequest(r.id, { note });
-      } else if (action === 'cancel') await leaveApi.cancelRequest(r.id);
-      toast.success(t('common.updated')); loadAll();
-    } catch (e) { toast.error(apiErr(e, t('leave.action_failed'))); }
+    if (action === 'cancel') {
+      try { await leaveApi.cancelRequest(r.id); toast.success(t('common.updated')); loadAll(); }
+      catch (e) { toast.error(apiErr(e, t('leave.action_failed'))); }
+      return;
+    }
+    setDecision({ request: r, action });
   };
 
   return (
@@ -153,7 +154,9 @@ export default function Leave() {
               <div key={tp.id} className="flex items-center gap-3 p-3">
                 <span className="w-2.5 h-2.5 rounded-full" style={{ background: tp.color || '#7c3aed' }} />
                 <span className="font-medium text-surface-800">{tp.name}</span>
-                <Badge variant={tp.is_paid ? 'success' : 'info'} className="text-[10px]">{tp.is_paid ? t('leave.paid') : t('leave.unpaid')}</Badge>
+                <Badge variant={tp.paid_mode === 'None' ? 'info' : tp.paid_mode === 'Half' ? 'warning' : 'success'} className="text-[10px]">
+                  {t(`leave.pm_${String(tp.paid_mode || (tp.is_paid ? 'Full' : 'None')).toLowerCase()}`)}
+                </Badge>
                 {tp.company_id == null && <Badge variant="info" className="text-[10px]">{t('leave.global')}</Badge>}
                 <span className="ml-auto text-xs text-surface-400">{t('leave.days_per_year', { n: tp.default_days })}</span>
               </div>
@@ -164,6 +167,7 @@ export default function Leave() {
 
       {tab === 'report' && isHR && <ReportTab employees={employees} />}
 
+      <DecisionModal decision={decision} onClose={() => setDecision(null)} onDone={() => { setDecision(null); loadAll(); }} />
       <RequestModal open={reqModal} onClose={() => setReqModal(false)} types={types} isHR={isHR} employees={employees} onSaved={() => { setReqModal(false); loadAll(); }} />
       <BalanceModal open={balModal} onClose={() => setBalModal(false)} types={types} employees={employees} onSaved={() => { setBalModal(false); loadAll(); }} />
       <TypeModal open={typeModal} onClose={() => setTypeModal(false)} onSaved={() => { setTypeModal(false); loadAll(); }} />
@@ -268,6 +272,7 @@ function ReportTab({ employees = [] }) {
 function RequestModal({ open, onClose, types, isHR, employees = [], onSaved }) {
   const { t } = useTranslation();
   const [form, setForm] = useState({ leave_type_id: '', start_date: '', end_date: '', reason: '', employee_id: '' });
+  const [proof, setProof] = useState(null);
   const [saving, setSaving] = useState(false);
   const save = async () => {
     if (!form.leave_type_id || !form.start_date || !form.end_date) { toast.error(t('leave.type_dates_required')); return; }
@@ -275,8 +280,18 @@ function RequestModal({ open, onClose, types, isHR, employees = [], onSaved }) {
     try {
       const body = { ...form };
       if (!isHR || !body.employee_id) delete body.employee_id;
-      await leaveApi.createRequest(body); toast.success(t('leave.submitted')); onSaved();
+      const { data } = await leaveApi.createRequest(body);
+      // Attaching here is optional; the proof becomes mandatory at decision time.
+      if (proof && data?.id) {
+        const fd = new FormData();
+        fd.append('file', proof);
+        fd.append('kind', 'request_proof');
+        try { await leaveApi.uploadRequestFile(data.id, fd); }
+        catch (e) { toast.error(apiErr(e, t('leave.proof_upload_failed'))); }
+      }
+      toast.success(t('leave.submitted')); onSaved();
       setForm({ leave_type_id: '', start_date: '', end_date: '', reason: '', employee_id: '' });
+      setProof(null);
     } catch (e) { toast.error(apiErr(e, t('leave.submit_failed'))); } finally { setSaving(false); }
   };
   return (
@@ -300,8 +315,117 @@ function RequestModal({ open, onClose, types, isHR, employees = [], onSaved }) {
           </div>
         )}
         <div><label className="text-xs font-semibold text-surface-700">{t('leave.f_reason')}</label><textarea rows={2} value={form.reason} onChange={(e) => setForm((f) => ({ ...f, reason: e.target.value }))} className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1" /></div>
+        <div>
+          <label className="text-xs font-semibold text-surface-700">{t('leave.f_request_proof')}</label>
+          <label className="mt-1 flex items-center gap-2 border-2 border-dashed border-surface-200 rounded-lg px-3 py-2.5 cursor-pointer hover:border-brand-400">
+            <Upload size={14} className="text-surface-400" />
+            <span className="text-xs text-surface-500 truncate">{proof ? proof.name : t('leave.attach_proof')}</span>
+            <input type="file" className="hidden" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx" onChange={(e) => setProof(e.target.files?.[0] || null)} />
+          </label>
+          <p className="text-[10px] text-surface-400 mt-1">{t('leave.proof_hint')}</p>
+        </div>
         <Button onClick={save} loading={saving}>{t('leave.submit_request')}</Button>
       </div>
+    </Modal>
+  );
+}
+
+/**
+ * Approve / reject a request. The server refuses a decision unless the written
+ * request is on file and the deciding manager is named, so both are collected
+ * here — along with optional proof of the approval conversation itself.
+ */
+function DecisionModal({ decision, onClose, onDone }) {
+  const { t } = useTranslation();
+  const [approverName, setApproverName] = useState('');
+  const [note, setNote] = useState('');
+  const [requestProof, setRequestProof] = useState(null);
+  const [approvalProof, setApprovalProof] = useState(null);
+  const [existing, setExisting] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const req = decision?.request;
+  const isApprove = decision?.action === 'approve';
+
+  useEffect(() => {
+    setApproverName(''); setNote(''); setRequestProof(null); setApprovalProof(null); setExisting([]);
+    if (!req) return;
+    leaveApi.getRequestFiles(req.id).then(({ data }) => setExisting(data || [])).catch(() => setExisting([]));
+  }, [req]);
+
+  const hasRequestProof = existing.some((f) => f.kind === 'request_proof') || !!requestProof;
+
+  const submit = async () => {
+    if (!approverName.trim()) { toast.error(t('leave.approver_required')); return; }
+    if (!hasRequestProof) { toast.error(t('leave.request_proof_required')); return; }
+    setSaving(true);
+    try {
+      for (const [file, kind] of [[requestProof, 'request_proof'], [approvalProof, 'approval_proof']]) {
+        if (!file) continue;
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('kind', kind);
+        await leaveApi.uploadRequestFile(req.id, fd);
+      }
+      const body = { approver_name: approverName.trim(), note };
+      if (isApprove) await leaveApi.approveRequest(req.id, body);
+      else await leaveApi.rejectRequest(req.id, body);
+      toast.success(t('common.updated'));
+      onDone();
+    } catch (e) { toast.error(apiErr(e, t('leave.action_failed'))); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <Modal open={!!decision} onClose={onClose} size="md"
+      title={isApprove ? t('leave.approve_title') : t('leave.reject_title')}>
+      {req && (
+        <div className="space-y-3">
+          <div className="text-xs bg-surface-50 rounded-lg p-2.5">
+            <span className="font-semibold text-surface-800">{req.first_name} {req.last_name}</span>
+            <span className="text-surface-500"> · {req.leave_type_name} · {dayjs(req.start_date).format('MMM D')} → {dayjs(req.end_date).format('MMM D, YYYY')} · {req.days} {t('leave.days')}</span>
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-surface-700">{t('leave.f_approver_name')} *</label>
+            <input value={approverName} onChange={(e) => setApproverName(e.target.value)} placeholder={t('leave.approver_placeholder')}
+              className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1" />
+            <p className="text-[10px] text-surface-400 mt-1">{t('leave.approver_hint')}</p>
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-surface-700">{t('leave.f_request_proof')} *</label>
+            {existing.filter((f) => f.kind === 'request_proof').map((f) => (
+              <p key={f.id} className="text-[11px] text-emerald-600 mt-1">✓ {f.file_name}</p>
+            ))}
+            <label className="mt-1 flex items-center gap-2 border-2 border-dashed border-surface-200 rounded-lg px-3 py-2.5 cursor-pointer hover:border-brand-400">
+              <Upload size={14} className="text-surface-400" />
+              <span className="text-xs text-surface-500 truncate">{requestProof ? requestProof.name : t('leave.attach_proof')}</span>
+              <input type="file" className="hidden" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx" onChange={(e) => setRequestProof(e.target.files?.[0] || null)} />
+            </label>
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-surface-700">{t('leave.f_approval_proof')}</label>
+            <label className="mt-1 flex items-center gap-2 border-2 border-dashed border-surface-200 rounded-lg px-3 py-2.5 cursor-pointer hover:border-brand-400">
+              <Upload size={14} className="text-surface-400" />
+              <span className="text-xs text-surface-500 truncate">{approvalProof ? approvalProof.name : t('leave.attach_approval_proof')}</span>
+              <input type="file" className="hidden" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx" onChange={(e) => setApprovalProof(e.target.files?.[0] || null)} />
+            </label>
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-surface-700">{isApprove ? t('leave.decision_note') : t('leave.rejection_note')}</label>
+            <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1" />
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={onClose}>{t('common.cancel')}</Button>
+            <Button variant={isApprove ? 'primary' : 'danger'} onClick={submit} loading={saving}>
+              {isApprove ? t('common.approve') : t('common.reject')}
+            </Button>
+          </div>
+        </div>
+      )}
     </Modal>
   );
 }
@@ -339,12 +463,12 @@ function BalanceModal({ open, onClose, types, employees = [], onSaved }) {
 
 function TypeModal({ open, onClose, onSaved }) {
   const { t } = useTranslation();
-  const [form, setForm] = useState({ name: '', default_days: 0, is_paid: true });
+  const [form, setForm] = useState({ name: '', default_days: 0, paid_mode: 'Full' });
   const [saving, setSaving] = useState(false);
   const save = async () => {
     if (!form.name) { toast.error(t('leave.name_required')); return; }
     setSaving(true);
-    try { await leaveApi.createType({ ...form, default_days: Number(form.default_days) }); toast.success(t('leave.type_added')); onSaved(); setForm({ name: '', default_days: 0, is_paid: true }); }
+    try { await leaveApi.createType({ ...form, default_days: Number(form.default_days) }); toast.success(t('leave.type_added')); onSaved(); setForm({ name: '', default_days: 0, paid_mode: 'Full' }); }
     catch (e) { toast.error(apiErr(e, t('common.operation_failed'))); } finally { setSaving(false); }
   };
   return (
@@ -353,7 +477,14 @@ function TypeModal({ open, onClose, onSaved }) {
         <div><label className="text-xs font-semibold text-surface-700">{t('leave.f_name')} *</label><input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1" /></div>
         <div className="grid grid-cols-2 gap-3 items-end">
           <div><label className="text-xs font-semibold text-surface-700">{t('leave.f_default_days')}</label><input type="number" value={form.default_days} onChange={(e) => setForm((f) => ({ ...f, default_days: e.target.value }))} className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1" /></div>
-          <label className="flex items-center gap-2 text-sm pb-2"><input type="checkbox" checked={form.is_paid} onChange={(e) => setForm((f) => ({ ...f, is_paid: e.target.checked }))} /> {t('leave.paid_leave')}</label>
+          <div>
+            <label className="text-xs font-semibold text-surface-700">{t('leave.f_paid_mode')}</label>
+            <select value={form.paid_mode} onChange={(e) => setForm((f) => ({ ...f, paid_mode: e.target.value }))} className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1">
+              <option value="Full">{t('leave.pm_full')}</option>
+              <option value="Half">{t('leave.pm_half')}</option>
+              <option value="None">{t('leave.pm_none')}</option>
+            </select>
+          </div>
         </div>
         <Button onClick={save} loading={saving}>{t('common.add')}</Button>
       </div>

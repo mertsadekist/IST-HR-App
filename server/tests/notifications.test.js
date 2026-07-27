@@ -65,7 +65,12 @@ describe('Notifications — personal scoping & lifecycle', () => {
     // set entitlement + create + approve
     await request.post('/api/leave/balances').set(auth(tokHrA)).send({ employee_id: f.ids.emp, leave_type_id: annualTypeId, year: 2026, entitled: 20 });
     const lr = await request.post('/api/leave/requests').set(auth(tokEmpA)).send({ leave_type_id: annualTypeId, start_date: '2026-10-01', end_date: '2026-10-02' });
-    await request.put(`/api/leave/requests/${lr.body.id}/approve`).set(auth(tokHrA)).send({});
+    // A decision requires the written request on file + the deciding manager named.
+    await request.post(`/api/leave/requests/${lr.body.id}/files`).set(auth(tokHrA))
+      .field('kind', 'request_proof')
+      .attach('file', Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64'),
+        { filename: 'request.png', contentType: 'image/png' });
+    await request.put(`/api/leave/requests/${lr.body.id}/approve`).set(auth(tokHrA)).send({ approver_name: 'Line Manager' });
 
     const empList = await request.get('/api/notifications').set(auth(tokEmpA));
     expect(empList.body.some((n) => n.title === 'Leave approved')).toBe(true);

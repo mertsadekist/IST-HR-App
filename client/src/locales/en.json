@@ -966,7 +966,8 @@
     "onboarding_wizard": "Employee Onboarding Hub",
     "profile_tab": "Profile Details",
     "subtitle": "Manage company staff and complete full onboarding setup.",
-    "title": "Employees Hub"
+    "title": "Employees Hub",
+    "leave_tab": "Leave"
   },
   "inventory": {
     "actions": "Actions",
@@ -1166,7 +1167,27 @@
     "th_reason": "Reason",
     "th_decided_by": "Decided by",
     "no_report_selection": "Select an employee to see their full-year leave report",
-    "no_report_requests": "No leave requests for this employee in this year"
+    "no_report_requests": "No leave requests for this employee in this year",
+    "approve_title": "Approve Leave Request",
+    "reject_title": "Reject Leave Request",
+    "f_approver_name": "Decision made by (manager)",
+    "approver_placeholder": "e.g. Mohammed Shahbaaz",
+    "approver_hint": "The manager who actually approved or refused this — they may have decided verbally or over chat, outside the system.",
+    "approver_required": "Enter the name of the manager who made the decision",
+    "f_request_proof": "Copy of the written request",
+    "attach_proof": "Attach a scan or screenshot…",
+    "proof_hint": "e.g. a screenshot of the email or message requesting the leave. Required before a decision can be recorded.",
+    "request_proof_required": "Attach a copy of the written request first",
+    "f_approval_proof": "Proof of the decision (optional)",
+    "attach_approval_proof": "Attach the approval / refusal message…",
+    "decision_note": "Note (optional)",
+    "proof_upload_failed": "The request was saved but the attachment failed to upload",
+    "f_paid_mode": "Payment",
+    "pm_full": "Full Paid",
+    "pm_half": "Half Paid",
+    "pm_none": "No Paid",
+    "kind_request_proof": "Request",
+    "kind_approval_proof": "Decision"
   },
   "attendance": {
     "title": "Attendance",
