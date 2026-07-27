@@ -3,7 +3,7 @@ import { useSelector } from 'react-redux';
 import Card from '@components/ui/Card';
 import Button from '@components/ui/Button';
 import Badge from '@components/ui/Badge';
-import { Users, Plus, Mail, Phone, Building2, Briefcase, FileText, Upload, Download, Calendar, DollarSign, Globe, Loader2, Pencil, X, AlertTriangle } from 'lucide-react';
+import { Users, Plus, Mail, Phone, Building2, Briefcase, FileText, Upload, Download, Calendar, DollarSign, Globe, Loader2, Pencil, X, AlertTriangle, Camera } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import api from '@api/axios';
 import * as employeesApi from '@api/employeesApi';
@@ -36,6 +36,8 @@ export default function Employees() {
   const [departments, setDepartments] = useState([]);
   const [creatingLogin, setCreatingLogin] = useState(false);
   const [newLoginCreds, setNewLoginCreds] = useState(null);
+  const [photoUrl, setPhotoUrl] = useState(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
 
   // Official mail domains of the employee's own company (not the selected entity).
   const companyDomains = useMemo(() => {
@@ -74,6 +76,7 @@ export default function Employees() {
     setNewLoginCreds(null);
     setEmpDocs([]);
     setDocsLoading(true);
+    loadPhoto(emp);
     try {
       const { data } = await employeesApi.getEmployeeDocuments(emp.id);
       setEmpDocs(data || []);
@@ -127,6 +130,37 @@ export default function Employees() {
     } finally {
       setSavingProfile(false);
     }
+  };
+
+  // Photo bytes come from an authenticated endpoint, so they're fetched as a
+  // blob and exposed as an object URL. Revoked whenever it's replaced/cleared.
+  const loadPhoto = async (emp) => {
+    setPhotoUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
+    if (!emp?.photo_path) return;
+    try {
+      const { data } = await employeesApi.getEmployeePhotoBytes(emp.id);
+      setPhotoUrl(URL.createObjectURL(data));
+    } catch { /* no photo / not readable */ }
+  };
+  useEffect(() => () => { if (photoUrl) URL.revokeObjectURL(photoUrl); }, [photoUrl]);
+
+  const handlePhotoPick = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setPhotoBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append('photo', file);
+      await employeesApi.uploadEmployeePhoto(selectedEmp.id, fd);
+      const { data } = await employeesApi.getEmployee(selectedEmp.id);
+      setSelectedEmp(data);
+      setEmployees((list) => list.map((x) => (x.id === data.id ? { ...x, photo_path: data.photo_path, photo_type: data.photo_type } : x)));
+      await loadPhoto(data);
+      toast.success(t('employees.photo_saved'));
+    } catch (err) {
+      toast.error(err.response?.data?.error || t('employees.photo_save_failed'));
+    } finally { setPhotoBusy(false); }
   };
 
   const createLogin = async () => {
@@ -277,10 +311,42 @@ export default function Employees() {
         <Modal
           open={!!selectedEmp}
           onClose={() => setSelectedEmp(null)}
-          title={`${selectedEmp.first_name} ${selectedEmp.last_name}`}
+          title={t('employees.employee_profile')}
           size="lg"
         >
           <div className="space-y-4">
+            {/* Employee card — photo + identity */}
+            <div className="flex items-center gap-4 p-4 rounded-2xl bg-gradient-to-r from-brand-50 to-surface-50 border border-brand-100">
+              <label className={`relative group shrink-0 ${photoBusy ? 'pointer-events-none' : 'cursor-pointer'}`} title={t('employees.change_photo')}>
+                <span className="block w-20 h-20 rounded-full overflow-hidden bg-brand-100 text-brand-700 ring-2 ring-white shadow-sm">
+                  {photoUrl ? (
+                    <img src={photoUrl} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="w-full h-full flex items-center justify-center text-xl font-bold">
+                      {selectedEmp.first_name?.[0]}{selectedEmp.last_name?.[0]}
+                    </span>
+                  )}
+                </span>
+                <span className="absolute inset-0 rounded-full bg-black/45 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  {photoBusy ? <Loader2 size={18} className="text-white animate-spin" /> : <Camera size={18} className="text-white" />}
+                </span>
+                <input type="file" className="hidden" accept="image/png,image/jpeg,image/webp" onChange={handlePhotoPick} disabled={photoBusy} />
+              </label>
+              <div className="min-w-0">
+                <h2 className="text-lg font-bold text-surface-900 truncate">{selectedEmp.first_name} {selectedEmp.last_name}</h2>
+                <p className="text-sm text-surface-600 truncate">
+                  {selectedEmp.job_title_text || selectedEmp.job_title_name || t('employees.no_job_title')}
+                  {selectedEmp.department_name ? ` · ${selectedEmp.department_name}` : ''}
+                </p>
+                <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                  <Badge variant={selectedEmp.status === 'Active' ? 'success' : 'neutral'}>{selectedEmp.status}</Badge>
+                  <Badge variant={selectedEmp.labour_contract_status === 'Issued' ? 'success' : 'danger'}>
+                    {t('employees.labour_contract_status')}: {t(selectedEmp.labour_contract_status === 'Issued' ? 'employees.lc_issued' : 'employees.lc_not_issued')}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+
             {/* Tabs Selector */}
             <div className="flex border-b border-surface-200">
               <button

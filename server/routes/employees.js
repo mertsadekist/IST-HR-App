@@ -23,6 +23,21 @@ const upload = multer({
   },
 });
 
+// Employee profile picture. Stored on the persistent uploads volume so it
+// survives redeploys (mirrors the company letterhead upload).
+const PHOTO_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' };
+const photoUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, ensureUploadDir('employee_photos')),
+    filename: (req, file, cb) => cb(null, `emp_${req.params.id}_${Date.now()}.${PHOTO_EXT[file.mimetype] || 'bin'}`),
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (PHOTO_EXT[file.mimetype]) return cb(null, true);
+    cb(new Error('Profile photo must be a PNG, JPG, or WEBP image'));
+  },
+});
+
 const router = Router();
 router.use(auth, tenantScope);
 
@@ -199,6 +214,59 @@ router.post('/:id/create-login', authorize('admin', 'hr_manager'), async (req, r
     await addAudit(pool, req.user, 'Employees', 'Login Created', `Login account created for employee ${emp.first_name} ${emp.last_name}`);
     res.status(201).json({ user_id: userId, username, password: tempPassword });
   } catch (err) { console.error('POST /employees/:id/create-login error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// ==================== Profile photo ====================
+
+// Turns multer rejections (wrong type, too large) into a 4xx instead of letting
+// them bubble to the generic 500 handler.
+const acceptPhoto = (req, res, next) => photoUpload.single('photo')(req, res, (err) => {
+  if (!err) return next();
+  const tooBig = err.code === 'LIMIT_FILE_SIZE';
+  res.status(tooBig ? 413 : 422).json({ error: tooBig ? 'Photo must be 5 MB or smaller' : (err.message || 'Invalid photo upload') });
+});
+
+// POST /api/employees/:id/photo — upload/replace the profile picture (scoped).
+router.post('/:id/photo', authorize('admin', 'hr_manager'), acceptPhoto, async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'A photo file is required' });
+    const emp = await getScopedEmployee(req, req.params.id);
+    if (!emp) {
+      fs.unlink(req.file.path, () => {});
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+    // Drop the previous file so replaced photos don't accumulate on the volume.
+    if (emp.photo_path) fs.unlink(uploadPath('employee_photos', emp.photo_path), () => {});
+    const type = PHOTO_EXT[req.file.mimetype];
+    await pool.query('UPDATE employees SET photo_path = ?, photo_type = ? WHERE id = ?', [req.file.filename, type, emp.id]);
+    await addAudit(pool, req.user, 'Employees', 'Photo Updated', `Profile photo set for ${emp.first_name} ${emp.last_name}`);
+    res.json({ success: true, type });
+  } catch (err) { console.error('POST /employees/:id/photo error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// GET /api/employees/:id/photo — stream the photo (any authenticated user in scope).
+router.get('/:id/photo', async (req, res) => {
+  try {
+    const emp = await getScopedEmployee(req, req.params.id);
+    if (!emp || !emp.photo_path) return res.status(404).json({ error: 'No photo set' });
+    const filePath = uploadPath('employee_photos', emp.photo_path);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Photo file missing on disk' });
+    res.type(emp.photo_type === 'png' ? 'image/png' : emp.photo_type === 'webp' ? 'image/webp' : 'image/jpeg');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.sendFile(filePath);
+  } catch (err) { console.error('GET /employees/:id/photo error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// DELETE /api/employees/:id/photo — remove the photo (admin only, scoped).
+router.delete('/:id/photo', authorize('admin'), async (req, res) => {
+  try {
+    const emp = await getScopedEmployee(req, req.params.id);
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+    if (emp.photo_path) fs.unlink(uploadPath('employee_photos', emp.photo_path), () => {});
+    await pool.query('UPDATE employees SET photo_path = NULL, photo_type = NULL WHERE id = ?', [emp.id]);
+    await addAudit(pool, req.user, 'Employees', 'Photo Removed', `Profile photo removed for ${emp.first_name} ${emp.last_name}`);
+    res.json({ success: true });
+  } catch (err) { console.error('DELETE /employees/:id/photo error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
 // POST /api/employees — Create employee manually

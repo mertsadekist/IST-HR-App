@@ -243,6 +243,9 @@ CREATE TABLE IF NOT EXISTS employees (
     basic_salary    DECIMAL(12, 2) NULL,
     full_salary     DECIMAL(12, 2) NULL,
     attendance_id   VARCHAR(100) NULL,
+    -- Profile picture: stored on the uploads volume, streamed via GET /employees/:id/photo.
+    photo_path      VARCHAR(512) NULL,
+    photo_type      VARCHAR(20) NULL,
     status          ENUM('Onboarding', 'Active', 'Offboarding', 'Exited') DEFAULT 'Onboarding',
     -- Has the UAE labour contract / work residency actually been issued?
     -- 'Not Issued' = still probationary/trial (a legal notice is shown in the UI).

@@ -20,6 +20,9 @@ const COLUMN_GUARDS = [
   { table: 'employees', column: 'labour_contract_issued_at', ddl: 'ALTER TABLE employees ADD COLUMN labour_contract_issued_at DATE NULL' },
   // Official mail domains owned by the company (comma-separated).
   { table: 'companies', column: 'email_domains', ddl: 'ALTER TABLE companies ADD COLUMN email_domains VARCHAR(500) NULL' },
+  // Employee profile picture (file on the uploads volume, not inline base64).
+  { table: 'employees', column: 'photo_path', ddl: 'ALTER TABLE employees ADD COLUMN photo_path VARCHAR(512) NULL' },
+  { table: 'employees', column: 'photo_type', ddl: 'ALTER TABLE employees ADD COLUMN photo_type VARCHAR(20) NULL' },
 ];
 
 // Tiny key/value store for global app settings (e.g. timezone).
