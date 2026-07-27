@@ -1,5 +1,8 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { useSelector } from 'react-redux';
 import * as auditApi from '@api/auditApi';
+import LogReport from '@components/reports/LogReport';
+import { printElementWithLetterhead, waitForPaint } from '@utils/printDoc';
 import Card from '@components/ui/Card';
 import Badge from '@components/ui/Badge';
 import EmptyState from '@components/ui/EmptyState';
@@ -17,6 +20,7 @@ const moduleColors = {
 };
 
 const EMPTY_FILTERS = { user: '', module: '', action: '', from: '', to: '', search: '' };
+const PAGE_SIZE = 50;
 
 export default function AuditLog() {
   const { t } = useTranslation();
@@ -25,20 +29,28 @@ export default function AuditLog() {
   const [loading, setLoading] = useState(true);
   const [facets, setFacets] = useState({ modules: [], actions: [] });
   const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [page, setPage] = useState(1);
+  const [exporting, setExporting] = useState(false);
+  const [reportRows, setReportRows] = useState(null);
+  const reportRef = useRef(null);
+  const { currentCompanyId } = useSelector((s) => s.entity);
 
   const hasFilters = useMemo(() => Object.values(filters).some(Boolean), [filters]);
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   // Build the query params: drop empty values. The audit log is a global
   // security trail — it is NOT scoped to the selected Entity, so rows with a
   // NULL company_id (logins, system/pre-migration events) always appear.
   const params = useMemo(() => {
-    const p = { limit: 200 };
+    // limit stays within the server's cap of 100; the page used to ask for 200
+    // and silently receive at most 100 while displaying the true total.
+    const p = { page, limit: PAGE_SIZE };
     for (const [k, v] of Object.entries(filters)) if (v) p[k] = v;
     return p;
-  }, [filters]);
+  }, [filters, page]);
 
-  const set = (key, value) => setFilters((f) => ({ ...f, [key]: value }));
-  const clearFilters = () => setFilters(EMPTY_FILTERS);
+  const set = (key, value) => { setFilters((f) => ({ ...f, [key]: value })); setPage(1); };
+  const clearFilters = () => { setFilters(EMPTY_FILTERS); setPage(1); };
 
   // Load the distinct module/action lists for the dropdowns (once).
   useEffect(() => {
@@ -64,6 +76,21 @@ export default function AuditLog() {
     return () => clearTimeout(id);
   }, [params, t]);
 
+  // The audit trail itself is global, but the letterhead has to come from some
+  // company — the entity the operator is working in.
+  const exportPdf = async () => {
+    setExporting(true);
+    try {
+      const { data } = await auditApi.exportAuditLogs(params);
+      const parsed = data instanceof Blob ? JSON.parse(await data.text()) : data;
+      setReportRows(parsed.logs || []);
+      await waitForPaint();
+      await printElementWithLetterhead(reportRef.current, currentCompanyId, `audit-log-${dayjs().format('YYYY-MM-DD')}.pdf`);
+    } catch (e) {
+      toast.error(e.message || t('audit.export_failed'));
+    } finally { setExporting(false); }
+  };
+
   const exportLogs = async () => {
     try {
       const { data } = await auditApi.exportAuditLogs(params);
@@ -88,6 +115,9 @@ export default function AuditLog() {
           <p className="text-surface-500 mt-0.5 text-sm">{t('audit.subtitle', 'Track all system actions and changes')}</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="secondary" onClick={exportPdf} loading={exporting}>
+            <Download size={16} /> {t('audit.export_pdf')}
+          </Button>
           <Button variant="secondary" onClick={exportLogs}>
             <Download size={16} /> {t('audit.export_json', 'Export JSON')}
           </Button>
@@ -190,8 +220,48 @@ export default function AuditLog() {
               </tbody>
             </table>
           </div>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-5 py-3 border-t border-surface-100 bg-surface-50/30">
+              <p className="text-xs text-surface-400">
+                {t('audit.showing')} {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} {t('audit.of')} {total}
+              </p>
+              <div className="flex gap-1">
+                <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium bg-surface-100 text-surface-600 hover:bg-surface-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                  {t('common.previous', 'Previous')}
+                </button>
+                <span className="px-3 py-1.5 text-xs text-surface-500">{page} / {totalPages}</span>
+                <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium bg-surface-100 text-surface-600 hover:bg-surface-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                  {t('common.next', 'Next')}
+                </button>
+              </div>
+            </div>
+          )}
         </Card>
       )}
+
+      {/* Off-screen printable report — captured by html2canvas on export */}
+      <div style={{ position: 'fixed', left: '-9999px', top: 0, width: '800px' }} aria-hidden="true">
+        {reportRows && (
+          <LogReport
+            ref={reportRef}
+            title="Audit Log Report"
+            subtitle="تقرير سجل التدقيق"
+            appliedFilters={Object.entries(filters).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`)}
+            columns={AUDIT_REPORT_COLUMNS}
+            rows={reportRows}
+          />
+        )}
+      </div>
     </div>
   );
 }
+
+const AUDIT_REPORT_COLUMNS = [
+  { key: 'created_at', label: 'Time', width: '14%', format: (v) => (v ? dayjs(v).format('DD/MM/YY HH:mm') : '—') },
+  { key: 'user_name', label: 'User', width: '16%' },
+  { key: 'module', label: 'Module', width: '13%' },
+  { key: 'action', label: 'Action', width: '15%' },
+  { key: 'detail', label: 'Details' },
+];

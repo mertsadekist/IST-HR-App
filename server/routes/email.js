@@ -111,63 +111,109 @@ router.post('/send-bulk', authorize('admin', 'hr_manager'), async (req, res) => 
   }
 });
 
+// 'YYYY-MM-DDTHH:mm' from a datetime-local input → MySQL DATETIME.
+const normDate = (s) => String(s).replace('T', ' ');
+
+/**
+ * Shared filter clause for the email log. Aliases are passed in because the
+ * count query runs without the users join.
+ * Status is matched case-insensitively so the UI can send either casing.
+ */
+function emailFilters(req, { el = 'el', joinUsers = true } = {}) {
+  const clauses = [];
+  const params = [];
+  const q = req.query;
+  if (q.status) { clauses.push(`LOWER(${el}.status) = LOWER(?)`); params.push(q.status); }
+  if (q.module) { clauses.push(`${el}.related_module = ?`); params.push(q.module); }
+  if (q.template) { clauses.push(`${el}.template_type = ?`); params.push(q.template); }
+  if (q.sent_by) { clauses.push(`${el}.sent_by = ?`); params.push(q.sent_by); }
+  if (q.search) {
+    clauses.push(`(${el}.to_email LIKE ? OR ${el}.subject LIKE ? OR ${el}.to_name LIKE ?)`);
+    params.push(`%${q.search}%`, `%${q.search}%`, `%${q.search}%`);
+  }
+  if (q.from) { clauses.push(`${el}.sent_at >= ?`); params.push(normDate(q.from)); }
+  if (q.to) { clauses.push(`${el}.sent_at <= ?`); params.push(normDate(q.to)); }
+  if (q.user && joinUsers) { clauses.push('u.name LIKE ?'); params.push(`%${q.user}%`); }
+  return { clause: clauses.length ? ' AND ' + clauses.join(' AND ') : '', params };
+}
+
 // GET /api/email/log — Email history with filters (scoped)
 router.get('/log', authorize('admin', 'hr_manager'), async (req, res) => {
   try {
-    const { page = 1, limit = 25, status, module: relatedModule, search } = req.query;
-    const safeLimit = Math.min(parseInt(limit) || 25, 100);
-    const safePage = Math.max(parseInt(page) || 1, 1);
+    const safeLimit = Math.min(parseInt(req.query.limit) || 25, 100);
+    const safePage = Math.max(parseInt(req.query.page) || 1, 1);
     const offset = (safePage - 1) * safeLimit;
 
     const co = companyClause(req, 'el.company_id');
-    const coCount = companyClause(req, 'company_id');
-    let sql = `SELECT el.*, u.name as sent_by_name FROM email_log el
-               LEFT JOIN users u ON el.sent_by = u.id WHERE 1=1` + co.clause;
-    let countSql = 'SELECT COUNT(*) as total FROM email_log WHERE 1=1' + coCount.clause;
-    const params = [...co.params];
-    const countParams = [...coCount.params];
+    const f = emailFilters(req);
+    const [rows] = await pool.query(
+      `SELECT el.*, u.name as sent_by_name FROM email_log el
+       LEFT JOIN users u ON el.sent_by = u.id
+       WHERE 1=1${co.clause}${f.clause}
+       ORDER BY el.sent_at DESC LIMIT ? OFFSET ?`,
+      [...co.params, ...f.params, safeLimit, offset]);
+    // Same joined shape so a `user` name filter counts consistently.
+    const [[{ total }]] = await pool.query(
+      `SELECT COUNT(*) as total FROM email_log el LEFT JOIN users u ON el.sent_by = u.id
+       WHERE 1=1${co.clause}${f.clause}`, [...co.params, ...f.params]);
 
-    if (status) {
-      sql += ' AND el.status = ?'; params.push(status);
-      countSql += ' AND status = ?'; countParams.push(status);
-    }
-    if (relatedModule) {
-      sql += ' AND el.related_module = ?'; params.push(relatedModule);
-      countSql += ' AND related_module = ?'; countParams.push(relatedModule);
-    }
-    if (search) {
-      sql += ' AND (el.to_email LIKE ? OR el.subject LIKE ? OR el.to_name LIKE ?)';
-      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
-      countSql += ' AND (to_email LIKE ? OR subject LIKE ? OR to_name LIKE ?)';
-      countParams.push(`%${search}%`, `%${search}%`, `%${search}%`);
-    }
-
-    sql += ' ORDER BY el.sent_at DESC LIMIT ? OFFSET ?';
-    params.push(safeLimit, offset);
-
-    const [rows] = await pool.query(sql, params);
-    const [[{ total }]] = await pool.query(countSql, countParams);
-
-    res.json({ data: rows, total, page: safePage, limit: safeLimit });
+    res.json({ data: rows, total, page: safePage, limit: safeLimit, totalPages: Math.ceil(total / safeLimit) });
   } catch (err) {
     console.error('GET /email/log error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// GET /api/email/log/stats — Email stats summary (scoped)
+// GET /api/email/log/facets — distinct values for the filter dropdowns (scoped)
+router.get('/log/facets', authorize('admin', 'hr_manager'), async (req, res) => {
+  try {
+    const co = companyClause(req, 'el.company_id');
+    const [modules] = await pool.query(
+      `SELECT DISTINCT el.related_module AS v FROM email_log el WHERE el.related_module IS NOT NULL${co.clause} ORDER BY v`, co.params);
+    const [templates] = await pool.query(
+      `SELECT DISTINCT el.template_type AS v FROM email_log el WHERE el.template_type IS NOT NULL${co.clause} ORDER BY v`, co.params);
+    const [senders] = await pool.query(
+      `SELECT DISTINCT u.id, u.name FROM email_log el JOIN users u ON el.sent_by = u.id WHERE 1=1${co.clause} ORDER BY u.name`, co.params);
+    res.json({ modules: modules.map((r) => r.v), templates: templates.map((r) => r.v), senders });
+  } catch (err) {
+    console.error('GET /email/log/facets error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/email/log/export — every matching row, unpaginated (feeds the PDF report)
+router.get('/log/export', authorize('admin', 'hr_manager'), async (req, res) => {
+  try {
+    const co = companyClause(req, 'el.company_id');
+    const f = emailFilters(req);
+    const [rows] = await pool.query(
+      `SELECT el.id, el.to_email, el.to_name, el.subject, el.template_type, el.related_module,
+              el.status, el.error_message, el.sent_at, u.name as sent_by_name
+       FROM email_log el LEFT JOIN users u ON el.sent_by = u.id
+       WHERE 1=1${co.clause}${f.clause}
+       ORDER BY el.sent_at DESC`, [...co.params, ...f.params]);
+    res.json({ exported_at: new Date().toISOString(), count: rows.length, logs: rows });
+  } catch (err) {
+    console.error('GET /email/log/export error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/email/log/stats — summary for the active filter set (scoped)
 router.get('/log/stats', authorize('admin', 'hr_manager'), async (req, res) => {
   try {
-    const co = companyClause(req, 'company_id');
-    const [rows] = await pool.query(`
-      SELECT
-        COUNT(*) as total,
-        SUM(status = 'Sent') as sent,
-        SUM(status = 'Failed') as failed,
-        SUM(status = 'Queued') as queued
-      FROM email_log WHERE 1=1` + co.clause, co.params);
+    const co = companyClause(req, 'el.company_id');
+    const f = emailFilters(req);
+    const [rows] = await pool.query(
+      `SELECT COUNT(*) as total,
+              SUM(el.status = 'Sent') as sent,
+              SUM(el.status = 'Failed') as failed,
+              SUM(el.status = 'Queued') as queued
+       FROM email_log el LEFT JOIN users u ON el.sent_by = u.id
+       WHERE 1=1${co.clause}${f.clause}`, [...co.params, ...f.params]);
     res.json(rows[0]);
   } catch (err) {
+    console.error('GET /email/log/stats error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

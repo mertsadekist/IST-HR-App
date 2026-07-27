@@ -838,7 +838,11 @@
     "time": "Time",
     "title": "Audit Log",
     "to": "To",
-    "user": "User"
+    "user": "User",
+    "export_pdf": "Export PDF",
+    "export_failed": "Failed to generate the report",
+    "showing": "Showing",
+    "of": "of"
   },
   "email": {
     "body": "Body",
@@ -889,7 +893,7 @@
     "queued": "Queued",
     "search_placeholder": "Search by recipient, subject...",
     "sent": "Sent",
-    "sent_by": "Sent By",
+    "sent_by": "Sent by",
     "showing": "Showing",
     "status": "Status",
     "subject": "Subject",
@@ -897,7 +901,11 @@
     "template": "Template",
     "title": "Email Log",
     "to": "To",
-    "total_emails": "Total Emails"
+    "total_emails": "Total Emails",
+    "export_pdf": "Export PDF",
+    "export_failed": "Failed to generate the report",
+    "clear_filters": "Clear filters",
+    "from": "From"
   },
   "email_settings": {
     "authentication": "Authentication",

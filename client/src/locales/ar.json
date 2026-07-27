@@ -838,7 +838,11 @@
     "time": "الوقت",
     "title": "سجلّ التدقيق",
     "to": "إلى",
-    "user": "المستخدم"
+    "user": "المستخدم",
+    "export_pdf": "تصدير PDF",
+    "export_failed": "فشل إنشاء التقرير",
+    "showing": "عرض",
+    "of": "من"
   },
   "email": {
     "body": "النص",
@@ -889,15 +893,19 @@
     "queued": "في الانتظار",
     "search_placeholder": "ابحث بالمستلِم أو الموضوع...",
     "sent": "مُرسَل",
-    "sent_by": "أرسله",
+    "sent_by": "أُرسلت بواسطة",
     "showing": "عرض",
     "status": "الحالة",
     "subject": "الموضوع",
     "subtitle": "تتبّع جميع الرسائل الصادرة وحالة التسليم",
     "template": "القالب",
     "title": "سجلّ البريد",
-    "to": "إلى",
-    "total_emails": "إجمالي الرسائل"
+    "to": "إلى تاريخ",
+    "total_emails": "إجمالي الرسائل",
+    "export_pdf": "تصدير PDF",
+    "export_failed": "فشل إنشاء التقرير",
+    "clear_filters": "مسح عوامل التصفية",
+    "from": "من تاريخ"
   },
   "email_settings": {
     "authentication": "المصادقة",
