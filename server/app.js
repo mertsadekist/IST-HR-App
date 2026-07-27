@@ -75,6 +75,13 @@ app.use(helmet({
       // to upgrade same-origin asset requests to https — that breaks asset
       // loading (503/CORS) when the page itself is served over http.
       'upgrade-insecure-requests': null,
+      // Helmet's default img-src is "'self' data:". Authenticated images
+      // (employee photos, company letterheads) can't be fetched by a bare
+      // <img src> — the Bearer token lives in the axios interceptor — so they
+      // are read as blobs and shown via URL.createObjectURL. A blob: URL can
+      // only be minted by same-origin script, so allowing it here does not
+      // widen the origin set the page may load images from.
+      'img-src': ["'self'", 'data:', 'blob:'],
     },
   },
 }));
