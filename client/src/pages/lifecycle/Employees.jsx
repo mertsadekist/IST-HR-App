@@ -39,7 +39,11 @@ export default function Employees() {
   const [departments, setDepartments] = useState([]);
   const [creatingLogin, setCreatingLogin] = useState(false);
   const [newLoginCreds, setNewLoginCreds] = useState(null);
-  const [photoUrl, setPhotoUrl] = useState(null);
+  // Photo bytes come from an authenticated endpoint, so an <img src> can't
+  // fetch them directly — they're read as blobs into a map of object URLs
+  // keyed by employee id, shared by the list avatars and the profile card.
+  const [photoUrls, setPhotoUrls] = useState({});
+  const photoUrlsRef = useRef({});
   const [photoBusy, setPhotoBusy] = useState(false);
   const [historyData, setHistoryData] = useState(null);
   const [exporting, setExporting] = useState(false);
@@ -57,10 +61,13 @@ export default function Employees() {
 
   const loadEmployees = async () => {
     setLoading(true);
+    revokeAllPhotos(); // the previous company's blobs are no longer referenced
     try {
       const url = currentCompanyId ? `/employees?company_id=${currentCompanyId}` : '/employees';
       const { data } = await api.get(url);
-      setEmployees(data.data || data); // handle standard pagination response or flat array
+      const list = data.data || data; // handle standard pagination response or flat array
+      setEmployees(list);
+      loadPhotos(list); // not awaited: avatars fill in as they arrive
     } catch (err) {
       toast.error(t('toasts.t_failed_to_load_employees'));
     } finally {
@@ -82,7 +89,7 @@ export default function Employees() {
     setNewLoginCreds(null);
     setEmpDocs([]);
     setDocsLoading(true);
-    loadPhoto(emp);
+    if (emp.photo_path && !photoUrls[emp.id]) loadPhotos([emp]); // in case the list fetch missed it
     try {
       const { data } = await employeesApi.getEmployeeDocuments(emp.id);
       setEmpDocs(data || []);
@@ -138,17 +145,37 @@ export default function Employees() {
     }
   };
 
-  // Photo bytes come from an authenticated endpoint, so they're fetched as a
-  // blob and exposed as an object URL. Revoked whenever it's replaced/cleared.
-  const loadPhoto = async (emp) => {
-    setPhotoUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
-    if (!emp?.photo_path) return;
-    try {
-      const { data } = await employeesApi.getEmployeePhotoBytes(emp.id);
-      setPhotoUrl(URL.createObjectURL(data));
-    } catch { /* no photo / not readable */ }
+  // Only employees that actually have a stored photo are fetched.
+  const loadPhotos = async (list) => {
+    const targets = (list || []).filter((e) => e.photo_path);
+    if (!targets.length) return;
+    const entries = await Promise.all(targets.map(async (e) => {
+      try {
+        const { data } = await employeesApi.getEmployeePhotoBytes(e.id);
+        return [e.id, URL.createObjectURL(data)];
+      } catch { return null; }
+    }));
+    setPhotoUrls((prev) => {
+      const next = { ...prev };
+      for (const entry of entries) {
+        if (!entry) continue;
+        const [id, url] = entry;
+        if (next[id]) URL.revokeObjectURL(next[id]);
+        next[id] = url;
+      }
+      return next;
+    });
   };
-  useEffect(() => () => { if (photoUrl) URL.revokeObjectURL(photoUrl); }, [photoUrl]);
+
+  const revokeAllPhotos = () => {
+    Object.values(photoUrlsRef.current).forEach((u) => URL.revokeObjectURL(u));
+    photoUrlsRef.current = {};
+    setPhotoUrls({});
+  };
+
+  // Keep a ref copy so the unmount cleanup revokes the *current* URLs.
+  useEffect(() => { photoUrlsRef.current = photoUrls; }, [photoUrls]);
+  useEffect(() => () => { Object.values(photoUrlsRef.current).forEach((u) => URL.revokeObjectURL(u)); }, []);
 
   const handlePhotoPick = async (e) => {
     const file = e.target.files?.[0];
@@ -162,7 +189,7 @@ export default function Employees() {
       const { data } = await employeesApi.getEmployee(selectedEmp.id);
       setSelectedEmp(data);
       setEmployees((list) => list.map((x) => (x.id === data.id ? { ...x, photo_path: data.photo_path, photo_type: data.photo_type } : x)));
-      await loadPhoto(data);
+      await loadPhotos([data]); // replaces the map entry and revokes the old blob
       toast.success(t('employees.photo_saved'));
     } catch (err) {
       toast.error(err.response?.data?.error || t('employees.photo_save_failed'));
@@ -287,8 +314,10 @@ export default function Employees() {
                   <tr key={emp.id} onClick={() => handleOpenProfile(emp)} className="hover:bg-surface-50/50 transition-colors cursor-pointer">
                     <td className="p-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center font-bold">
-                          {emp.first_name[0]}{emp.last_name[0]}
+                        <div className="w-10 h-10 rounded-full overflow-hidden bg-brand-100 text-brand-700 flex items-center justify-center font-bold shrink-0">
+                          {photoUrls[emp.id]
+                            ? <img src={photoUrls[emp.id]} alt="" className="w-full h-full object-cover" />
+                            : <>{emp.first_name?.[0]}{emp.last_name?.[0]}</>}
                         </div>
                         <div>
                           <div className="font-semibold text-surface-900">{emp.first_name} {emp.last_name}</div>
@@ -338,8 +367,8 @@ export default function Employees() {
             <div className="flex items-center gap-4 p-4 rounded-2xl bg-gradient-to-r from-brand-50 to-surface-50 border border-brand-100">
               <label className={`relative group shrink-0 ${photoBusy ? 'pointer-events-none' : 'cursor-pointer'}`} title={t('employees.change_photo')}>
                 <span className="block w-20 h-20 rounded-full overflow-hidden bg-brand-100 text-brand-700 ring-2 ring-white shadow-sm">
-                  {photoUrl ? (
-                    <img src={photoUrl} alt="" className="w-full h-full object-cover" />
+                  {photoUrls[selectedEmp.id] ? (
+                    <img src={photoUrls[selectedEmp.id]} alt="" className="w-full h-full object-cover" />
                   ) : (
                     <span className="w-full h-full flex items-center justify-center text-xl font-bold">
                       {selectedEmp.first_name?.[0]}{selectedEmp.last_name?.[0]}
