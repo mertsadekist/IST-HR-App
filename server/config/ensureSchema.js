@@ -9,6 +9,17 @@ const COLUMN_GUARDS = [
     table: 'companies', column: 'salary_review_approver_id',
     ddl: 'ALTER TABLE companies ADD COLUMN salary_review_approver_id INT NULL, ADD FOREIGN KEY (salary_review_approver_id) REFERENCES users(id) ON DELETE SET NULL',
   },
+  // "How did you hear about us?" on the public careers form.
+  { table: 'job_applications', column: 'heard_about_us', ddl: 'ALTER TABLE job_applications ADD COLUMN heard_about_us VARCHAR(60) NULL' },
+  { table: 'job_applications', column: 'referrer_name', ddl: 'ALTER TABLE job_applications ADD COLUMN referrer_name VARCHAR(200) NULL' },
+  // Labour contract / work residency issued? Drives the probation notice.
+  {
+    table: 'employees', column: 'labour_contract_status',
+    ddl: "ALTER TABLE employees ADD COLUMN labour_contract_status ENUM('Not Issued','Issued') NOT NULL DEFAULT 'Not Issued'",
+  },
+  { table: 'employees', column: 'labour_contract_issued_at', ddl: 'ALTER TABLE employees ADD COLUMN labour_contract_issued_at DATE NULL' },
+  // Official mail domains owned by the company (comma-separated).
+  { table: 'companies', column: 'email_domains', ddl: 'ALTER TABLE companies ADD COLUMN email_domains VARCHAR(500) NULL' },
 ];
 
 // Tiny key/value store for global app settings (e.g. timezone).

@@ -39,7 +39,7 @@ export default function CompanySettings() {
       name: '', short_code: '', currency: 'AED', address: '', phone: '',
       email: '', website: '', industry: '', crm_platform: '',
       color_primary: '#6D28D9', color_secondary: '#1D1245', status: 'Active',
-      logo: '', salary_review_approver_id: '',
+      logo: '', salary_review_approver_id: '', email_domains: '',
     };
   }
 
@@ -64,6 +64,7 @@ export default function CompanySettings() {
       status: company.status || 'Active',
       logo: company.logo || '',
       salary_review_approver_id: company.salary_review_approver_id ? String(company.salary_review_approver_id) : '',
+      email_domains: company.email_domains || '',
     });
     try {
       setLhMargins(company.letterhead_margins ? JSON.parse(company.letterhead_margins) : { top: 50, bottom: 40, left: 18, right: 18 });
@@ -417,6 +418,15 @@ export default function CompanySettings() {
               <p className="text-sm font-medium text-surface-900">{form.name || 'Company Name'}</p>
               <p className="text-xs text-surface-400">{form.short_code || 'CODE'} · {form.currency} · {form.industry || 'Industry'}</p>
             </div>
+          </div>
+
+          {/* Official mail domains — drives the employee email builder */}
+          <div className="border-t border-surface-100 pt-4">
+            <label className="block text-sm font-medium text-surface-700 mb-1.5">{t('company_settings.email_domains')}</label>
+            <input value={form.email_domains} onChange={(e) => update('email_domains', e.target.value)}
+              placeholder="istrealestate.com, istmarkets.com"
+              className="w-full px-3 py-2.5 text-sm bg-white border border-surface-200 rounded-xl input-focus transition-all" />
+            <p className="text-[10px] text-surface-400 mt-1">{t('company_settings.email_domains_hint')}</p>
           </div>
 
           {/* Salary Review approver — existing company only (needs users to pick from) */}

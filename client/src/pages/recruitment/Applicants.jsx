@@ -156,6 +156,10 @@ function Detail({ detail, reload, downloadCV }) {
             {detail.notice_period && <p><span className="text-surface-400">{t('applicants.notice')}</span> {detail.notice_period}</p>}
             {detail.linkedin_url && <p><a href={detail.linkedin_url} target="_blank" rel="noreferrer" className="text-brand-600 underline">LinkedIn</a></p>}
             {detail.source && <p><span className="text-surface-400">{t('applicants.source')}</span> {detail.source}{detail.utm_campaign ? ` / ${detail.utm_campaign}` : ''}</p>}
+            {detail.heard_about_us && (
+              <p><span className="text-surface-400">{t('applicants.heard_about_us')}</span> {t(`careers.hau_${detail.heard_about_us.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`, detail.heard_about_us)}
+                {detail.referrer_name ? ` — ${detail.referrer_name}` : ''}</p>
+            )}
             {detail.cover_letter && <p className="text-xs bg-surface-50 rounded-lg p-2 mt-1 whitespace-pre-line">{detail.cover_letter}</p>}
           </div>
           {c.cv_file_name && <Button size="sm" variant="secondary" onClick={() => downloadCV(detail.id, c.cv_file_name)}><Download size={13} /> {t('applicants.download_cv')}</Button>}

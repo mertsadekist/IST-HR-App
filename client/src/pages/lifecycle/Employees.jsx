@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSelector } from 'react-redux';
 import Card from '@components/ui/Card';
 import Button from '@components/ui/Button';
 import Badge from '@components/ui/Badge';
-import { Users, Plus, Mail, Phone, Building2, Briefcase, FileText, Upload, Download, Calendar, DollarSign, Globe, Loader2, Pencil, X } from 'lucide-react';
+import { Users, Plus, Mail, Phone, Building2, Briefcase, FileText, Upload, Download, Calendar, DollarSign, Globe, Loader2, Pencil, X, AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import api from '@api/axios';
 import * as employeesApi from '@api/employeesApi';
@@ -16,6 +16,7 @@ import dayjs from 'dayjs';
 export default function Employees() {
   const { t } = useTranslation();
   const { currentCompanyId } = useSelector((s) => s.entity);
+  const { items: companies } = useSelector((s) => s.companies);
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -35,6 +36,12 @@ export default function Employees() {
   const [departments, setDepartments] = useState([]);
   const [creatingLogin, setCreatingLogin] = useState(false);
   const [newLoginCreds, setNewLoginCreds] = useState(null);
+
+  // Official mail domains of the employee's own company (not the selected entity).
+  const companyDomains = useMemo(() => {
+    const co = companies.find((c) => c.id === selectedEmp?.company_id);
+    return String(co?.email_domains || '').split(',').map((d) => d.trim()).filter(Boolean);
+  }, [companies, selectedEmp]);
 
   useEffect(() => {
     loadEmployees();
@@ -86,6 +93,7 @@ export default function Employees() {
       basic_salary: selectedEmp.basic_salary ?? '', full_salary: selectedEmp.full_salary ?? '',
       start_date: selectedEmp.start_date ? dayjs(selectedEmp.start_date).format('YYYY-MM-DD') : '',
       status: selectedEmp.status || 'Active',
+      labour_contract_status: selectedEmp.labour_contract_status || 'Not Issued',
     });
     try {
       const { data } = await departmentsApi.getDepartments({ company_id: selectedEmp.company_id });
@@ -322,7 +330,13 @@ export default function Employees() {
                         <input value={editForm.first_name} onChange={(e) => setEditForm(f => ({ ...f, first_name: e.target.value }))} placeholder={t('recruitment.first_name', 'First name')} className="text-xs bg-white border border-surface-200 rounded-lg px-2 py-1.5" />
                         <input value={editForm.last_name} onChange={(e) => setEditForm(f => ({ ...f, last_name: e.target.value }))} placeholder={t('recruitment.last_name', 'Last name')} className="text-xs bg-white border border-surface-200 rounded-lg px-2 py-1.5" />
                       </div>
-                      <input value={editForm.email} onChange={(e) => setEditForm(f => ({ ...f, email: e.target.value }))} type="email" placeholder={t('recruitment.email', 'Email')} className="w-full text-xs bg-white border border-surface-200 rounded-lg px-2 py-1.5" />
+                      <EmailBuilder
+                        value={editForm.email}
+                        onChange={(v) => setEditForm(f => ({ ...f, email: v }))}
+                        companyDomains={companyDomains}
+                        contracted={editForm.labour_contract_status === 'Issued'}
+                        t={t}
+                      />
                       <input value={editForm.phone} onChange={(e) => setEditForm(f => ({ ...f, phone: e.target.value }))} placeholder={t('recruitment.phone', 'Phone')} className="w-full text-xs bg-white border border-surface-200 rounded-lg px-2 py-1.5" />
                       <input value={editForm.nationality} onChange={(e) => setEditForm(f => ({ ...f, nationality: e.target.value }))} placeholder={t('recruitment.nationality', 'Nationality')} className="w-full text-xs bg-white border border-surface-200 rounded-lg px-2 py-1.5" />
                     </div>
@@ -352,6 +366,13 @@ export default function Employees() {
                       <select value={editForm.status} onChange={(e) => setEditForm(f => ({ ...f, status: e.target.value }))} className="w-full text-xs bg-white border border-surface-200 rounded-lg px-2 py-1.5">
                         {['Onboarding', 'Active', 'Offboarding', 'Exited'].map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
+                      <div>
+                        <label className="block text-surface-500 text-[10px] mb-0.5">{t('employees.labour_contract_status')}</label>
+                        <select value={editForm.labour_contract_status} onChange={(e) => setEditForm(f => ({ ...f, labour_contract_status: e.target.value }))} className="w-full text-xs bg-white border border-surface-200 rounded-lg px-2 py-1.5">
+                          <option value="Not Issued">{t('employees.lc_not_issued')}</option>
+                          <option value="Issued">{t('employees.lc_issued')}</option>
+                        </select>
+                      </div>
                       <div className="grid grid-cols-2 gap-2">
                         <input value={editForm.basic_salary} onChange={(e) => setEditForm(f => ({ ...f, basic_salary: e.target.value }))} type="number" placeholder={t('employees.basic_salary', 'Basic salary')} className="text-xs bg-white border border-surface-200 rounded-lg px-2 py-1.5" />
                         <input value={editForm.full_salary} onChange={(e) => setEditForm(f => ({ ...f, full_salary: e.target.value }))} type="number" placeholder={t('employees.full_salary', 'Full salary')} className="text-xs bg-white border border-surface-200 rounded-lg px-2 py-1.5" />
@@ -364,6 +385,12 @@ export default function Employees() {
                     <div className="flex justify-between"><span className="text-surface-500">Department:</span> <span className="font-semibold text-surface-800">{selectedEmp.department_name || 'N/A'}</span></div>
                     <div className="flex justify-between"><span className="text-surface-500">Job Title:</span> <span className="font-semibold text-surface-800">{selectedEmp.job_title_text || selectedEmp.job_title_name || 'N/A'}</span></div>
                     <div className="flex justify-between"><span className="text-surface-500">Status:</span> <Badge variant={selectedEmp.status === 'Active' ? 'success' : 'neutral'}>{selectedEmp.status}</Badge></div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-surface-500">{t('employees.labour_contract_status')}</span>
+                      <Badge variant={selectedEmp.labour_contract_status === 'Issued' ? 'success' : 'danger'}>
+                        {t(selectedEmp.labour_contract_status === 'Issued' ? 'employees.lc_issued' : 'employees.lc_not_issued')}
+                      </Badge>
+                    </div>
                     <div className="flex justify-between"><span className="text-surface-500">Basic Salary:</span> <span className="font-semibold text-emerald-600">{selectedEmp.basic_salary ? `${Number(selectedEmp.basic_salary).toLocaleString()} AED` : 'N/A'}</span></div>
                     <div className="flex justify-between"><span className="text-surface-500">Full Salary:</span> <span className="font-semibold text-emerald-700">{selectedEmp.full_salary ? `${Number(selectedEmp.full_salary).toLocaleString()} AED` : 'N/A'}</span></div>
                     <div className="flex justify-between"><span className="text-surface-500">Join Date:</span> <span className="font-semibold text-surface-800">{selectedEmp.start_date ? dayjs(selectedEmp.start_date).format('MMM D, YYYY') : 'N/A'}</span></div>
@@ -394,6 +421,12 @@ export default function Employees() {
                   </div>
                 </div>
                 </div>
+                {selectedEmp.labour_contract_status !== 'Issued' && (
+                  <div className="mt-3 p-3 rounded-xl bg-red-50 border border-red-200 flex items-start gap-2">
+                    <AlertTriangle size={16} className="text-red-500 shrink-0 mt-0.5" />
+                    <p className="text-xs text-red-700 leading-relaxed">{t('employees.probation_notice')}</p>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="space-y-4">
@@ -476,6 +509,60 @@ export default function Employees() {
             )}
           </div>
         </Modal>
+      )}
+    </div>
+  );
+}
+
+// Public providers offered to staff who are not yet under contract — they must
+// not hold an official company address before the labour contract and residency
+// are in place.
+const PUBLIC_EMAIL_DOMAINS = ['gmail.com', 'hotmail.com', 'outlook.com', 'yahoo.com', 'icloud.com'];
+const OTHER = '__other__';
+
+/**
+ * Email as "local part" + a domain picker. The composed value is still a plain
+ * string, so the surrounding save logic is unchanged. An existing address whose
+ * domain is in neither list is preserved as its own option rather than rewritten.
+ */
+function EmailBuilder({ value, onChange, companyDomains, contracted, t }) {
+  const at = String(value || '').lastIndexOf('@');
+  const local = at >= 0 ? String(value).slice(0, at) : String(value || '');
+  const domain = at >= 0 ? String(value).slice(at + 1) : '';
+
+  const options = useMemo(() => {
+    const list = [...companyDomains, ...PUBLIC_EMAIL_DOMAINS];
+    if (domain && !list.includes(domain)) list.push(domain);
+    return [...new Set(list)];
+  }, [companyDomains, domain]);
+
+  const [freeform, setFreeform] = useState(false);
+  const compose = (l, d) => onChange(l && d ? `${l}@${d}` : l || '');
+  const usingCompanyDomain = companyDomains.includes(domain);
+
+  return (
+    <div className="space-y-1">
+      <div className="flex gap-1.5">
+        <input value={local} onChange={(e) => compose(e.target.value.trim(), domain)}
+          placeholder={t('employees.email_local_part')} className="flex-1 min-w-0 text-xs bg-white border border-surface-200 rounded-lg px-2 py-1.5" />
+        <span className="text-xs text-surface-400 self-center">@</span>
+        {freeform ? (
+          <input autoFocus value={domain} onChange={(e) => compose(local, e.target.value.trim().toLowerCase())}
+            onBlur={() => domain && setFreeform(false)}
+            placeholder="example.com" className="w-36 text-xs bg-white border border-surface-200 rounded-lg px-2 py-1.5" />
+        ) : (
+          <select value={domain} onChange={(e) => {
+            if (e.target.value === OTHER) { setFreeform(true); compose(local, ''); return; }
+            compose(local, e.target.value);
+          }} className="w-36 text-xs bg-white border border-surface-200 rounded-lg px-2 py-1.5">
+            <option value="">{t('employees.select_domain')}</option>
+            {options.map((d) => <option key={d} value={d}>{d}</option>)}
+            <option value={OTHER}>{t('employees.other_domain')}</option>
+          </select>
+        )}
+      </div>
+      {usingCompanyDomain && !contracted && (
+        <p className="text-[10px] text-amber-600">{t('employees.company_domain_warning')}</p>
       )}
     </div>
   );

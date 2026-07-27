@@ -16,6 +16,9 @@ CREATE TABLE IF NOT EXISTS companies (
     phone           VARCHAR(50) NULL,
     email           VARCHAR(255) NULL,
     website         VARCHAR(255) NULL,
+    -- Official mail domains owned by this company, comma-separated. Drives the
+    -- employee email builder (company domain vs public provider).
+    email_domains   VARCHAR(500) NULL,
     currency        VARCHAR(10) NOT NULL DEFAULT 'AED',
     industry        VARCHAR(100) NULL,
     crm_platform    VARCHAR(100) NULL,
@@ -241,6 +244,10 @@ CREATE TABLE IF NOT EXISTS employees (
     full_salary     DECIMAL(12, 2) NULL,
     attendance_id   VARCHAR(100) NULL,
     status          ENUM('Onboarding', 'Active', 'Offboarding', 'Exited') DEFAULT 'Onboarding',
+    -- Has the UAE labour contract / work residency actually been issued?
+    -- 'Not Issued' = still probationary/trial (a legal notice is shown in the UI).
+    labour_contract_status    ENUM('Not Issued', 'Issued') NOT NULL DEFAULT 'Not Issued',
+    labour_contract_issued_at DATE NULL,
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (candidate_id) REFERENCES candidates(id) ON DELETE SET NULL,
@@ -1027,6 +1034,8 @@ CREATE TABLE IF NOT EXISTS job_applications (
   rating TINYINT NULL,
   assigned_to INT NULL,
   source VARCHAR(80) NULL,
+  -- Self-reported "How did you hear about us?" from the public careers form.
+  heard_about_us VARCHAR(60) NULL, referrer_name VARCHAR(200) NULL,
   utm_source VARCHAR(120) NULL, utm_medium VARCHAR(120) NULL, utm_campaign VARCHAR(120) NULL,
   utm_content VARCHAR(120) NULL, utm_term VARCHAR(120) NULL,
   current_location VARCHAR(200) NULL, current_job_title VARCHAR(200) NULL,

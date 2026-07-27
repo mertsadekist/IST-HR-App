@@ -245,16 +245,51 @@ router.post('/', authorize('admin', 'hr_manager'), validate({
   }
 });
 
+// Columns an HR user may edit through PUT /employees/:id. Anything else in the
+// body (id, company_id, candidate_id, timestamps, …) is ignored rather than
+// blindly written — this route previously did `UPDATE employees SET ?` on the
+// whole request body.
+const EDITABLE_EMPLOYEE_FIELDS = [
+  'first_name', 'last_name', 'email', 'phone', 'nationality',
+  'department_id', 'job_title_id', 'job_title_text',
+  'start_date', 'end_date', 'basic_salary', 'full_salary',
+  'attendance_id', 'status', 'labour_contract_status', 'labour_contract_issued_at',
+];
+const EMPLOYEE_STATUSES = ['Onboarding', 'Active', 'Offboarding', 'Exited'];
+const LABOUR_CONTRACT_STATUSES = ['Not Issued', 'Issued'];
+
 // PUT /api/employees/:id (company-scoped; cannot re-tenant)
 router.put('/:id', authorize('admin', 'hr_manager'), async (req, res) => {
   try {
-    const { company_id, ...data } = req.body;
+    const data = {};
+    for (const f of EDITABLE_EMPLOYEE_FIELDS) {
+      if (req.body[f] !== undefined) data[f] = req.body[f] === '' ? null : req.body[f];
+    }
+    if (data.status != null && !EMPLOYEE_STATUSES.includes(data.status)) {
+      return res.status(422).json({ error: `status must be one of: ${EMPLOYEE_STATUSES.join(', ')}` });
+    }
+    if (data.labour_contract_status != null) {
+      if (!LABOUR_CONTRACT_STATUSES.includes(data.labour_contract_status)) {
+        return res.status(422).json({ error: `labour_contract_status must be one of: ${LABOUR_CONTRACT_STATUSES.join(', ')}` });
+      }
+      // Keep the issued date consistent with the flag unless one was supplied.
+      if (req.body.labour_contract_issued_at === undefined) {
+        data.labour_contract_issued_at = data.labour_contract_status === 'Issued'
+          ? new Date().toISOString().slice(0, 10)
+          : null;
+      }
+    }
+    if (!Object.keys(data).length) return res.status(400).json({ error: 'Nothing to update' });
+
     const co = companyClause(req, 'company_id');
     const [result] = await pool.query('UPDATE employees SET ? WHERE id = ?' + co.clause, [data, req.params.id, ...co.params]);
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Employee not found' });
     await addAudit(pool, req.user, 'Employees', 'Updated', `Employee #${req.params.id} updated`);
     res.json({ success: true });
-  } catch (err) { console.error('PUT /employees/:id error:', err); res.status(500).json({ error: 'Internal server error' }); }
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'An employee with this email already exists in this company' });
+    console.error('PUT /employees/:id error:', err); res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 // DELETE /api/employees/:id (company-scoped)

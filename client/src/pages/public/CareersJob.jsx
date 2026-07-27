@@ -6,6 +6,11 @@ import { Loader2, MapPin, Briefcase, Building2, Upload, CheckCircle2, ShieldChec
 
 const apiErr = (e, f) => e?.response?.data?.missing?.join(' · ') || e?.response?.data?.error || f;
 
+// Must stay in sync with HEARD_ABOUT_US_OPTIONS in server/routes/public.js — the
+// server rejects anything outside this set. Stored as stable English keys.
+const HEARD_ABOUT_US_OPTIONS = ['Social Media', 'LinkedIn', 'Referral', 'Job Board', 'Company Website', 'Other'];
+const hauKey = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+
 export default function CareersJob() {
   const { t } = useTranslation();
   const { slug } = useParams();
@@ -134,6 +139,20 @@ export default function CareersJob() {
               <Field label={t('careers.f_available')} type="date" value={form.available_date} onChange={(v) => set('available_date', v)} />
               <Field label={t('careers.f_linkedin')} value={form.linkedin_url} onChange={(v) => set('linkedin_url', v)} />
               <Field label={t('careers.f_portfolio')} value={form.portfolio_url} onChange={(v) => set('portfolio_url', v)} />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-slate-600">{t('careers.f_heard_about_us')}</label>
+                <select value={form.heard_about_us || ''}
+                  onChange={(e) => setForm((f) => ({ ...f, heard_about_us: e.target.value, ...(e.target.value !== 'Referral' && { referrer_name: '' }) }))}
+                  className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 mt-1 bg-white focus:ring-2 focus:ring-violet-200">
+                  <option value="">{t('careers.select_option')}</option>
+                  {HEARD_ABOUT_US_OPTIONS.map((o) => <option key={o} value={o}>{t(`careers.hau_${hauKey(o)}`)}</option>)}
+                </select>
+              </div>
+              {form.heard_about_us === 'Referral' && (
+                <Field label={t('careers.f_referrer_name')} value={form.referrer_name} onChange={(v) => set('referrer_name', v)} />
+              )}
             </div>
             <div>
               <label className="text-xs font-semibold text-slate-600">{t('careers.cover_letter')}</label>

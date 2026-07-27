@@ -429,6 +429,13 @@ router.post('/offers/:offerId/respond', authorize('admin', 'hr_manager', 'hr_spe
       await pool.query("UPDATE onboarding_records SET offer_state = 'accepted' WHERE id = ?", [offer.onboarding_id]);
       await setStage(record, 'OFFER_ACCEPTED', req.user, `Offer ${offer.offer_number} accepted`);
       await pool.query('INSERT IGNORE INTO onboarding_signed_offer SET ?', { onboarding_id: record.id, company_id: record.company_id, verification_status: 'Pending' });
+      // Create the Employees-section profile now, as probationary: the hire is
+      // agreed but the labour contract / residency is not issued yet. Failing
+      // here must not roll back the accepted offer itself.
+      try {
+        const agg = await loadAggregate(record);
+        await finalizeEmployee(record, agg, req.user, { probationary: true });
+      } catch (e) { console.error('probationary employee creation failed:', e.message); }
     } else {
       await pool.query("UPDATE onboarding_records SET offer_state = 'rejected' WHERE id = ?", [offer.onboarding_id]);
       await logEvent(record, req.user, 'offer_rejected', `Offer ${offer.offer_number} rejected: ${req.body.rejection_reason}`);
@@ -653,14 +660,22 @@ async function resolveDepartmentId(companyId, deptText) {
   return dept?.id || null;
 }
 
-// Creates (or re-activates + backfills) the Employees-section record for a
-// completed onboarding. Idempotent: if already linked, re-activates and fills
-// in any still-empty employment fields from the accepted offer; if an
-// employee with the same company+email exists, links to it (same backfill)
-// instead of creating a duplicate; otherwise creates a fresh employee.
-async function finalizeEmployee(record, agg, user) {
+// Creates (or re-activates + backfills) the Employees-section record for an
+// onboarding. Idempotent: if already linked, re-activates and fills in any
+// still-empty employment fields from the accepted offer; if an employee with
+// the same company+email exists, links to it (same backfill) instead of
+// creating a duplicate; otherwise creates a fresh employee.
+//
+// `probationary: true` is used the moment an offer is ACCEPTED — the profile is
+// created early so HR can work with it, but as status 'Onboarding' with no
+// labour contract issued yet. The later COMPLETED transition calls this again
+// without the flag, which flips the employee to 'Active'. The labour contract
+// flag is never touched here — only HR marks it Issued, once the real work
+// residency is in hand.
+async function finalizeEmployee(record, agg, user, { probationary = false } = {}) {
   const profile = agg.profile || {};
   const accepted = (agg.offers || []).find((o) => o.status === 'Accepted');
+  const targetStatus = probationary ? 'Onboarding' : 'Active';
 
   const basic = accepted?.basic_salary != null ? Number(accepted.basic_salary) : null;
   const allowances = accepted ? sumAllowances(accepted.allowances) : 0;
@@ -676,12 +691,16 @@ async function finalizeEmployee(record, agg, user) {
       'SELECT job_title_id, job_title_text, department_id, basic_salary, full_salary, start_date FROM employees WHERE id = ?', [employeeId]
     );
     if (!emp) return;
-    const patch = { status: 'Active' };
+    // Never downgrade an already-Active employee back to 'Onboarding' if the
+    // probationary path runs after a completion (e.g. a revised offer).
+    const patch = {};
+    if (!probationary) patch.status = 'Active';
     if (!emp.job_title_id && !emp.job_title_text && jobTitleText) patch.job_title_text = jobTitleText;
     if (!emp.department_id && departmentId) patch.department_id = departmentId;
     if (emp.basic_salary == null && basic != null) patch.basic_salary = basic;
     if (emp.full_salary == null && fullSalary != null) patch.full_salary = fullSalary;
     if (!emp.start_date && joiningDate) patch.start_date = joiningDate;
+    if (!Object.keys(patch).length) return; // nothing to change (SET ? with {} is invalid SQL)
     await pool.query('UPDATE employees SET ? WHERE id = ?', [patch, employeeId]);
   }
 
@@ -709,11 +728,14 @@ async function finalizeEmployee(record, agg, user) {
     job_title_text: jobTitleText, department_id: departmentId,
     start_date: joiningDate || new Date(),
     basic_salary: basic, full_salary: fullSalary,
-    status: 'Active',
+    status: targetStatus,
   });
   await pool.query('UPDATE onboarding_records SET employee_id = ? WHERE id = ?', [r.insertId, record.id]);
   record.employee_id = r.insertId;
-  await logEvent(record, user, 'employee_created', `Employee #${r.insertId} created in the Employees section`);
+  await logEvent(record, user, 'employee_created',
+    probationary
+      ? `Employee #${r.insertId} created in the Employees section (probationary — labour contract not yet issued)`
+      : `Employee #${r.insertId} created in the Employees section`);
   return r.insertId;
 }
 

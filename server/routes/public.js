@@ -34,6 +34,11 @@ const router = Router();
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const POLICY_VERSION = 'v1';
 
+// Allowed answers to "How did you hear about us?" — kept in sync with the
+// options rendered by client/src/pages/public/CareersJob.jsx. Stored as stable
+// English keys; the client translates them for display.
+export const HEARD_ABOUT_US_OPTIONS = ['Social Media', 'LinkedIn', 'Referral', 'Job Board', 'Company Website', 'Other'];
+
 function parseJSON(v, fallback) { try { return typeof v === 'string' ? JSON.parse(v) : (v || fallback); } catch { return fallback; } }
 
 // Public, whitelisted view of a published vacancy + company branding.
@@ -125,11 +130,16 @@ router.post('/jobs/:slug/apply', upload.single('cv'), async (req, res) => {
         [req.file.originalname, cvText || null, JSON.stringify(extracted || {}), candidateId]);
     }
 
-    // Create the application
+    // Create the application. `heard_about_us` is constrained to the known
+    // option set — this endpoint is public/unauthenticated, so never persist a
+    // free-form value the UI didn't offer.
+    const heardAboutUs = HEARD_ABOUT_US_OPTIONS.includes(b.heard_about_us) ? b.heard_about_us : null;
     const [appRes] = await pool.query('INSERT INTO job_applications SET ?', {
       company_id: companyId, vacancy_id: v.id, candidate_id: candidateId,
       stage: 'New Application', status: 'Open', assigned_to: v.recruitment_owner || null,
       source: b.source || b.utm_source || 'Direct',
+      heard_about_us: heardAboutUs,
+      referrer_name: heardAboutUs === 'Referral' && b.referrer_name ? String(b.referrer_name).slice(0, 200) : null,
       utm_source: b.utm_source || null, utm_medium: b.utm_medium || null, utm_campaign: b.utm_campaign || null,
       utm_content: b.utm_content || null, utm_term: b.utm_term || null,
       current_location: b.current_location || null, current_job_title: b.current_job_title || null,

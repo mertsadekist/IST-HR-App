@@ -94,6 +94,16 @@ router.put('/:id', authorize('admin'), async (req, res) => {
     const co = companyClause(req, 'id');
     const { name, short_code, currency, address, phone, email, website, industry, crm_platform, color_primary, color_secondary, status, logo, salary_review_approver_id } = req.body;
 
+    // Official mail domains, comma-separated. Normalized (lowercased, trimmed,
+    // "@" and any scheme stripped) so the employee email builder can match them.
+    let email_domains = null;
+    if (req.body.email_domains != null && String(req.body.email_domains).trim() !== '') {
+      const parts = String(req.body.email_domains).split(',').map((d) => d.trim().toLowerCase().replace(/^@+/, '').replace(/^https?:\/\//, '')).filter(Boolean);
+      const bad = parts.find((d) => !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(d));
+      if (bad) return res.status(422).json({ error: `"${bad}" is not a valid email domain` });
+      email_domains = [...new Set(parts)].join(',').slice(0, 500);
+    }
+
     // The approver gains real approval authority (see PUT /salary-reviews/:id/decision),
     // so restrict the pick to admin/hr_manager accounts even if called outside the UI.
     if (salary_review_approver_id) {
@@ -104,8 +114,8 @@ router.put('/:id', authorize('admin'), async (req, res) => {
     }
 
     const [result] = await pool.query(
-      'UPDATE companies SET name=?, short_code=?, currency=?, address=?, phone=?, email=?, website=?, industry=?, crm_platform=?, color_primary=?, color_secondary=?, status=?, logo=?, salary_review_approver_id=? WHERE id=?' + co.clause,
-      [name, short_code?.toUpperCase(), currency, address, phone, email, website, industry, crm_platform, color_primary, color_secondary, status, logo, salary_review_approver_id || null, req.params.id, ...co.params]
+      'UPDATE companies SET name=?, short_code=?, currency=?, address=?, phone=?, email=?, website=?, email_domains=?, industry=?, crm_platform=?, color_primary=?, color_secondary=?, status=?, logo=?, salary_review_approver_id=? WHERE id=?' + co.clause,
+      [name, short_code?.toUpperCase(), currency, address, phone, email, website, email_domains, industry, crm_platform, color_primary, color_secondary, status, logo, salary_review_approver_id || null, req.params.id, ...co.params]
     );
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Company not found' });
     await addAudit(pool, req.user, 'Companies', 'Updated', `Company #${req.params.id} updated`);
