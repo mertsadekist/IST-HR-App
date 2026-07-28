@@ -206,11 +206,17 @@ export default function Candidates() {
     return { ...p, company_id: value, vacancy_id: stillValid ? p.vacancy_id : '' };
   });
 
-  const openProfile = (c) => {
+  // The list row has no stage_history — fetch the full record so the Timeline
+  // and Notes tabs can show every stage move and the note recorded with it.
+  const openProfile = async (c) => {
     setProfileCandidate(c);
     setProfileTab('overview');
     setAiSummary('');
     setProfileOpen(true);
+    try {
+      const { data } = await candidatesApi.getCandidate(c.id);
+      setProfileCandidate(data);
+    } catch { /* keep the list row — the profile still renders */ }
   };
 
   const handleSummarize = async () => {
@@ -738,20 +744,55 @@ export default function Candidates() {
               <div className="space-y-3">
                 <div className="border-l-2 border-brand-200 pl-4 space-y-4">
                   {profileCandidate.applied_date && <div className="relative"><div className="absolute -left-[21px] top-1 w-3 h-3 bg-brand-500 rounded-full" /><p className="text-sm font-medium text-surface-800">{t('recruitment.application_received')}</p><p className="text-xs text-surface-400">{dayjs(profileCandidate.applied_date).format('MMM D, YYYY')}</p></div>}
+                  {/* Every recorded stage move, newest first */}
+                  {(profileCandidate.stage_history || []).map((h) => (
+                    <div key={h.id} className="relative">
+                      <div className="absolute -left-[21px] top-1 w-3 h-3 rounded-full" style={{ background: h.color || '#7c3aed' }} />
+                      <p className="text-sm font-medium text-surface-800">{t('recruitment.moved_to')} {h.stage_name}</p>
+                      <p className="text-xs text-surface-400">
+                        {dayjs(h.moved_at).format('MMM D, YYYY h:mm A')}{h.moved_by_name ? ` · ${h.moved_by_name}` : ''}
+                      </p>
+                      {h.notes && <p className="text-xs text-surface-600 mt-1 bg-surface-50 rounded-lg p-2 whitespace-pre-wrap">{h.notes}</p>}
+                    </div>
+                  ))}
                   {profileCandidate.stage_name && <div className="relative"><div className="absolute -left-[21px] top-1 w-3 h-3 bg-emerald-500 rounded-full" /><p className="text-sm font-medium text-surface-800">{t('recruitment.current_stage')}: {profileCandidate.stage_name}</p><p className="text-xs text-surface-400">{t('recruitment.status')}: {t(`recruitment.${profileCandidate.status.toLowerCase().replace(' ', '_')}`)}</p></div>}
                   <div className="relative"><div className="absolute -left-[21px] top-1 w-3 h-3 bg-surface-300 rounded-full" /><p className="text-sm font-medium text-surface-800">{t('recruitment.record_created')}</p><p className="text-xs text-surface-400">{dayjs(profileCandidate.created_at).format('MMM D, YYYY h:mm A')}</p></div>
                 </div>
               </div>
             )}
 
-            {/* Notes Tab */}
-            {profileTab === 'notes' && (
-              <div className="space-y-3">
-                <div className="bg-surface-50 rounded-xl p-4 min-h-[120px]">
-                  <p className="text-sm text-surface-700 whitespace-pre-wrap">{profileCandidate.notes || t('recruitment.no_notes')}</p>
+            {/* Notes Tab — the general note plus every note left on a stage move */}
+            {profileTab === 'notes' && (() => {
+              const stageNotes = (profileCandidate.stage_history || []).filter((h) => h.notes && h.notes.trim());
+              const hasAny = (profileCandidate.notes && profileCandidate.notes.trim()) || stageNotes.length > 0;
+              return (
+                <div className="space-y-3">
+                  {!hasAny && (
+                    <div className="bg-surface-50 rounded-xl p-4 min-h-[120px]">
+                      <p className="text-sm text-surface-700">{t('recruitment.no_notes')}</p>
+                    </div>
+                  )}
+                  {profileCandidate.notes && profileCandidate.notes.trim() && (
+                    <div className="bg-surface-50 rounded-xl p-4">
+                      <p className="text-[11px] font-semibold text-surface-500 uppercase tracking-wide mb-1.5">{t('recruitment.general_note')}</p>
+                      <p className="text-sm text-surface-700 whitespace-pre-wrap">{profileCandidate.notes}</p>
+                    </div>
+                  )}
+                  {stageNotes.map((h) => (
+                    <div key={h.id} className="bg-white border border-surface-200 rounded-xl p-4">
+                      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                        <span className="w-2 h-2 rounded-full" style={{ background: h.color || '#7c3aed' }} />
+                        <span className="text-xs font-semibold text-surface-800">{h.stage_name}</span>
+                        <span className="text-[11px] text-surface-400">
+                          {dayjs(h.moved_at).format('MMM D, YYYY h:mm A')}{h.moved_by_name ? ` · ${h.moved_by_name}` : ''}
+                        </span>
+                      </div>
+                      <p className="text-sm text-surface-700 whitespace-pre-wrap">{h.notes}</p>
+                    </div>
+                  ))}
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* AI Summary Tab */}
             {profileTab === 'ai' && (

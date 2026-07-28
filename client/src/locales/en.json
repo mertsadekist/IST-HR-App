@@ -304,7 +304,9 @@
     "read_cv": "Read CV data",
     "reports_to": "Reports to",
     "reread_cv": "Re-read CV",
-    "type": "Type"
+    "type": "Type",
+    "general_note": "General note",
+    "hide_closed": "Hide rejected & hired"
   },
   "settings": {
     "title": "Settings",

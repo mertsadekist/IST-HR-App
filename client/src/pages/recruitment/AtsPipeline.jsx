@@ -24,8 +24,9 @@ export default function AtsPipeline() {
   const [vacancyFilter, setVacancyFilter] = useState('');
   const [dragging, setDragging] = useState(null);
   const [dragOver, setDragOver] = useState(null);
+  const [hideClosed, setHideClosed] = useState(false);
 
-  useEffect(() => { loadAll(); }, [currentCompanyId, vacancyFilter]);
+  useEffect(() => { loadAll(); }, [currentCompanyId, vacancyFilter, hideClosed]);
 
   const loadAll = async () => {
     setLoading(true);
@@ -33,9 +34,14 @@ export default function AtsPipeline() {
       const [stgRes] = await Promise.all([settingsApi.getAtsStages()]);
       setStages(stgRes.data.filter(s => s.status === 'Active'));
 
-      const params = { limit: 500, status: 'Active' };
+      // Do NOT filter by status here: moving a candidate into a fail/success
+      // stage flips candidates.status to Failed/Hired, so filtering on 'Active'
+      // emptied the Rejected/Failed/Blacklisted/Success columns entirely — the
+      // board silently lost everyone who had been rejected or hired.
+      const params = { limit: 500 };
       if (currentCompanyId) params.company_id = currentCompanyId;
       if (vacancyFilter) params.vacancy_id = vacancyFilter;
+      if (hideClosed) params.status = 'Active';
       const candRes = await candidatesApi.getCandidates(params);
       setCandidates(candRes.data.data || []);
 
@@ -125,6 +131,11 @@ export default function AtsPipeline() {
             options={[{ value: '', label: t('recruitment.all_vacancies') }, ...vacancies.map(v => ({ value: String(v.id), label: v.title }))]}
             className="!w-52"
           />
+          <label className="flex items-center gap-2 text-xs text-surface-600 cursor-pointer whitespace-nowrap">
+            <input type="checkbox" checked={hideClosed} onChange={(e) => setHideClosed(e.target.checked)}
+              className="w-4 h-4 rounded border-surface-300 text-brand-600" />
+            {t('recruitment.hide_closed')}
+          </label>
           <Button variant="secondary" onClick={loadAll}><RefreshCw size={14} /> {t('recruitment.refresh')}</Button>
         </div>
       </div>
