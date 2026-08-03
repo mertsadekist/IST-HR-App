@@ -173,6 +173,7 @@ async function loadWpsData(req, runId) {
   const [items] = await pool.query(
     `SELECT pi.employee_id, pi.gross, pi.net, pi.absence_days, pi.unpaid_leave_days,
             e.first_name, e.last_name, e.work_permit_no, e.personal_no,
+            e.labour_contract_status,
             b.bank_name, b.iban, b.verified AS bank_verified
        FROM payroll_items pi
        JOIN employees e ON pi.employee_id = e.id
@@ -194,9 +195,12 @@ router.get('/runs/:id/wps-readiness', authorize('admin', 'hr_manager'), async (r
       period: data.run.period,
       company_name: data.company?.name || '',
       mol_id: data.company?.mol_id || '',
+      // Run figures, so the difference against the file's own total is visible
+      // when someone is held back for a missing labour contract.
       employee_count: data.items.length,
       total_net: data.items.reduce((s, i) => s + Number(i.net || 0), 0),
-      unverified_bank: data.items.filter((i) => i.iban && !i.bank_verified)
+      unverified_bank: data.items
+        .filter((i) => i.labour_contract_status === 'Issued' && i.iban && !i.bank_verified)
         .map((i) => `${i.first_name} ${i.last_name}`.trim()),
     });
   } catch (err) { console.error('GET /payroll/runs/:id/wps-readiness error:', err); res.status(500).json({ error: 'Internal server error' }); }
@@ -212,16 +216,26 @@ router.get('/runs/:id/wps-export', authorize('admin', 'hr_manager'), async (req,
 
     const report = wpsReadiness(data);
     const force = req.query.force === '1' || req.query.force === 'true';
+    if (!report.included_count) {
+      return res.status(409).json({
+        error: 'No employee in this run has an issued labour contract, so the WPS file would be empty',
+        ...report,
+      });
+    }
     if (!report.ready && !force) {
       return res.status(422).json({ error: 'WPS data is incomplete', ...report });
     }
 
-    const { buffer, grandTotal, count } = buildWpsWorkbook({
+    const { buffer, grandTotal, count, excluded } = buildWpsWorkbook({
       company: data.company, period: data.run.period, items: data.items,
     });
     const fileName = `WPS-${(data.company?.name || 'company').replace(/[^\w-]+/g, '_')}-${data.run.period}${force && !report.ready ? '-DRAFT' : ''}.xlsx`;
+    // The excluded count goes in the audit trail: the file total will not match
+    // the payroll run total, and that difference must be explainable later.
     await addAudit(pool, req.user, 'Payroll', 'WPS Export',
-      `WPS file generated for run #${data.run.id} (${data.run.period}): ${count} employee(s), total AED ${grandTotal.toFixed(2)}${report.ready ? '' : ' — INCOMPLETE DRAFT'}`);
+      `WPS file generated for run #${data.run.id} (${data.run.period}): ${count} employee(s), total AED ${grandTotal.toFixed(2)}`
+      + (excluded.length ? `; ${excluded.length} excluded — labour contract not issued: ${excluded.map((e) => e.name).join(', ')}` : '')
+      + (report.ready ? '' : ' — INCOMPLETE DRAFT'));
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);

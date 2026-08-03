@@ -162,11 +162,31 @@ export default function PayrollRuns() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="p-3 bg-surface-50 rounded-xl"><p className="text-xs text-surface-400">{t('payroll_runs.wps_company')}</p><p className="font-semibold text-surface-800 text-sm">{wps.company_name}</p></div>
               <div className="p-3 bg-surface-50 rounded-xl"><p className="text-xs text-surface-400">{t('payroll_runs.wps_mol_id')}</p><p className="font-semibold text-surface-800 text-sm">{wps.mol_id || '—'}</p></div>
-              <div className="p-3 bg-surface-50 rounded-xl"><p className="text-xs text-surface-400">{t('payroll_runs.wps_employees')}</p><p className="font-semibold text-surface-800 text-sm">{wps.employee_count}</p></div>
-              <div className="p-3 bg-surface-50 rounded-xl"><p className="text-xs text-surface-400">{t('payroll_runs.wps_total')}</p><p className="font-bold text-brand-600 text-sm">{Number(wps.total_net || 0).toFixed(2)}</p></div>
+              <div className="p-3 bg-surface-50 rounded-xl"><p className="text-xs text-surface-400">{t('payroll_runs.wps_employees')}</p><p className="font-semibold text-surface-800 text-sm">{wps.included_count}{wps.excluded?.length > 0 && <span className="text-surface-400"> / {wps.employee_count}</span>}</p></div>
+              <div className="p-3 bg-surface-50 rounded-xl"><p className="text-xs text-surface-400">{t('payroll_runs.wps_total')}</p><p className="font-bold text-brand-600 text-sm">{Number(wps.included_total || 0).toFixed(2)}</p></div>
             </div>
 
-            {wps.ready ? (
+            {/* Held back for a missing labour contract — not an error, but the
+                reason the file total differs from the payroll run total. */}
+            {wps.excluded?.length > 0 && (
+              <div className="p-3 rounded-xl bg-surface-50 border border-surface-200">
+                <p className="text-sm font-semibold text-surface-700 mb-1">{t('payroll_runs.wps_excluded', { count: wps.excluded.length })}</p>
+                <p className="text-[11px] text-surface-500 mb-2">{t('payroll_runs.wps_excluded_hint')}</p>
+                <ul className="text-xs text-surface-600 space-y-0.5">
+                  {wps.excluded.map((e) => (
+                    <li key={e.employee_id} className="flex justify-between">
+                      <span>{e.name}</span><span className="font-mono text-surface-400">{Number(e.net || 0).toFixed(2)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {wps.included_count === 0 ? (
+              <div className="flex items-start gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-800 text-sm">
+                <AlertTriangle size={16} className="mt-0.5 shrink-0" /><span>{t('payroll_runs.wps_none_eligible')}</span>
+              </div>
+            ) : wps.ready ? (
               <div className="flex items-start gap-2 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm">
                 <CheckCircle2 size={16} className="mt-0.5 shrink-0" /><span>{t('payroll_runs.wps_ready')}</span>
               </div>
@@ -202,7 +222,7 @@ export default function PayrollRuns() {
 
             <div className="flex justify-end gap-2 pt-1">
               <Button variant="secondary" onClick={() => setWps(null)}>{t('common.cancel')}</Button>
-              {wps.ready
+              {wps.included_count === 0 ? null : wps.ready
                 ? <Button onClick={() => downloadWps(false)} loading={wpsBusy}><FileSpreadsheet size={14} /> {t('payroll_runs.wps_download')}</Button>
                 : <Button variant="secondary" onClick={() => downloadWps(true)} loading={wpsBusy}>{t('payroll_runs.wps_download_draft')}</Button>}
             </div>

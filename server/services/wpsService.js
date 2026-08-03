@@ -25,30 +25,52 @@ const money = (v) => Math.round((Number(v) || 0) * 100) / 100;
 const txt = (v) => ({ v: v == null ? '' : String(v), t: 's' });
 const num = (v) => ({ v: money(v), t: 'n', z: '0.00' });
 
+const fullName = (it) => `${it.first_name || ''} ${it.last_name || ''}`.trim();
+
+/**
+ * Only staff whose UAE labour contract has actually been issued belong in the
+ * salary file: without an issued contract there is no MOL work permit to pay
+ * against, so the ministry has nobody to match the row to. Anyone still on
+ * 'Not Issued' is left out of the file and reported separately instead.
+ */
+export function splitWpsItems(items) {
+  const included = [], excluded = [];
+  for (const it of items) {
+    if (it.labour_contract_status === 'Issued') included.push(it);
+    else excluded.push({ employee_id: it.employee_id, name: fullName(it), net: money(it.net) });
+  }
+  return { included, excluded };
+}
+
 /**
  * Which employees can't be submitted yet, and exactly why. Surfaced before the
  * download so a file is never sent with blank mandatory identifiers.
+ * Employees excluded for a missing labour contract are not treated as errors —
+ * they are simply not part of this file.
  */
 export function wpsReadiness({ company, items }) {
   const companyIssues = [];
   if (!company?.mol_id) companyIssues.push('Company MOL ID is not set (Settings → Companies)');
 
+  const { included, excluded } = splitWpsItems(items);
+
   const employeeIssues = [];
-  for (const it of items) {
+  for (const it of included) {
     const missing = [];
     if (!it.work_permit_no) missing.push('Work Permit No');
     if (!it.personal_no) missing.push('Personal No');
     if (!it.iban) missing.push('IBAN');
     if (!it.bank_name) missing.push('Bank name');
     if (missing.length) {
-      employeeIssues.push({
-        employee_id: it.employee_id,
-        name: `${it.first_name} ${it.last_name}`.trim(),
-        missing,
-      });
+      employeeIssues.push({ employee_id: it.employee_id, name: fullName(it), missing });
     }
   }
-  return { companyIssues, employeeIssues, ready: !companyIssues.length && !employeeIssues.length };
+  return {
+    companyIssues, employeeIssues, excluded,
+    included_count: included.length,
+    included_total: money(included.reduce((s, i) => s + Number(i.net || 0), 0)),
+    ready: !companyIssues.length && !employeeIssues.length && included.length > 0,
+  };
 }
 
 /** "2026-07" → "JULY-2026", matching the header wording on the official sheet. */
@@ -63,7 +85,10 @@ export function formatPayrollMonth(period) {
 /**
  * @returns {Buffer} .xlsx ready to submit
  */
-export function buildWpsWorkbook({ company, period, items }) {
+export function buildWpsWorkbook({ company, period, items: allItems }) {
+  // Filtered here as well as in the route so there is no path that can emit a
+  // row for someone without an issued labour contract.
+  const { included: items, excluded } = splitWpsItems(allItems);
   const monthLabel = formatPayrollMonth(period);
   const rows = [];
 
@@ -140,6 +165,7 @@ export function buildWpsWorkbook({ company, period, items }) {
     buffer: XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }),
     grandTotal: money(grandTotal),
     count: items.length,
+    excluded,
     firstDataRow,
   };
 }

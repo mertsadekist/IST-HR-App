@@ -8,7 +8,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import XLSX from 'xlsx';
-import { buildWpsWorkbook, wpsReadiness, formatPayrollMonth } from '../services/wpsService.js';
+import { buildWpsWorkbook, wpsReadiness, formatPayrollMonth, splitWpsItems } from '../services/wpsService.js';
 
 const company = {
   name: 'I S T REAL ESTATE L.L.C', mol_id: '2080452',
@@ -18,11 +18,19 @@ const company = {
 const items = [
   { employee_id: 1, first_name: 'Mert', last_name: 'Sadak', work_permit_no: '121791084',
     personal_no: '00411089670224', bank_name: 'Mashreq Bank', iban: 'AE870330000019101608741',
-    absence_days: 0, unpaid_leave_days: 0, gross: 11000, net: 11000 },
+    absence_days: 0, unpaid_leave_days: 0, gross: 11000, net: 11000, labour_contract_status: 'Issued' },
   { employee_id: 2, first_name: 'Ana', last_name: 'Silva', work_permit_no: '987654321',
     personal_no: '00411089670225', bank_name: 'Emirates NBD', iban: 'AE070331234567890999999',
-    absence_days: 1, unpaid_leave_days: 2, gross: 9000, net: 8100.55 },
+    absence_days: 1, unpaid_leave_days: 2, gross: 9000, net: 8100.55, labour_contract_status: 'Issued' },
 ];
+
+// Hired but the UAE labour contract has not been issued yet, so there is no MOL
+// work permit to pay against — never belongs in the file.
+const noContract = {
+  employee_id: 3, first_name: 'Probation', last_name: 'Hire', work_permit_no: '111222333',
+  personal_no: '00411089670226', bank_name: 'ADCB', iban: 'AE070331234567890111111',
+  absence_days: 0, unpaid_leave_days: 0, gross: 4000, net: 4000, labour_contract_status: 'Not Issued',
+};
 
 const sheetOf = (opts = {}) => {
   const { buffer } = buildWpsWorkbook({ company, period: '2026-07', items, ...opts });
@@ -51,11 +59,47 @@ describe('wpsReadiness', () => {
   });
 
   it('lists exactly which fields each employee is missing', () => {
-    const r = wpsReadiness({ company, items: [{ employee_id: 9, first_name: 'No', last_name: 'Data' }] });
+    const r = wpsReadiness({ company, items: [{ employee_id: 9, first_name: 'No', last_name: 'Data', labour_contract_status: 'Issued' }] });
     expect(r.ready).toBe(false);
     expect(r.employeeIssues).toEqual([
       { employee_id: 9, name: 'No Data', missing: ['Work Permit No', 'Personal No', 'IBAN', 'Bank name'] },
     ]);
+  });
+
+  it('reports an employee without an issued contract as excluded, not as an error', () => {
+    const r = wpsReadiness({ company, items: [...items, noContract] });
+    expect(r.ready).toBe(true);
+    expect(r.employeeIssues).toEqual([]);
+    expect(r.excluded).toEqual([{ employee_id: 3, name: 'Probation Hire', net: 4000 }]);
+    expect(r.included_count).toBe(2);
+    expect(r.included_total).toBe(19100.55);
+  });
+
+  it('does not block the file for data missing on an excluded employee', () => {
+    const bare = { employee_id: 4, first_name: 'Bare', last_name: 'Hire', labour_contract_status: 'Not Issued', net: 0 };
+    const r = wpsReadiness({ company, items: [...items, bare] });
+    expect(r.employeeIssues).toEqual([]);
+    expect(r.ready).toBe(true);
+  });
+
+  it('is not ready when nobody has an issued contract', () => {
+    const r = wpsReadiness({ company, items: [noContract] });
+    expect(r.ready).toBe(false);
+    expect(r.included_count).toBe(0);
+  });
+
+  it('treats a missing contract status as not issued', () => {
+    const r = wpsReadiness({ company, items: [{ ...items[0], labour_contract_status: undefined }] });
+    expect(r.included_count).toBe(0);
+    expect(r.excluded).toHaveLength(1);
+  });
+});
+
+describe('splitWpsItems', () => {
+  it('keeps only issued contracts in the file', () => {
+    const { included, excluded } = splitWpsItems([...items, noContract]);
+    expect(included.map((i) => i.employee_id)).toEqual([1, 2]);
+    expect(excluded.map((e) => e.employee_id)).toEqual([3]);
   });
 });
 
@@ -131,8 +175,33 @@ describe('buildWpsWorkbook', () => {
   it('rounds to fils rather than accumulating float error', () => {
     const cents = Array.from({ length: 3 }, (_, i) => ({
       employee_id: i, first_name: 'A', last_name: String(i), gross: 0.1, net: 0.1,
+      labour_contract_status: 'Issued',
     }));
     const { grandTotal } = buildWpsWorkbook({ company, period: '2026-07', items: cents });
     expect(grandTotal).toBe(0.3);
+  });
+
+  it('never writes a row for an employee without an issued labour contract', () => {
+    const { buffer, count, grandTotal, excluded } = buildWpsWorkbook({
+      company, period: '2026-07', items: [...items, noContract],
+    });
+    const ws = XLSX.read(buffer, { type: 'buffer' }).Sheets.Sheet1;
+    const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, blankrows: true });
+    const names = aoa.slice(8).filter((r) => typeof r[0] === 'number').map((r) => r[1]);
+    expect(names).toEqual(['MERT SADAK', 'ANA SILVA']);
+    expect(names).not.toContain('PROBATION HIRE');
+    expect(count).toBe(2);
+    expect(grandTotal).toBe(19100.55);          // excludes the 4000
+    expect(excluded).toHaveLength(1);
+  });
+
+  it('renumbers Sl.No so exclusions leave no gap', () => {
+    const { aoa } = (() => {
+      const { buffer } = buildWpsWorkbook({ company, period: '2026-07', items: [items[0], noContract, items[1]] });
+      const ws = XLSX.read(buffer, { type: 'buffer' }).Sheets.Sheet1;
+      return { aoa: XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, blankrows: true }) };
+    })();
+    const nums = aoa.slice(8).filter((r) => typeof r[0] === 'number').map((r) => r[0]);
+    expect(nums).toEqual([1, 2]);
   });
 });
