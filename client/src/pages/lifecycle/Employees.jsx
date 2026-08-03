@@ -581,18 +581,23 @@ export default function Employees() {
                   <div className="pt-2 mt-1 border-t border-surface-200">
                     <label className="block text-surface-500 text-xs mb-1">{t('employees.wps_ids')}</label>
                     <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-surface-400 text-[10px] mb-0.5">{t('employees.work_permit_no')}</label>
-                        <input value={wpsIds.work_permit_no} onChange={(e) => setWpsIds((p) => ({ ...p, work_permit_no: e.target.value }))}
-                          inputMode="numeric" placeholder={t('employees.work_permit_ph')}
-                          className="w-full text-xs font-mono bg-white border border-surface-200 rounded-lg px-2 py-1.5" />
-                      </div>
-                      <div>
-                        <label className="block text-surface-400 text-[10px] mb-0.5">{t('employees.personal_no')}</label>
-                        <input value={wpsIds.personal_no} onChange={(e) => setWpsIds((p) => ({ ...p, personal_no: e.target.value }))}
-                          inputMode="numeric" placeholder={t('employees.personal_no_ph')}
-                          className="w-full text-xs font-mono bg-white border border-surface-200 rounded-lg px-2 py-1.5" />
-                      </div>
+                      {[
+                        ['work_permit_no', t('employees.work_permit_no_full'), 9],
+                        ['personal_no', t('employees.personal_no_full'), 14],
+                      ].map(([key, label, len]) => {
+                        const val = wpsIds[key];
+                        // Live length feedback: the MOL rejects a file with a wrong-width number.
+                        const wrongLen = val.trim().length > 0 && val.trim().length !== len;
+                        return (
+                          <div key={key}>
+                            <label className="block text-surface-400 text-[10px] mb-0.5">{label}</label>
+                            <input value={val} onChange={(e) => setWpsIds((p) => ({ ...p, [key]: e.target.value }))}
+                              inputMode="numeric" placeholder={'0'.repeat(len)}
+                              className={`w-full text-xs font-mono bg-white border rounded-lg px-2 py-1.5 ${wrongLen ? 'border-amber-400' : 'border-surface-200'}`} />
+                            {wrongLen && <p className="text-[10px] text-amber-600 mt-0.5">{t('employees.wps_len_warning', { expected: len, actual: val.trim().length })}</p>}
+                          </div>
+                        );
+                      })}
                     </div>
                     <div className="flex items-center gap-2 mt-2">
                       <Button size="sm" onClick={saveWpsIds} loading={savingWps}>{t('common.save', 'Save')}</Button>
