@@ -10,6 +10,7 @@ import { parseEmployeeDocument } from '../services/deepseekService.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import { extractTextFromFile } from '../services/cvParserService.js';
 import { ensureUploadDir, uploadPath } from '../config/storage.js';
 
@@ -304,6 +305,147 @@ router.get('/:id/history', async (req, res) => {
 
     res.json({ employee: header, timeline, counts: { onboarding: obEvents.length, documents: docs.length, assets: assets.length + assetHistory.length, leave: leave.length } });
   } catch (err) { console.error('GET /employees/:id/history error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// ==================== Bank details + stamped IBAN letter ====================
+
+// The bank-stamped IBAN letter is the evidence behind a payroll account, so it
+// is kept as a real file (same pattern as leave/onboarding attachments).
+const BANK_EXT = ['.pdf', '.png', '.jpg', '.jpeg', '.webp'];
+const bankUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, ensureUploadDir('employee_bank')),
+    filename: (req, file, cb) => cb(null, `${crypto.randomBytes(12).toString('hex')}${path.extname(file.originalname).toLowerCase()}`),
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ok = BANK_EXT.includes(path.extname(file.originalname).toLowerCase());
+    cb(ok ? null : new Error(`Unsupported file type — allowed: ${BANK_EXT.join(', ')}`), ok);
+  },
+});
+const acceptBankFile = (req, res, next) => bankUpload.single('file')(req, res, (err) => {
+  if (!err) return next();
+  const tooBig = err.code === 'LIMIT_FILE_SIZE';
+  res.status(tooBig ? 413 : 422).json({ error: tooBig ? 'File must be 10 MB or smaller' : (err.message || 'Invalid upload') });
+});
+
+// Loose IBAN shape check (same rule the onboarding stage engine applies).
+const IBAN_RE = /^[A-Z]{2}[0-9A-Z]{13,32}$/;
+const normIban = (v) => String(v || '').replace(/\s/g, '').toUpperCase();
+
+// GET /api/employees/:id/bank — details + attached letters (scoped).
+router.get('/:id/bank', async (req, res) => {
+  try {
+    const emp = await getScopedEmployee(req, req.params.id);
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+    const [[bank]] = await pool.query(
+      `SELECT b.*, u.name AS verified_by_name FROM employee_bank_details b
+       LEFT JOIN users u ON b.verified_by = u.id WHERE b.employee_id = ?`, [emp.id]);
+    const [files] = await pool.query(
+      `SELECT f.id, f.kind, f.file_name, f.file_type, f.file_size, f.uploaded_at, u.name AS uploaded_by_name
+       FROM employee_bank_files f LEFT JOIN users u ON f.uploaded_by = u.id
+       WHERE f.employee_id = ? ORDER BY f.uploaded_at DESC`, [emp.id]);
+    res.json({ bank: bank || null, files });
+  } catch (err) { console.error('GET /employees/:id/bank error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// PUT /api/employees/:id/bank — create/update the payroll account (scoped).
+// Editing the account always drops verification: a changed account needs a new
+// stamped letter before it can be trusted for payroll again.
+router.put('/:id/bank', authorize('admin', 'hr_manager'), async (req, res) => {
+  try {
+    const emp = await getScopedEmployee(req, req.params.id);
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+    const { bank_name, account_holder_name, account_number, swift_code, branch_name, transfer_method, salary_currency, notes } = req.body;
+    const iban = normIban(req.body.iban);
+    if (!bank_name || !account_holder_name || !account_number || !iban) {
+      return res.status(422).json({ error: 'Bank name, account holder, account number and IBAN are required' });
+    }
+    if (!IBAN_RE.test(iban)) return res.status(422).json({ error: 'Invalid IBAN format' });
+    const METHODS = ['Bank Transfer', 'WPS', 'Cheque', 'Cash'];
+    const method = METHODS.includes(transfer_method) ? transfer_method : 'Bank Transfer';
+
+    await pool.query(
+      `INSERT INTO employee_bank_details
+         (employee_id, company_id, bank_name, account_holder_name, account_number, iban, swift_code, branch_name, transfer_method, salary_currency, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE bank_name=VALUES(bank_name), account_holder_name=VALUES(account_holder_name),
+         account_number=VALUES(account_number), iban=VALUES(iban), swift_code=VALUES(swift_code),
+         branch_name=VALUES(branch_name), transfer_method=VALUES(transfer_method),
+         salary_currency=VALUES(salary_currency), notes=VALUES(notes),
+         verified=0, verified_by=NULL, verified_at=NULL`,
+      [emp.id, emp.company_id, bank_name, account_holder_name, account_number, iban,
+        swift_code || null, branch_name || null, method, salary_currency || null, notes || null]);
+    await addAudit(pool, req.user, 'Employees', 'Bank Details Updated', `Bank account saved for ${emp.first_name} ${emp.last_name} (pending verification)`);
+    res.json({ success: true });
+  } catch (err) { console.error('PUT /employees/:id/bank error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// POST /api/employees/:id/bank/verify — refuses without a stamped IBAN letter.
+router.post('/:id/bank/verify', authorize('admin', 'hr_manager'), async (req, res) => {
+  try {
+    const emp = await getScopedEmployee(req, req.params.id);
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+    const [[bank]] = await pool.query('SELECT id FROM employee_bank_details WHERE employee_id = ?', [emp.id]);
+    if (!bank) return res.status(400).json({ error: 'No bank details to verify' });
+    const [[letter]] = await pool.query(
+      "SELECT id FROM employee_bank_files WHERE employee_id = ? AND kind = 'iban_letter' LIMIT 1", [emp.id]);
+    if (!letter) return res.status(422).json({ error: 'Attach the bank-stamped IBAN letter before verifying the account' });
+
+    await pool.query('UPDATE employee_bank_details SET verified = 1, verified_by = ?, verified_at = NOW() WHERE employee_id = ?', [req.user.id, emp.id]);
+    await addAudit(pool, req.user, 'Employees', 'Bank Details Verified', `Bank account verified for ${emp.first_name} ${emp.last_name}`);
+    res.json({ success: true });
+  } catch (err) { console.error('POST /employees/:id/bank/verify error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// POST /api/employees/:id/bank/files — attach the stamped IBAN letter (scoped).
+router.post('/:id/bank/files', authorize('admin', 'hr_manager'), acceptBankFile, async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'A file is required' });
+    const emp = await getScopedEmployee(req, req.params.id);
+    if (!emp) { fs.unlink(req.file.path, () => {}); return res.status(404).json({ error: 'Employee not found' }); }
+    const kind = req.body.kind === 'other' ? 'other' : 'iban_letter';
+    const [r] = await pool.query('INSERT INTO employee_bank_files SET ?', {
+      employee_id: emp.id, company_id: emp.company_id, kind,
+      file_name: req.file.originalname, file_type: req.file.mimetype, file_size: req.file.size,
+      storage_key: req.file.filename, uploaded_by: req.user.id,
+    });
+    await addAudit(pool, req.user, 'Employees', 'IBAN Letter Attached', `${kind} attached for ${emp.first_name} ${emp.last_name}`);
+    res.status(201).json({ id: r.insertId, kind });
+  } catch (err) { console.error('POST /employees/:id/bank/files error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// GET /api/employees/:id/bank/files/:fileId/download (scoped)
+router.get('/:id/bank/files/:fileId/download', async (req, res) => {
+  try {
+    const emp = await getScopedEmployee(req, req.params.id);
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+    const [[f]] = await pool.query('SELECT * FROM employee_bank_files WHERE id = ? AND employee_id = ?', [req.params.fileId, emp.id]);
+    if (!f) return res.status(404).json({ error: 'File not found' });
+    const filePath = uploadPath('employee_bank', f.storage_key);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File missing on disk' });
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.download(filePath, f.file_name || 'iban-letter');
+  } catch (err) { console.error('GET bank file download error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// DELETE /api/employees/:id/bank/files/:fileId — admin only (scoped).
+router.delete('/:id/bank/files/:fileId', authorize('admin'), async (req, res) => {
+  try {
+    const emp = await getScopedEmployee(req, req.params.id);
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+    const [[f]] = await pool.query('SELECT * FROM employee_bank_files WHERE id = ? AND employee_id = ?', [req.params.fileId, emp.id]);
+    if (!f) return res.status(404).json({ error: 'File not found' });
+    fs.unlink(uploadPath('employee_bank', f.storage_key), () => {});
+    await pool.query('DELETE FROM employee_bank_files WHERE id = ?', [f.id]);
+    // Removing the evidence invalidates the verification it supported.
+    if (f.kind === 'iban_letter') {
+      const [[left]] = await pool.query("SELECT id FROM employee_bank_files WHERE employee_id = ? AND kind = 'iban_letter' LIMIT 1", [emp.id]);
+      if (!left) await pool.query('UPDATE employee_bank_details SET verified = 0, verified_by = NULL, verified_at = NULL WHERE employee_id = ?', [emp.id]);
+    }
+    await addAudit(pool, req.user, 'Employees', 'Bank File Removed', `${f.kind} removed for ${emp.first_name} ${emp.last_name}`);
+    res.json({ success: true });
+  } catch (err) { console.error('DELETE bank file error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
 // ==================== Profile photo ====================

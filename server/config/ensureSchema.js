@@ -26,6 +26,7 @@ const COLUMN_GUARDS = [
   // Leave: who actually approved (may not be a system user), and Full/Half/None pay.
   { table: 'leave_requests', column: 'approver_name', ddl: 'ALTER TABLE leave_requests ADD COLUMN approver_name VARCHAR(200) NULL' },
   { table: 'leave_types', column: 'paid_mode', ddl: "ALTER TABLE leave_types ADD COLUMN paid_mode ENUM('Full','Half','None') NOT NULL DEFAULT 'Full'" },
+  { table: 'onboarding_bank_details', column: 'iban_letter_file_id', ddl: 'ALTER TABLE onboarding_bank_details ADD COLUMN iban_letter_file_id INT NULL' },
 ];
 
 // Tiny key/value store for global app settings (e.g. timezone).
@@ -132,6 +133,47 @@ const TABLE_GUARDS = [
      created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
      FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
      INDEX idx_visa_tpl_company (company_id)
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  // Per-employee payroll bank account + the bank-stamped IBAN letter.
+  // See server/apply_employee_bank.mjs for why this is separate from onboarding.
+  `CREATE TABLE IF NOT EXISTS employee_bank_details (
+     id                  INT AUTO_INCREMENT PRIMARY KEY,
+     employee_id         INT NOT NULL UNIQUE,
+     company_id          INT NOT NULL,
+     bank_name           VARCHAR(150) NULL,
+     account_holder_name VARCHAR(200) NULL,
+     account_number      VARCHAR(60) NULL,
+     iban                VARCHAR(60) NULL,
+     swift_code          VARCHAR(30) NULL,
+     branch_name         VARCHAR(150) NULL,
+     transfer_method     ENUM('Bank Transfer','WPS','Cheque','Cash') DEFAULT 'Bank Transfer',
+     salary_currency     VARCHAR(10) NULL,
+     notes               VARCHAR(500) NULL,
+     verified            BOOLEAN NOT NULL DEFAULT FALSE,
+     verified_by         INT NULL,
+     verified_at         TIMESTAMP NULL,
+     created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+     FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE,
+     FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+     FOREIGN KEY (verified_by) REFERENCES users(id) ON DELETE SET NULL,
+     INDEX idx_emp_bank_company (company_id)
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  `CREATE TABLE IF NOT EXISTS employee_bank_files (
+     id           INT AUTO_INCREMENT PRIMARY KEY,
+     employee_id  INT NOT NULL,
+     company_id   INT NOT NULL,
+     kind         ENUM('iban_letter','other') NOT NULL DEFAULT 'iban_letter',
+     file_name    VARCHAR(255) NULL,
+     file_type    VARCHAR(100) NULL,
+     file_size    INT NULL,
+     storage_key  VARCHAR(500) NOT NULL,
+     uploaded_by  INT NULL,
+     uploaded_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     INDEX idx_emp_bank_file (employee_id, kind),
+     FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE,
+     FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+     FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE SET NULL
    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   // Scanned proof attached to a leave request — see server/apply_leave_docs.mjs.
   `CREATE TABLE IF NOT EXISTS leave_files (

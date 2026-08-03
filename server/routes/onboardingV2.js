@@ -647,6 +647,27 @@ function sumAllowances(raw) {
   return 0;
 }
 
+// Carries the bank account captured during hiring onto the employee record,
+// which is the source of truth for payroll from then on. Only fills a gap —
+// never overwrites an account HR has already set on the employee. Verification
+// does not carry over: the employee-level account is only trusted once the
+// bank-stamped IBAN letter is attached there.
+async function copyBankToEmployee(record, agg, employeeId) {
+  try {
+    const b = agg?.bank;
+    if (!b || !employeeId || !b.iban) return;
+    const [[exists]] = await pool.query('SELECT id FROM employee_bank_details WHERE employee_id = ?', [employeeId]);
+    if (exists) return;
+    await pool.query('INSERT INTO employee_bank_details SET ?', {
+      employee_id: employeeId, company_id: record.company_id,
+      bank_name: b.bank_name, account_holder_name: b.account_holder_name,
+      account_number: b.account_number, iban: b.iban, swift_code: b.swift_code,
+      branch_name: b.branch_name, transfer_method: b.transfer_method || 'Bank Transfer',
+      verified: 0,
+    });
+  } catch (e) { console.error('copyBankToEmployee failed:', e.message); }
+}
+
 // Best-effort match of a free-text department name (offers store department
 // as text) to this company's departments list (employees store department_id
 // as an FK) — there's no way to force an exact link without an existing row.
@@ -706,6 +727,7 @@ async function finalizeEmployee(record, agg, user, { probationary = false } = {}
 
   if (record.employee_id) {
     await backfillEmployee(record.employee_id);
+    await copyBankToEmployee(record, agg, record.employee_id);
     return record.employee_id;
   }
 
@@ -714,6 +736,7 @@ async function finalizeEmployee(record, agg, user, { probationary = false } = {}
     const [[existing]] = await pool.query('SELECT id FROM employees WHERE company_id = ? AND email = ? LIMIT 1', [record.company_id, profile.email]);
     if (existing) {
       await backfillEmployee(existing.id);
+      await copyBankToEmployee(record, agg, existing.id);
       await pool.query('UPDATE onboarding_records SET employee_id = ? WHERE id = ?', [existing.id, record.id]);
       record.employee_id = existing.id;
       await logEvent(record, user, 'employee_linked', `Linked to existing employee #${existing.id}, activated, and backfilled from the accepted offer`);
@@ -732,6 +755,7 @@ async function finalizeEmployee(record, agg, user, { probationary = false } = {}
   });
   await pool.query('UPDATE onboarding_records SET employee_id = ? WHERE id = ?', [r.insertId, record.id]);
   record.employee_id = r.insertId;
+  await copyBankToEmployee(record, agg, r.insertId);
   await logEvent(record, user, 'employee_created',
     probationary
       ? `Employee #${r.insertId} created in the Employees section (probationary — labour contract not yet issued)`

@@ -12,6 +12,16 @@ export const uploadEmployeePhoto = (id, formData) => api.post(`/employees/${id}/
 export const getEmployeePhotoBytes = (id) => api.get(`/employees/${id}/photo`, { responseType: 'blob' });
 export const deleteEmployeePhoto = (id) => api.delete(`/employees/${id}/photo`);
 export const getEmployeeHistory = (id) => api.get(`/employees/${id}/history`);
+
+// Bank details + the bank-stamped IBAN letter
+export const getEmployeeBank = (id) => api.get(`/employees/${id}/bank`);
+export const saveEmployeeBank = (id, data) => api.put(`/employees/${id}/bank`, data);
+export const verifyEmployeeBank = (id) => api.post(`/employees/${id}/bank/verify`);
+export const uploadEmployeeBankFile = (id, formData) => api.post(`/employees/${id}/bank/files`, formData, {
+  headers: { 'Content-Type': 'multipart/form-data' }
+});
+export const downloadEmployeeBankFile = (id, fileId) => api.get(`/employees/${id}/bank/files/${fileId}/download`, { responseType: 'blob' });
+export const deleteEmployeeBankFile = (id, fileId) => api.delete(`/employees/${id}/bank/files/${fileId}`);
 export const getEmployeeDocuments = (id) => api.get(`/employees/${id}/documents`);
 export const uploadEmployeeDocument = (id, formData) => api.post(`/employees/${id}/documents`, formData, {
   headers: { 'Content-Type': 'multipart/form-data' }
