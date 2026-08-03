@@ -22,6 +22,14 @@ const upload = multer({
 const router = Router();
 router.use(auth, tenantScope);
 
+// The stored credential must never reach the browser: revealing one goes through
+// GET /:id/reveal-password, which is role-gated and audited. The list endpoints
+// expose only whether a password exists.
+const stripSecrets = (rows) => rows.map(({ encrypted_password, password_iv, password_tag, ...r }) => ({
+  ...r, has_password: !!encrypted_password,
+}));
+
+
 // Verifies an asset assignment is within the caller's company; returns row or null.
 async function getScopedAsset(req, id, columns = '*') {
   const co = companyClause(req, 'company_id');
@@ -43,7 +51,7 @@ router.get('/', async (req, res) => {
     if (req.query.status) { sql += ' AND a.status = ?'; params.push(req.query.status); }
     sql += ' ORDER BY a.created_at DESC';
     const [rows] = await pool.query(sql, params);
-    res.json(rows);
+    res.json(stripSecrets(rows));
   } catch (err) { console.error('GET /assets error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
@@ -171,7 +179,7 @@ router.get('/by-employee/:employeeId', async (req, res) => {
        WHERE a.employee_id = ? AND a.status = 'Active'` + co.clause + ' ORDER BY a.created_at DESC',
       [req.params.employeeId, ...co.params]
     );
-    res.json(rows);
+    res.json(stripSecrets(rows));
   } catch (err) { console.error(err); res.status(500).json({ error: 'Internal server error' }); }
 });
 

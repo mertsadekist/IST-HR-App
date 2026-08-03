@@ -1002,7 +1002,22 @@
     "upload_iban_letter": "رفع الخطاب",
     "iban_letter_hint": "خطاب الآيبان الصادر والمختوم من البنك. مطلوب قبل توثيق الحساب لاعتماده في الرواتب.",
     "iban_letter_required": "يجب إرفاق خطاب IBAN مختوم من البنك قبل توثيق هذا الحساب.",
-    "iban_letter_uploaded": "تم إرفاق خطاب الـ IBAN"
+    "iban_letter_uploaded": "تم إرفاق خطاب الـ IBAN",
+    "assets_tab": "العهد والحسابات",
+    "assets_held": "بحوزته حاليًا",
+    "assets_closed": "مُعادة / مغلقة",
+    "assets_currently_held": "بحوزته حاليًا",
+    "assets_returned_history": "المُعادة والمغلقة",
+    "asset_identifier": "الرقم التسلسلي / المعرّف",
+    "asset_username": "اسم المستخدم",
+    "asset_workspace": "مساحة العمل",
+    "asset_access": "مستوى الصلاحية",
+    "asset_issued": "تاريخ التسليم",
+    "asset_returned": "تاريخ الإعادة",
+    "asset_receipt_on_file": "إيصال التسليم الموقّع محفوظ",
+    "reveal_password": "إظهار",
+    "no_assets": "لم يتم تسليم أي عهدة بعد",
+    "no_assets_desc": "ستظهر هنا الأجهزة وحسابات الشركة والبرامج التي سُلّمت لهذا الموظف."
   },
   "inventory": {
     "actions": "إجراءات",

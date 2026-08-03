@@ -333,7 +333,7 @@ export default function Assets() {
                             <span className="text-xs text-surface-600 max-w-[100px] truncate" title={a.account_username}>
                               <Key size={10} className="inline mr-1 text-amber-500" />{a.account_username}
                             </span>
-                            {a.encrypted_password && (
+                            {a.has_password && (
                               <button
                                 onClick={() => handleRevealPassword(a.id)}
                                 disabled={revealingId === a.id}
