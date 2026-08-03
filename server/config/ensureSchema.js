@@ -27,6 +27,16 @@ const COLUMN_GUARDS = [
   { table: 'leave_requests', column: 'approver_name', ddl: 'ALTER TABLE leave_requests ADD COLUMN approver_name VARCHAR(200) NULL' },
   { table: 'leave_types', column: 'paid_mode', ddl: "ALTER TABLE leave_types ADD COLUMN paid_mode ENUM('Full','Half','None') NOT NULL DEFAULT 'Full'" },
   { table: 'onboarding_bank_details', column: 'iban_letter_file_id', ddl: 'ALTER TABLE onboarding_bank_details ADD COLUMN iban_letter_file_id INT NULL' },
+  // Identifiers required by the UAE WPS salary file — see server/apply_wps_fields.mjs.
+  // VARCHAR, not numeric: leading zeros are significant.
+  { table: 'employees', column: 'work_permit_no', ddl: 'ALTER TABLE employees ADD COLUMN work_permit_no VARCHAR(20) NULL' },
+  { table: 'employees', column: 'personal_no', ddl: 'ALTER TABLE employees ADD COLUMN personal_no VARCHAR(20) NULL' },
+  { table: 'companies', column: 'mol_id', ddl: 'ALTER TABLE companies ADD COLUMN mol_id VARCHAR(30) NULL' },
+  { table: 'companies', column: 'wps_contact_person', ddl: 'ALTER TABLE companies ADD COLUMN wps_contact_person VARCHAR(150) NULL' },
+  { table: 'companies', column: 'wps_contact_mobile', ddl: 'ALTER TABLE companies ADD COLUMN wps_contact_mobile VARCHAR(40) NULL' },
+  { table: 'companies', column: 'wps_contact_phone', ddl: 'ALTER TABLE companies ADD COLUMN wps_contact_phone VARCHAR(40) NULL' },
+  { table: 'companies', column: 'wps_contact_fax', ddl: 'ALTER TABLE companies ADD COLUMN wps_contact_fax VARCHAR(40) NULL' },
+  { table: 'companies', column: 'wps_contact_email', ddl: 'ALTER TABLE companies ADD COLUMN wps_contact_email VARCHAR(150) NULL' },
 ];
 
 // Tiny key/value store for global app settings (e.g. timezone).

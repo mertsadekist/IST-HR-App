@@ -116,6 +116,7 @@ export default function Employees() {
       start_date: selectedEmp.start_date ? dayjs(selectedEmp.start_date).format('YYYY-MM-DD') : '',
       status: selectedEmp.status || 'Active',
       labour_contract_status: selectedEmp.labour_contract_status || 'Not Issued',
+      work_permit_no: selectedEmp.work_permit_no || '', personal_no: selectedEmp.personal_no || '',
     });
     try {
       const { data } = await departmentsApi.getDepartments({ company_id: selectedEmp.company_id });
@@ -533,6 +534,17 @@ export default function Employees() {
                         <input value={editForm.full_salary} onChange={(e) => setEditForm(f => ({ ...f, full_salary: e.target.value }))} type="number" placeholder={t('employees.full_salary', 'Full salary')} className="text-xs bg-white border border-surface-200 rounded-lg px-2 py-1.5" />
                       </div>
                       <input value={editForm.start_date} onChange={(e) => setEditForm(f => ({ ...f, start_date: e.target.value }))} type="date" className="w-full text-xs bg-white border border-surface-200 rounded-lg px-2 py-1.5" />
+                      {/* WPS identifiers — required on the MOL salary file */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-surface-500 text-[10px] mb-0.5">{t('employees.work_permit_no')}</label>
+                          <input value={editForm.work_permit_no} onChange={(e) => setEditForm(f => ({ ...f, work_permit_no: e.target.value }))} inputMode="numeric" placeholder="9 digits" className="w-full text-xs bg-white border border-surface-200 rounded-lg px-2 py-1.5" />
+                        </div>
+                        <div>
+                          <label className="block text-surface-500 text-[10px] mb-0.5">{t('employees.personal_no')}</label>
+                          <input value={editForm.personal_no} onChange={(e) => setEditForm(f => ({ ...f, personal_no: e.target.value }))} inputMode="numeric" placeholder="14 digits" className="w-full text-xs bg-white border border-surface-200 rounded-lg px-2 py-1.5" />
+                        </div>
+                      </div>
                     </div>
                   ) : (
                   <div className="space-y-2 text-xs">
@@ -549,6 +561,8 @@ export default function Employees() {
                     <div className="flex justify-between"><span className="text-surface-500">Basic Salary:</span> <span className="font-semibold text-emerald-600">{selectedEmp.basic_salary ? `${Number(selectedEmp.basic_salary).toLocaleString()} AED` : 'N/A'}</span></div>
                     <div className="flex justify-between"><span className="text-surface-500">Full Salary:</span> <span className="font-semibold text-emerald-700">{selectedEmp.full_salary ? `${Number(selectedEmp.full_salary).toLocaleString()} AED` : 'N/A'}</span></div>
                     <div className="flex justify-between"><span className="text-surface-500">Join Date:</span> <span className="font-semibold text-surface-800">{selectedEmp.start_date ? dayjs(selectedEmp.start_date).format('MMM D, YYYY') : 'N/A'}</span></div>
+                    <div className="flex justify-between"><span className="text-surface-500">{t('employees.work_permit_no')}</span> <span className={`font-semibold font-mono ${selectedEmp.work_permit_no ? 'text-surface-800' : 'text-red-500'}`}>{selectedEmp.work_permit_no || t('employees.wps_missing')}</span></div>
+                    <div className="flex justify-between"><span className="text-surface-500">{t('employees.personal_no')}</span> <span className={`font-semibold font-mono ${selectedEmp.personal_no ? 'text-surface-800' : 'text-red-500'}`}>{selectedEmp.personal_no || t('employees.wps_missing')}</span></div>
                   </div>
                   )}
                   <div className="pt-2 mt-1 border-t border-surface-200">

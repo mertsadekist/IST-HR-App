@@ -94,6 +94,14 @@ router.put('/:id', authorize('admin'), async (req, res) => {
     const co = companyClause(req, 'id');
     const { name, short_code, currency, address, phone, email, website, industry, crm_platform, color_primary, color_secondary, status, logo, salary_review_approver_id } = req.body;
 
+    // WPS establishment details — printed on the MOL salary file header/footer.
+    const mol_id = req.body.mol_id ? String(req.body.mol_id).trim().slice(0, 30) : null;
+    const wps = {};
+    for (const f of ['wps_contact_person', 'wps_contact_mobile', 'wps_contact_phone', 'wps_contact_fax', 'wps_contact_email']) {
+      const v = req.body[f];
+      wps[f] = v == null || String(v).trim() === '' ? null : String(v).trim().slice(0, 150);
+    }
+
     // Official mail domains, comma-separated. Normalized (lowercased, trimmed,
     // "@" and any scheme stripped) so the employee email builder can match them.
     let email_domains = null;
@@ -114,8 +122,10 @@ router.put('/:id', authorize('admin'), async (req, res) => {
     }
 
     const [result] = await pool.query(
-      'UPDATE companies SET name=?, short_code=?, currency=?, address=?, phone=?, email=?, website=?, email_domains=?, industry=?, crm_platform=?, color_primary=?, color_secondary=?, status=?, logo=?, salary_review_approver_id=? WHERE id=?' + co.clause,
-      [name, short_code?.toUpperCase(), currency, address, phone, email, website, email_domains, industry, crm_platform, color_primary, color_secondary, status, logo, salary_review_approver_id || null, req.params.id, ...co.params]
+      'UPDATE companies SET name=?, short_code=?, currency=?, address=?, phone=?, email=?, website=?, email_domains=?, industry=?, crm_platform=?, color_primary=?, color_secondary=?, status=?, logo=?, salary_review_approver_id=?, mol_id=?, wps_contact_person=?, wps_contact_mobile=?, wps_contact_phone=?, wps_contact_fax=?, wps_contact_email=? WHERE id=?' + co.clause,
+      [name, short_code?.toUpperCase(), currency, address, phone, email, website, email_domains, industry, crm_platform, color_primary, color_secondary, status, logo, salary_review_approver_id || null,
+        mol_id, wps.wps_contact_person, wps.wps_contact_mobile, wps.wps_contact_phone, wps.wps_contact_fax, wps.wps_contact_email,
+        req.params.id, ...co.params]
     );
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Company not found' });
     await addAudit(pool, req.user, 'Companies', 'Updated', `Company #${req.params.id} updated`);

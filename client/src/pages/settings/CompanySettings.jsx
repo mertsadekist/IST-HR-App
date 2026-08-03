@@ -40,6 +40,8 @@ export default function CompanySettings() {
       email: '', website: '', industry: '', crm_platform: '',
       color_primary: '#6D28D9', color_secondary: '#1D1245', status: 'Active',
       logo: '', salary_review_approver_id: '', email_domains: '',
+      mol_id: '', wps_contact_person: '', wps_contact_mobile: '',
+      wps_contact_phone: '', wps_contact_fax: '', wps_contact_email: '',
     };
   }
 
@@ -65,6 +67,12 @@ export default function CompanySettings() {
       logo: company.logo || '',
       salary_review_approver_id: company.salary_review_approver_id ? String(company.salary_review_approver_id) : '',
       email_domains: company.email_domains || '',
+      mol_id: company.mol_id || '',
+      wps_contact_person: company.wps_contact_person || '',
+      wps_contact_mobile: company.wps_contact_mobile || '',
+      wps_contact_phone: company.wps_contact_phone || '',
+      wps_contact_fax: company.wps_contact_fax || '',
+      wps_contact_email: company.wps_contact_email || '',
     });
     try {
       setLhMargins(company.letterhead_margins ? JSON.parse(company.letterhead_margins) : { top: 50, bottom: 40, left: 18, right: 18 });
@@ -427,6 +435,28 @@ export default function CompanySettings() {
               placeholder="istrealestate.com, istmarkets.com"
               className="w-full px-3 py-2.5 text-sm bg-white border border-surface-200 rounded-xl input-focus transition-all" />
             <p className="text-[10px] text-surface-400 mt-1">{t('company_settings.email_domains_hint')}</p>
+          </div>
+
+          {/* WPS establishment details — printed on the MOL salary file */}
+          <div className="border-t border-surface-100 pt-4">
+            <label className="block text-sm font-medium text-surface-700 mb-1.5">{t('company_settings.wps_section')}</label>
+            <p className="text-[10px] text-surface-400 mb-2">{t('company_settings.wps_hint')}</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {[
+                ['mol_id', t('company_settings.mol_id'), '2080452'],
+                ['wps_contact_person', t('company_settings.wps_contact_person'), ''],
+                ['wps_contact_mobile', t('company_settings.wps_contact_mobile'), ''],
+                ['wps_contact_phone', t('company_settings.wps_contact_phone'), ''],
+                ['wps_contact_fax', t('company_settings.wps_contact_fax'), ''],
+                ['wps_contact_email', t('company_settings.wps_contact_email'), ''],
+              ].map(([key, label, ph]) => (
+                <div key={key}>
+                  <label className="block text-xs text-surface-500 mb-1">{label}</label>
+                  <input value={form[key]} onChange={(e) => update(key, e.target.value)} placeholder={ph}
+                    className="w-full px-3 py-2 text-sm bg-white border border-surface-200 rounded-xl input-focus transition-all" />
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* Salary Review approver — existing company only (needs users to pick from) */}

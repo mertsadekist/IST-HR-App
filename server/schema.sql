@@ -26,6 +26,14 @@ CREATE TABLE IF NOT EXISTS companies (
     color_secondary VARCHAR(20) DEFAULT '#1D1245',
     status          ENUM('Active', 'Inactive') DEFAULT 'Active',
     salary_review_approver_id INT NULL,        -- designated approver for salary reviews (users.id)
+    -- WPS (UAE Wage Protection System): establishment details printed on the
+    -- salary file submitted to the Ministry of Labour / processing bank.
+    mol_id             VARCHAR(30) NULL,
+    wps_contact_person VARCHAR(150) NULL,
+    wps_contact_mobile VARCHAR(40) NULL,
+    wps_contact_phone  VARCHAR(40) NULL,
+    wps_contact_fax    VARCHAR(40) NULL,
+    wps_contact_email  VARCHAR(150) NULL,
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (salary_review_approver_id) REFERENCES users(id) ON DELETE SET NULL
@@ -251,6 +259,10 @@ CREATE TABLE IF NOT EXISTS employees (
     -- 'Not Issued' = still probationary/trial (a legal notice is shown in the UI).
     labour_contract_status    ENUM('Not Issued', 'Issued') NOT NULL DEFAULT 'Not Issued',
     labour_contract_issued_at DATE NULL,
+    -- WPS identifiers. VARCHAR, not numeric: these are fixed-width digit strings
+    -- whose leading zeros are significant (e.g. personal no 00411089670224).
+    work_permit_no  VARCHAR(20) NULL,          -- 9-digit labour card / work permit
+    personal_no     VARCHAR(20) NULL,          -- 14-digit MOL personal number
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (candidate_id) REFERENCES candidates(id) ON DELETE SET NULL,

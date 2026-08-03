@@ -554,6 +554,7 @@ const EDITABLE_EMPLOYEE_FIELDS = [
   'department_id', 'job_title_id', 'job_title_text',
   'start_date', 'end_date', 'basic_salary', 'full_salary',
   'attendance_id', 'status', 'labour_contract_status', 'labour_contract_issued_at',
+  'work_permit_no', 'personal_no',
 ];
 const EMPLOYEE_STATUSES = ['Onboarding', 'Active', 'Offboarding', 'Exited'];
 const LABOUR_CONTRACT_STATUSES = ['Not Issued', 'Issued'];
@@ -577,6 +578,17 @@ router.put('/:id', authorize('admin', 'hr_manager'), async (req, res) => {
         data.labour_contract_issued_at = data.labour_contract_status === 'Issued'
           ? new Date().toISOString().slice(0, 10)
           : null;
+      }
+    }
+    // WPS identifiers: digits only (leading zeros are significant, so they stay
+    // strings). Length isn't pinned to 9/14 — the MOL has issued shorter legacy
+    // numbers — but anything non-numeric is a typo that would fail submission.
+    for (const f of ['work_permit_no', 'personal_no']) {
+      if (data[f] != null) {
+        data[f] = String(data[f]).replace(/\s+/g, '');
+        if (!/^\d{1,20}$/.test(data[f])) {
+          return res.status(422).json({ error: `${f === 'work_permit_no' ? 'Work permit no' : 'Personal no'} must contain digits only` });
+        }
       }
     }
     if (!Object.keys(data).length) return res.status(400).json({ error: 'Nothing to update' });

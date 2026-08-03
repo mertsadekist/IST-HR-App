@@ -24,4 +24,5 @@ node apply_company_email_domains.mjs
 node apply_employee_photo.mjs
 node apply_leave_docs.mjs
 node apply_employee_bank.mjs
+node apply_wps_fields.mjs
 echo "✅ All migrations applied."

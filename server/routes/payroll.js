@@ -6,6 +6,7 @@ import { addAudit } from '../services/auditService.js';
 import { tenantScope, companyClause } from '../middleware/tenant.js';
 import { validate } from '../middleware/validate.js';
 import { computePayrollItem } from '../services/payrollService.js';
+import { buildWpsWorkbook, wpsReadiness } from '../services/wpsService.js';
 import { notifyRole } from '../services/notificationService.js';
 
 const router = Router();
@@ -153,6 +154,79 @@ router.delete('/runs/:id', authorize('admin'), async (req, res) => {
     await addAudit(pool, req.user, 'Payroll', 'Deleted', `Draft payroll run #${req.params.id} deleted`);
     res.json({ success: true });
   } catch (err) { console.error('DELETE /payroll/runs/:id error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// ─── WPS (UAE Wage Protection System) ────────────────────────────────────────
+// Loads everything the MOL salary file needs for one run: the paying company's
+// establishment details and, per employee, the identifiers + bank destination.
+async function loadWpsData(req, runId) {
+  const co = companyClause(req, 'company_id');
+  const [[run]] = await pool.query(
+    'SELECT * FROM payroll_runs WHERE id = ?' + co.clause, [runId, ...co.params]);
+  if (!run) return null;
+
+  const [[company]] = await pool.query(
+    `SELECT id, name, email, phone, mol_id, wps_contact_person, wps_contact_mobile,
+            wps_contact_phone, wps_contact_fax, wps_contact_email
+       FROM companies WHERE id = ?`, [run.company_id]);
+
+  const [items] = await pool.query(
+    `SELECT pi.employee_id, pi.gross, pi.net, pi.absence_days, pi.unpaid_leave_days,
+            e.first_name, e.last_name, e.work_permit_no, e.personal_no,
+            b.bank_name, b.iban, b.verified AS bank_verified
+       FROM payroll_items pi
+       JOIN employees e ON pi.employee_id = e.id
+       LEFT JOIN employee_bank_details b ON b.employee_id = e.id
+      WHERE pi.run_id = ?
+      ORDER BY e.first_name, e.last_name`, [run.id]);
+
+  return { run, company, items };
+}
+
+// What is still missing before the file can legitimately be submitted.
+router.get('/runs/:id/wps-readiness', authorize('admin', 'hr_manager'), async (req, res) => {
+  try {
+    const data = await loadWpsData(req, req.params.id);
+    if (!data) return res.status(404).json({ error: 'Payroll run not found' });
+    const report = wpsReadiness(data);
+    res.json({
+      ...report,
+      period: data.run.period,
+      company_name: data.company?.name || '',
+      mol_id: data.company?.mol_id || '',
+      employee_count: data.items.length,
+      total_net: data.items.reduce((s, i) => s + Number(i.net || 0), 0),
+      unverified_bank: data.items.filter((i) => i.iban && !i.bank_verified)
+        .map((i) => `${i.first_name} ${i.last_name}`.trim()),
+    });
+  } catch (err) { console.error('GET /payroll/runs/:id/wps-readiness error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// The submittable .xlsx. Blocked while mandatory identifiers are missing unless
+// the caller explicitly asks for a draft (?force=1) to review the layout.
+router.get('/runs/:id/wps-export', authorize('admin', 'hr_manager'), async (req, res) => {
+  try {
+    const data = await loadWpsData(req, req.params.id);
+    if (!data) return res.status(404).json({ error: 'Payroll run not found' });
+    if (!data.items.length) return res.status(409).json({ error: 'This payroll run has no employees' });
+
+    const report = wpsReadiness(data);
+    const force = req.query.force === '1' || req.query.force === 'true';
+    if (!report.ready && !force) {
+      return res.status(422).json({ error: 'WPS data is incomplete', ...report });
+    }
+
+    const { buffer, grandTotal, count } = buildWpsWorkbook({
+      company: data.company, period: data.run.period, items: data.items,
+    });
+    const fileName = `WPS-${(data.company?.name || 'company').replace(/[^\w-]+/g, '_')}-${data.run.period}${force && !report.ready ? '-DRAFT' : ''}.xlsx`;
+    await addAudit(pool, req.user, 'Payroll', 'WPS Export',
+      `WPS file generated for run #${data.run.id} (${data.run.period}): ${count} employee(s), total AED ${grandTotal.toFixed(2)}${report.ready ? '' : ' — INCOMPLETE DRAFT'}`);
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.send(buffer);
+  } catch (err) { console.error('GET /payroll/runs/:id/wps-export error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
 // ─── Payslips ────────────────────────────────────────────────────────────────
