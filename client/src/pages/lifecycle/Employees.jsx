@@ -39,6 +39,8 @@ export default function Employees() {
   const [uploading, setUploading] = useState(false);
   const [attId, setAttId] = useState('');
   const [savingAtt, setSavingAtt] = useState(false);
+  const [wpsIds, setWpsIds] = useState({ work_permit_no: '', personal_no: '' });
+  const [savingWps, setSavingWps] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editForm, setEditForm] = useState({});
   const [savingProfile, setSavingProfile] = useState(false);
@@ -90,6 +92,7 @@ export default function Employees() {
   const handleOpenProfile = async (emp) => {
     setSelectedEmp(emp);
     setAttId(emp.attendance_id || '');
+    setWpsIds({ work_permit_no: emp.work_permit_no || '', personal_no: emp.personal_no || '' });
     setActiveTab('profile');
     setEditMode(false);
     setNewLoginCreds(null);
@@ -116,7 +119,6 @@ export default function Employees() {
       start_date: selectedEmp.start_date ? dayjs(selectedEmp.start_date).format('YYYY-MM-DD') : '',
       status: selectedEmp.status || 'Active',
       labour_contract_status: selectedEmp.labour_contract_status || 'Not Issued',
-      work_permit_no: selectedEmp.work_permit_no || '', personal_no: selectedEmp.personal_no || '',
     });
     try {
       const { data } = await departmentsApi.getDepartments({ company_id: selectedEmp.company_id });
@@ -265,6 +267,26 @@ export default function Employees() {
       toast.error(t('employees.attendance_id_save_failed', 'Failed to save Attendance ID'));
     } finally {
       setSavingAtt(false);
+    }
+  };
+
+  // WPS identifiers save inline (like Attendance ID) rather than only through
+  // edit mode — they are filled in one pass across many employees.
+  const saveWpsIds = async () => {
+    setSavingWps(true);
+    const patch = {
+      work_permit_no: wpsIds.work_permit_no.trim() || null,
+      personal_no: wpsIds.personal_no.trim() || null,
+    };
+    try {
+      await employeesApi.updateEmployee(selectedEmp.id, patch);
+      setSelectedEmp((p) => ({ ...p, ...patch }));
+      setEmployees((list) => list.map((e) => (e.id === selectedEmp.id ? { ...e, ...patch } : e)));
+      toast.success(t('employees.wps_ids_saved'));
+    } catch (err) {
+      toast.error(err.response?.data?.error || t('employees.wps_ids_save_failed'));
+    } finally {
+      setSavingWps(false);
     }
   };
 
@@ -534,17 +556,6 @@ export default function Employees() {
                         <input value={editForm.full_salary} onChange={(e) => setEditForm(f => ({ ...f, full_salary: e.target.value }))} type="number" placeholder={t('employees.full_salary', 'Full salary')} className="text-xs bg-white border border-surface-200 rounded-lg px-2 py-1.5" />
                       </div>
                       <input value={editForm.start_date} onChange={(e) => setEditForm(f => ({ ...f, start_date: e.target.value }))} type="date" className="w-full text-xs bg-white border border-surface-200 rounded-lg px-2 py-1.5" />
-                      {/* WPS identifiers — required on the MOL salary file */}
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-surface-500 text-[10px] mb-0.5">{t('employees.work_permit_no')}</label>
-                          <input value={editForm.work_permit_no} onChange={(e) => setEditForm(f => ({ ...f, work_permit_no: e.target.value }))} inputMode="numeric" placeholder="9 digits" className="w-full text-xs bg-white border border-surface-200 rounded-lg px-2 py-1.5" />
-                        </div>
-                        <div>
-                          <label className="block text-surface-500 text-[10px] mb-0.5">{t('employees.personal_no')}</label>
-                          <input value={editForm.personal_no} onChange={(e) => setEditForm(f => ({ ...f, personal_no: e.target.value }))} inputMode="numeric" placeholder="14 digits" className="w-full text-xs bg-white border border-surface-200 rounded-lg px-2 py-1.5" />
-                        </div>
-                      </div>
                     </div>
                   ) : (
                   <div className="space-y-2 text-xs">
@@ -565,6 +576,32 @@ export default function Employees() {
                     <div className="flex justify-between"><span className="text-surface-500">{t('employees.personal_no')}</span> <span className={`font-semibold font-mono ${selectedEmp.personal_no ? 'text-surface-800' : 'text-red-500'}`}>{selectedEmp.personal_no || t('employees.wps_missing')}</span></div>
                   </div>
                   )}
+                  {/* WPS identifiers — mandatory on the Ministry of Labour salary file.
+                      Editable inline (no edit mode) because they are filled in one pass. */}
+                  <div className="pt-2 mt-1 border-t border-surface-200">
+                    <label className="block text-surface-500 text-xs mb-1">{t('employees.wps_ids')}</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-surface-400 text-[10px] mb-0.5">{t('employees.work_permit_no')}</label>
+                        <input value={wpsIds.work_permit_no} onChange={(e) => setWpsIds((p) => ({ ...p, work_permit_no: e.target.value }))}
+                          inputMode="numeric" placeholder={t('employees.work_permit_ph')}
+                          className="w-full text-xs font-mono bg-white border border-surface-200 rounded-lg px-2 py-1.5" />
+                      </div>
+                      <div>
+                        <label className="block text-surface-400 text-[10px] mb-0.5">{t('employees.personal_no')}</label>
+                        <input value={wpsIds.personal_no} onChange={(e) => setWpsIds((p) => ({ ...p, personal_no: e.target.value }))}
+                          inputMode="numeric" placeholder={t('employees.personal_no_ph')}
+                          className="w-full text-xs font-mono bg-white border border-surface-200 rounded-lg px-2 py-1.5" />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 mt-2">
+                      <Button size="sm" onClick={saveWpsIds} loading={savingWps}>{t('common.save', 'Save')}</Button>
+                      {(!selectedEmp.work_permit_no || !selectedEmp.personal_no) && (
+                        <span className="text-[10px] text-red-500">{t('employees.wps_ids_required')}</span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-surface-400 mt-1">{t('employees.wps_ids_hint')}</p>
+                  </div>
                   <div className="pt-2 mt-1 border-t border-surface-200">
                     <label className="block text-surface-500 text-xs mb-1">{t('employees.attendance_id', 'Attendance ID (device)')}</label>
                     <div className="flex gap-2">
