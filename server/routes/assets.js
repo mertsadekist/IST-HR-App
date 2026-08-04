@@ -6,6 +6,7 @@ import { addAudit } from '../services/auditService.js';
 import { encrypt, decrypt } from '../services/cryptoService.js';
 import { tenantScope, companyClause, resolveWriteCompanyId } from '../middleware/tenant.js';
 import { OWNER_SCOPES } from '../config/ownerScopes.js';
+import { rateLimit } from '../middleware/rateLimit.js';
 import multer from 'multer';
 import path from 'path';
 import { ensureUploadDir } from '../config/storage.js';
@@ -29,6 +30,52 @@ router.use(auth, tenantScope);
 const stripSecrets = (rows) => rows.map(({ encrypted_password, password_iv, password_tag, ...r }) => ({
   ...r, has_password: !!encrypted_password,
 }));
+
+const SECRET_TIERS = ['Reference', 'Delegated', 'Stored'];
+
+/**
+ * Applies the secret-handling policy to a write (docs/secrets_protection_design.md §1).
+ *
+ * Reference is the default and the PRD's own position: the system records that a
+ * credential exists and where to find it, never the value. A password may only
+ * be encrypted into the row when the caller has explicitly declared the Stored
+ * tier and justified it — otherwise a password arriving in the body is refused
+ * rather than quietly kept, because quietly kept is how a credential store
+ * appears without anyone deciding to build one.
+ *
+ * @returns {string|null} an error message, or null when the data is acceptable
+ */
+function applySecretPolicy(data) {
+  if (data.secret_tier != null && !SECRET_TIERS.includes(data.secret_tier)) {
+    return `secret_tier must be one of: ${SECRET_TIERS.join(', ')}`;
+  }
+  const tier = data.secret_tier;
+
+  if (data.account_password) {
+    if (tier !== 'Stored') {
+      return 'Storing a password requires secret_tier "Stored" with a justification. '
+        + 'By default, record a vault reference instead of the password itself.';
+    }
+    if (!String(data.secret_justification || '').trim()) {
+      return 'secret_justification is required when storing a password';
+    }
+    const { encrypted, iv, tag } = encrypt(data.account_password);
+    data.encrypted_password = encrypted;
+    data.password_iv = iv;
+    data.password_tag = tag;
+  }
+  delete data.account_password;
+
+  // Moving off the Stored tier must actually drop the ciphertext, or the promise
+  // that nothing is stored would be untrue.
+  if (tier && tier !== 'Stored') {
+    data.encrypted_password = null;
+    data.password_iv = null;
+    data.password_tag = null;
+    data.secret_justification = null;
+  }
+  return null;
+}
 
 
 // Verifies an asset assignment is within the caller's company; returns row or null.
@@ -74,14 +121,9 @@ router.post('/', authorize('admin', 'hr_manager'), async (req, res) => {
       if (plat?.owner_scope) data.owner_scope = plat.owner_scope;
     }
 
-    // Encrypt password if provided for Account type
-    if (data.account_password) {
-      const { encrypted, iv, tag } = encrypt(data.account_password);
-      data.encrypted_password = encrypted;
-      data.password_iv = iv;
-      data.password_tag = tag;
-      delete data.account_password;
-    }
+    const policyError = applySecretPolicy(data);
+    if (policyError) return res.status(422).json({ error: policyError });
+    if (data.secret_tier === 'Stored') data.secret_approved_by = req.user.id;
 
     const [result] = await pool.query('INSERT INTO asset_assignments SET ?', data);
     
@@ -118,13 +160,9 @@ router.put('/:id', authorize('admin', 'hr_manager'), async (req, res) => {
       return res.status(404).json({ error: 'Asset not found' });
     }
 
-    if (data.account_password) {
-      const { encrypted, iv, tag } = encrypt(data.account_password);
-      data.encrypted_password = encrypted;
-      data.password_iv = iv;
-      data.password_tag = tag;
-      delete data.account_password;
-    }
+    const policyError = applySecretPolicy(data);
+    if (policyError) return res.status(422).json({ error: policyError });
+    if (data.secret_tier === 'Stored') data.secret_approved_by = req.user.id;
 
     await pool.query('UPDATE asset_assignments SET ? WHERE id = ?', [data, req.params.id]);
     await addAudit(pool, req.user, 'Assets', 'Updated', `Asset #${req.params.id} updated`);
@@ -195,20 +233,63 @@ router.get('/by-employee/:employeeId', async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
-// GET /api/assets/:id/reveal-password — Reveal encrypted credential (company-scoped + audited)
-router.get('/:id/reveal-password', authorize('admin', 'hr_manager'), async (req, res) => {
+// POST /api/assets/:id/reveal-password
+//
+// Reading a stored credential is the most sensitive action in this module, and
+// encryption does nothing against a legitimate account being misused — which is
+// the likelier breach. So the reveal path carries its own controls
+// (docs/secrets_protection_design.md §4):
+//
+//   • POST, not GET — a URL lands in access logs, proxy logs and browser history
+//   • admin only — reading a platform password is not an HR function
+//   • a written reason is mandatory and goes into the audit trail
+//   • the audit row is written BEFORE decryption and a failure to write it
+//     aborts the reveal, so an unloggable read cannot happen
+//   • rate-limited per user: a credential dump needs hundreds of requests, a
+//     real admin needs two or three
+//   • no-store, so the plaintext is never cached by a browser or proxy
+const revealLimiter = rateLimit({
+  windowMs: 60 * 60_000,
+  max: 5,
+  keyGenerator: (req) => `user:${req.user?.id || 'anon'}`,
+  message: 'Too many password reveals in the last hour. This limit exists to make bulk credential access impossible; contact an administrator if you genuinely need more.',
+});
+
+router.post('/:id/reveal-password', authorize('admin'), revealLimiter, async (req, res) => {
   try {
+    const reason = String(req.body?.reason || '').trim();
+    if (reason.length < 10) {
+      return res.status(422).json({ error: 'A reason of at least 10 characters is required and will be recorded in the audit log' });
+    }
+
     const co = companyClause(req, 'company_id');
     const [[asset]] = await pool.query(
-      'SELECT encrypted_password, password_iv, password_tag, name, account_username FROM asset_assignments WHERE id = ?' + co.clause,
+      'SELECT encrypted_password, password_iv, password_tag, name, account_username, secret_tier, vault_secret_reference FROM asset_assignments WHERE id = ?' + co.clause,
       [req.params.id, ...co.params]
     );
     if (!asset) return res.status(404).json({ error: 'Asset not found' });
-    if (!asset.encrypted_password) return res.status(400).json({ error: 'No password stored' });
+    if (!asset.encrypted_password) {
+      return res.status(400).json({
+        error: asset.vault_secret_reference
+          ? `No password is stored here by design — retrieve it from the vault: ${asset.vault_secret_reference}`
+          : 'No password stored',
+      });
+    }
+
+    // Fail closed: if the reveal cannot be recorded, it does not happen.
+    try {
+      await addAudit(pool, req.user, 'Assets', 'Password Revealed',
+        `${req.user.name} revealed the password for "${asset.name}" (${asset.account_username || 'no username'}) — reason: ${reason}`);
+    } catch (auditErr) {
+      console.error('Reveal aborted — audit write failed:', auditErr.message);
+      return res.status(503).json({ error: 'Cannot record this access right now, so the password was not revealed. Try again shortly.' });
+    }
 
     const password = decrypt(asset.encrypted_password, asset.password_iv, asset.password_tag);
-    await addAudit(pool, req.user, 'Assets', 'Password Revealed', `${req.user.name} revealed password for "${asset.name}" (${asset.account_username})`);
+    if (password == null) return res.status(500).json({ error: 'Stored credential could not be decrypted' });
 
+    res.setHeader('Cache-Control', 'no-store, max-age=0');
+    res.setHeader('Pragma', 'no-cache');
     res.json({ password, username: asset.account_username });
   } catch (err) {
     console.error('Reveal password error:', err);

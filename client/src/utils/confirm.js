@@ -32,6 +32,31 @@ export const confirmDelete = (itemName = 'this item') =>
     },
   });
 
+/**
+ * Asks for a written reason before a sensitive action. Used by the credential
+ * reveal, where the server records the reason in the audit log and refuses
+ * anything shorter than 10 characters.
+ */
+export const promptReason = (title, text) =>
+  Swal.fire({
+    title,
+    text,
+    icon: 'warning',
+    input: 'textarea',
+    inputAttributes: { 'aria-label': title, maxlength: '400' },
+    inputValidator: (v) => (String(v || '').trim().length < 10 ? text : undefined),
+    showCancelButton: true,
+    confirmButtonColor: '#DC2626',
+    cancelButtonColor: '#737373',
+    heightAuto: false,
+    didOpen: escapeModalLock,
+    customClass: {
+      popup: 'rounded-2xl',
+      confirmButton: 'rounded-xl',
+      cancelButton: 'rounded-xl',
+    },
+  });
+
 export const confirmAction = (title, text) =>
   Swal.fire({
     title,

@@ -49,6 +49,13 @@ const COLUMN_GUARDS = [
   { table: 'asset_categories', column: 'recommended_owner', ddl: 'ALTER TABLE asset_categories ADD COLUMN recommended_owner VARCHAR(200) NULL' },
   { table: 'asset_assignments', column: 'owner_scope', ddl: "ALTER TABLE asset_assignments ADD COLUMN owner_scope ENUM('RE','MKT','GRP') NOT NULL DEFAULT 'GRP'" },
   { table: 'asset_inventory', column: 'owner_scope', ddl: "ALTER TABLE asset_inventory ADD COLUMN owner_scope ENUM('RE','MKT','GRP') NOT NULL DEFAULT 'GRP'" },
+  // Credential handling — see server/apply_secret_tiers.mjs and
+  // docs/secrets_protection_design.md. Reference is the default: record where
+  // the secret lives, not the secret.
+  { table: 'asset_assignments', column: 'secret_tier', ddl: "ALTER TABLE asset_assignments ADD COLUMN secret_tier ENUM('Reference','Delegated','Stored') NOT NULL DEFAULT 'Reference'" },
+  { table: 'asset_assignments', column: 'vault_secret_reference', ddl: 'ALTER TABLE asset_assignments ADD COLUMN vault_secret_reference VARCHAR(200) NULL' },
+  { table: 'asset_assignments', column: 'secret_justification', ddl: 'ALTER TABLE asset_assignments ADD COLUMN secret_justification VARCHAR(500) NULL' },
+  { table: 'asset_assignments', column: 'secret_approved_by', ddl: 'ALTER TABLE asset_assignments ADD COLUMN secret_approved_by INT NULL' },
 ];
 
 // Tiny key/value store for global app settings (e.g. timezone).

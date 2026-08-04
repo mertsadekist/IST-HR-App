@@ -11,7 +11,7 @@ import Modal from '@components/ui/Modal';
 import Input from '@components/ui/Input';
 import Select from '@components/ui/Select';
 import EmptyState from '@components/ui/EmptyState';
-import { confirmDelete } from '@utils/confirm';
+import { confirmDelete, promptReason } from '@utils/confirm';
 import { toast } from 'react-toastify';
 import { Plus, Edit3, Trash2, Laptop, RotateCcw, Search, Monitor, Globe, Wrench, Printer, Upload, CheckCircle2, FileCheck, Package, Eye, EyeOff, Link2, Key, Copy, Send } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -25,6 +25,47 @@ import { composeWithLetterhead, elementToPdfBlob, downloadBlob } from '@utils/pd
 
 const typeIcons = { Hardware: Monitor, Account: Globe, Software: Wrench };
 const statusColors = { Active: 'active', Returned: 'success', Deactivated: 'warning', Missing: 'danger' };
+
+/**
+ * How this credential is handled. "Reference" is the default and the policy the
+ * assets PRD asks for: record where the secret lives, never the secret. The
+ * password input only appears once someone deliberately chooses to store it, and
+ * the server enforces the same rule — a password sent on any other tier is
+ * refused rather than quietly kept.
+ */
+function SecretFields({ form, update, editing, t }) {
+  const tier = form.secret_tier || 'Reference';
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-4">
+        <Select label={t('lifecycle.secret_tier')} value={tier} onChange={(e) => update('secret_tier', e.target.value)}
+          options={[
+            { value: 'Reference', label: t('lifecycle.tier_reference') },
+            { value: 'Delegated', label: t('lifecycle.tier_delegated') },
+            { value: 'Stored', label: t('lifecycle.tier_stored') },
+          ]} />
+        {tier === 'Reference' && (
+          <Input label={t('lifecycle.vault_reference')} placeholder="VAULT-SOCIAL-014"
+            value={form.vault_secret_reference} onChange={(e) => update('vault_secret_reference', e.target.value)} />
+        )}
+      </div>
+      {tier === 'Reference' && <p className="text-[10px] text-surface-500">{t('lifecycle.tier_reference_hint')}</p>}
+      {tier === 'Delegated' && <p className="text-[10px] text-surface-500">{t('lifecycle.tier_delegated_hint')}</p>}
+      {tier === 'Stored' && (
+        <div className="p-3 rounded-xl bg-red-50 border border-red-200 space-y-3">
+          <p className="text-[11px] text-red-800">{t('lifecycle.tier_stored_warning')}</p>
+          <div className="grid grid-cols-2 gap-4">
+            <Input label={t('lifecycle.password', 'Password')} type="password" autoComplete="off"
+              placeholder={editing ? '(unchanged)' : 'Enter password...'}
+              value={form.account_password} onChange={(e) => update('account_password', e.target.value)} />
+            <Input label={t('lifecycle.secret_justification')} placeholder={t('lifecycle.secret_justification_ph')}
+              value={form.secret_justification} onChange={(e) => update('secret_justification', e.target.value)} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Assets() {
   const { t } = useTranslation();
@@ -49,6 +90,7 @@ export default function Assets() {
     employee_id: '', company_id: '', platform_id: '', name: '', asset_type: 'Hardware',
     workspace: '', access_level: '', identifier: '', issued_date: '', notes: '',
     inventory_id: '', account_username: '', account_password: '', account_url: '',
+    secret_tier: 'Reference', vault_secret_reference: '', secret_justification: '',
   });
 
   const [returnModal, setReturnModal] = useState(null);
@@ -106,6 +148,7 @@ export default function Assets() {
       platform_id: '', name: '', asset_type: 'Hardware', workspace: '', access_level: '',
       identifier: '', issued_date: dayjs().format('YYYY-MM-DD'), notes: '',
       inventory_id: '', account_username: '', account_password: '', account_url: '',
+      secret_tier: 'Reference', vault_secret_reference: '', secret_justification: '',
     });
     loadFormData();
     setModalOpen(true);
@@ -122,6 +165,9 @@ export default function Assets() {
       notes: a.notes || '', inventory_id: a.inventory_id ? String(a.inventory_id) : '',
       account_username: a.account_username || '', account_password: '',
       account_url: a.account_url || '',
+      secret_tier: a.secret_tier || 'Reference',
+      vault_secret_reference: a.vault_secret_reference || '',
+      secret_justification: a.secret_justification || '',
     });
     loadFormData();
     setModalOpen(true);
@@ -163,11 +209,14 @@ export default function Assets() {
       if (!payload.account_password) delete payload.account_password;
       if (!payload.account_username) delete payload.account_username;
       if (!payload.account_url) delete payload.account_url;
+      // A password only belongs on the Stored tier; the server refuses it
+      // otherwise, so don't send one that a tier change made irrelevant.
+      if (payload.secret_tier !== 'Stored') delete payload.account_password;
 
       if (editing) { await assetsApi.updateAsset(editing.id, payload); toast.success(t('toasts.t_asset_updated')); }
       else { await assetsApi.createAsset(payload); toast.success(t('toasts.t_asset_assigned_successfully')); }
       setModalOpen(false); loadAssets();
-    } catch { toast.error(t('common.error')); } finally { setSaving(false); }
+    } catch (err) { toast.error(err.response?.data?.error || t('common.error')); } finally { setSaving(false); }
   };
 
   const handleReturn = async () => {
@@ -183,21 +232,30 @@ export default function Assets() {
     if (result.isConfirmed) { try { await assetsApi.deleteAsset(a.id); toast.success(t('common.deleted')); loadAssets(); } catch { toast.error(t('common.error')); } }
   };
 
-  // Reveal password
+  // Reveal password. The server requires a written reason, records it in the
+  // audit log before decrypting, and allows only 5 reveals per hour — so the
+  // reason is asked for here rather than sent as a placeholder.
   const handleRevealPassword = async (assetId) => {
     if (revealedPasswords[assetId]) {
       setRevealedPasswords(prev => { const n = { ...prev }; delete n[assetId]; return n; });
       return;
     }
+    const res = await promptReason(t('lifecycle.reveal_reason_title'), t('lifecycle.reveal_reason_desc'));
+    if (!res?.isConfirmed) return;
+    const reason = String(res.value || '').trim();
+    if (reason.length < 10) { toast.error(t('lifecycle.reveal_reason_too_short')); return; }
+
     setRevealingId(assetId);
     try {
-      const { data } = await assetsApi.revealPassword(assetId);
+      const { data } = await assetsApi.revealPassword(assetId, reason);
       setRevealedPasswords(prev => ({ ...prev, [assetId]: data.password }));
       // Auto-hide after 15 seconds
       setTimeout(() => {
         setRevealedPasswords(prev => { const n = { ...prev }; delete n[assetId]; return n; });
       }, 15000);
-    } catch { toast.error(t('toasts.t_failed_to_reveal_password')); }
+    } catch (err) {
+      toast.error(err.response?.data?.error || t('toasts.t_failed_to_reveal_password'));
+    }
     finally { setRevealingId(null); }
   };
 
@@ -530,11 +588,11 @@ export default function Assets() {
                 <Select label={t('lifecycle.platform_optional')} value={form.platform_id} onChange={(e) => update('platform_id', e.target.value)}
                   options={platforms.map(p => ({ value: String(p.id), label: p.name }))} placeholder={t('lifecycle.select_platform', 'Select platform...')} />
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <Input label={t('lifecycle.username', 'Username / Email')} placeholder="user@company.com" value={form.account_username} onChange={(e) => update('account_username', e.target.value)} />
-                <Input label={t('lifecycle.password', 'Password')} type="password" autoComplete="off" placeholder={editing ? '(unchanged)' : 'Enter password...'} value={form.account_password} onChange={(e) => update('account_password', e.target.value)} />
                 <Input label={t('lifecycle.url', 'URL / Link')} placeholder="https://..." value={form.account_url} onChange={(e) => update('account_url', e.target.value)} />
               </div>
+              <SecretFields form={form} update={update} editing={editing} t={t} />
               <Input label={t('lifecycle.identifier')} placeholder="License key or account ID" value={form.identifier} onChange={(e) => update('identifier', e.target.value)} />
             </div>
           )}
@@ -552,11 +610,11 @@ export default function Assets() {
                 <Select label={t('lifecycle.platform_optional')} value={form.platform_id} onChange={(e) => update('platform_id', e.target.value)}
                   options={platforms.map(p => ({ value: String(p.id), label: p.name }))} placeholder={t('lifecycle.select_platform', 'Select platform...')} />
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <Input label={t('lifecycle.username', 'Username / Email')} placeholder="user@company.com" value={form.account_username} onChange={(e) => update('account_username', e.target.value)} />
-                <Input label={t('lifecycle.password', 'Password')} type="password" autoComplete="off" placeholder={editing ? '(unchanged)' : 'Password...'} value={form.account_password} onChange={(e) => update('account_password', e.target.value)} />
                 <Input label={t('lifecycle.url', 'URL / Link')} placeholder="https://..." value={form.account_url} onChange={(e) => update('account_url', e.target.value)} />
               </div>
+              <SecretFields form={form} update={update} editing={editing} t={t} />
             </div>
           )}
 

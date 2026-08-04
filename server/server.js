@@ -1,10 +1,16 @@
 import app from './app.js';
 import pool from './config/db.js';
 import { ensureSchema } from './config/ensureSchema.js';
+import { verifySecrets } from './config/verifySecrets.js';
 import { getAppSetting } from './services/appSettings.js';
 import { applyDueSalaryChanges } from './services/salaryReviewService.js';
 
 const PORT = process.env.PORT || 3001;
+
+// Validate the crypto secrets before binding a port: in production a weak or
+// duplicated key must stop the deploy, not be discovered after credentials have
+// been written under it. See docs/secrets_protection_design.md.
+verifySecrets();
 
 // Apply any approved salary-review items whose effective_date has arrived. Runs
 // once at boot and then on an interval — a lightweight in-process scheduler

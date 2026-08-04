@@ -134,10 +134,27 @@ describe('Cross-company roles see the whole organization', () => {
     expect(res.body.id).toBe(fixture.ids.empRecB);
   });
 
-  it('hr_manager can reveal a company-B asset password (cross-company)', async () => {
-    const res = await request.get(`/api/assets/${fixture.ids.asgB}/reveal-password`).set(bearer(tokHrA));
+  // Reading a stored credential is no longer an HR function — see
+  // docs/secrets_protection_design.md §4. Cross-company reach is unchanged for
+  // internal staff; what changed is that only an admin may reveal, only over
+  // POST, and only with a reason that lands in the audit log.
+  it('hr_manager can no longer reveal a stored password', async () => {
+    const res = await request.post(`/api/assets/${fixture.ids.asgB}/reveal-password`)
+      .set(bearer(tokHrA)).send({ reason: 'checking the credential works' });
+    expect(res.status).toBe(403);
+  });
+
+  it('admin can reveal a company-B asset password cross-company, with a reason', async () => {
+    const res = await request.post(`/api/assets/${fixture.ids.asgB}/reveal-password`)
+      .set(bearer(tokAdminB)).send({ reason: 'rotating this shared credential' });
     expect(res.status).toBe(200);
     expect(res.body.password).toBe('superSecretB');
+  });
+
+  it('refuses a reveal with no stated reason', async () => {
+    const res = await request.post(`/api/assets/${fixture.ids.asgB}/reveal-password`)
+      .set(bearer(tokAdminB)).send({});
+    expect(res.status).toBe(422);
   });
 });
 

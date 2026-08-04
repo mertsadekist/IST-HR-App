@@ -5,5 +5,7 @@ export const updateAsset = (id, data) => api.put(`/assets/${id}`, data);
 export const returnAsset = (id, data) => api.put(`/assets/${id}/return`, data);
 export const deleteAsset = (id) => api.delete(`/assets/${id}`);
 export const uploadReceipt = (id, formData) => api.post(`/assets/${id}/upload-receipt`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-export const revealPassword = (id) => api.get(`/assets/${id}/reveal-password`);
+// POST, not GET: a URL carrying this action lands in access logs, proxy logs and
+// browser history. The reason is mandatory and recorded in the audit log.
+export const revealPassword = (id, reason) => api.post(`/assets/${id}/reveal-password`, { reason });
 export const getByEmployee = (employeeId) => api.get(`/assets/by-employee/${employeeId}`);
