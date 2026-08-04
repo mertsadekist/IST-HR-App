@@ -166,6 +166,24 @@ export default function PayrollRuns() {
               <div className="p-3 bg-surface-50 rounded-xl"><p className="text-xs text-surface-400">{t('payroll_runs.wps_total')}</p><p className="font-bold text-brand-600 text-sm">{Number(wps.included_total || 0).toFixed(2)}</p></div>
             </div>
 
+            {/* Offboarding staff are out of the file entirely: their final pay is
+                a settlement matter, not a monthly transfer. Shown because the
+                file total is lower by these amounts. */}
+            {wps.offboarding_excluded?.length > 0 && (
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200">
+                <p className="text-sm font-semibold text-amber-900 mb-1">{t('payroll_runs.wps_offboarding', { count: wps.offboarding_excluded.length })}</p>
+                <p className="text-[11px] text-amber-800 mb-2">{t('payroll_runs.wps_offboarding_hint')}</p>
+                <ul className="text-xs text-amber-900 space-y-0.5">
+                  {wps.offboarding_excluded.map((e) => (
+                    <li key={e.employee_id} className="flex justify-between">
+                      <span>{e.name} <span className="text-amber-700">· {e.status}</span></span>
+                      <span className="font-mono text-amber-700">{Number(e.net || 0).toFixed(2)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             {/* Held back for a missing labour contract — not an error, but the
                 reason the file total differs from the payroll run total. */}
             {wps.excluded?.length > 0 && (

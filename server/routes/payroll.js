@@ -68,9 +68,13 @@ router.post('/runs/generate', authorize('admin', 'hr_manager'), validate({
       runId = r.insertId;
     }
 
-    // Active employees in this company
+    // Employees on the monthly payroll. Offboarding and Exited staff are
+    // excluded: once offboarding starts they are handled through the final
+    // settlement, and leaving them here paid a full month to people who had
+    // already left. Their earned final period is a settlement matter, not a
+    // monthly-payroll one — see the note in offboarding.
     const [employees] = await conn.query(
-      "SELECT id, first_name, last_name, basic_salary, full_salary FROM employees WHERE company_id = ? AND status IN ('Active','Onboarding','Offboarding')",
+      "SELECT id, first_name, last_name, basic_salary, full_salary FROM employees WHERE company_id = ? AND status IN ('Active','Onboarding')",
       [companyId]
     );
 
@@ -170,10 +174,14 @@ async function loadWpsData(req, runId) {
             wps_contact_phone, wps_contact_fax, wps_contact_email
        FROM companies WHERE id = ?`, [run.company_id]);
 
-  const [items] = await pool.query(
+  // Offboarding and Exited staff are filtered here as well as at generation.
+  // The file is a transfer instruction to the bank, and an older run generated
+  // before that rule existed must not instruct a salary transfer to somebody who
+  // has left. They are reported separately so the difference is explainable.
+  const [rows] = await pool.query(
     `SELECT pi.employee_id, pi.gross, pi.net, pi.absence_days, pi.unpaid_leave_days,
             e.first_name, e.last_name, e.work_permit_no, e.personal_no,
-            e.labour_contract_status,
+            e.labour_contract_status, e.status AS employment_status,
             b.bank_name, b.iban, b.verified AS bank_verified
        FROM payroll_items pi
        JOIN employees e ON pi.employee_id = e.id
@@ -181,7 +189,12 @@ async function loadWpsData(req, runId) {
       WHERE pi.run_id = ?
       ORDER BY e.first_name, e.last_name`, [run.id]);
 
-  return { run, company, items };
+  const items = rows.filter((r) => !['Offboarding', 'Exited'].includes(r.employment_status));
+  const offboarding = rows
+    .filter((r) => ['Offboarding', 'Exited'].includes(r.employment_status))
+    .map((r) => ({ employee_id: r.employee_id, name: `${r.first_name} ${r.last_name}`.trim(), net: Number(r.net || 0), status: r.employment_status }));
+
+  return { run, company, items, offboarding };
 }
 
 // What is still missing before the file can legitimately be submitted.
@@ -202,6 +215,10 @@ router.get('/runs/:id/wps-readiness', authorize('admin', 'hr_manager'), async (r
       unverified_bank: data.items
         .filter((i) => i.labour_contract_status === 'Issued' && i.iban && !i.bank_verified)
         .map((i) => `${i.first_name} ${i.last_name}`.trim()),
+      // Present in the run but dropped from the file because they are being
+      // offboarded. Reported rather than hidden: their earned final period is
+      // settled separately, and the file total is lower by these amounts.
+      offboarding_excluded: data.offboarding,
     });
   } catch (err) { console.error('GET /payroll/runs/:id/wps-readiness error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
@@ -212,7 +229,13 @@ router.get('/runs/:id/wps-export', authorize('admin', 'hr_manager'), async (req,
   try {
     const data = await loadWpsData(req, req.params.id);
     if (!data) return res.status(404).json({ error: 'Payroll run not found' });
-    if (!data.items.length) return res.status(409).json({ error: 'This payroll run has no employees' });
+    if (!data.items.length) {
+      return res.status(409).json({
+        error: data.offboarding?.length
+          ? 'Every employee in this run is being offboarded, so there is nobody to instruct a transfer for. Their final pay goes through the settlement.'
+          : 'This payroll run has no employees',
+      });
+    }
 
     const report = wpsReadiness(data);
     const force = req.query.force === '1' || req.query.force === 'true';
@@ -235,6 +258,7 @@ router.get('/runs/:id/wps-export', authorize('admin', 'hr_manager'), async (req,
     await addAudit(pool, req.user, 'Payroll', 'WPS Export',
       `WPS file generated for run #${data.run.id} (${data.run.period}): ${count} employee(s), total AED ${grandTotal.toFixed(2)}`
       + (excluded.length ? `; ${excluded.length} excluded — labour contract not issued: ${excluded.map((e) => e.name).join(', ')}` : '')
+      + (data.offboarding?.length ? `; ${data.offboarding.length} excluded — offboarding, settled separately: ${data.offboarding.map((e) => e.name).join(', ')}` : '')
       + (report.ready ? '' : ' — INCOMPLETE DRAFT'));
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');

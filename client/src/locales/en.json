@@ -1442,7 +1442,9 @@
     "st_draft": "Draft",
     "st_approved": "Approved",
     "st_paid": "Paid",
-    "st_cancelled": "Cancelled"
+    "st_cancelled": "Cancelled",
+    "wps_offboarding": "Not in the file — being offboarded ({{count}})",
+    "wps_offboarding_hint": "These employees are on the settlement path, so no monthly transfer is instructed for them. Their earned final period is paid through the offboarding settlement, not this file."
   },
   "salary_reviews": {
     "title": "Salary Reviews",
