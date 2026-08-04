@@ -1,0 +1,192 @@
+{
+  "generated_from": "IST_Groups_Assets_Access_PRD_Social_Media_Full_Profile_Access_Repaired.xlsx",
+  "asset_layers": [
+    "Page / Profile / Channel",
+    "Business / Portfolio Manager",
+    "Ads Manager / Advertising Account"
+  ],
+  "accounts": [
+    {
+      "entity": "IST Real Estate",
+      "platform": "Instagram",
+      "account_type": "Instagram Business Profile",
+      "business_manager_name": "Meta Business Portfolio / Meta Business Suite",
+      "ads_manager_platform": "Meta Ads Manager"
+    },
+    {
+      "entity": "IST Real Estate",
+      "platform": "Facebook",
+      "account_type": "Facebook Page",
+      "business_manager_name": "Meta Business Portfolio / Meta Business Suite",
+      "ads_manager_platform": "Meta Ads Manager"
+    },
+    {
+      "entity": "IST Real Estate",
+      "platform": "Threads",
+      "account_type": "Threads Profile",
+      "business_manager_name": "Meta Business Portfolio / Meta Business Suite",
+      "ads_manager_platform": "Meta Ads Manager"
+    },
+    {
+      "entity": "IST Real Estate",
+      "platform": "Snapchat",
+      "account_type": "Snapchat Public Profile",
+      "business_manager_name": "Snapchat Business Manager",
+      "ads_manager_platform": "Snapchat Ads Manager"
+    },
+    {
+      "entity": "IST Real Estate",
+      "platform": "YouTube",
+      "account_type": "YouTube Channel",
+      "business_manager_name": "Google Brand Account / YouTube Studio",
+      "ads_manager_platform": "Google Ads"
+    },
+    {
+      "entity": "IST Real Estate",
+      "platform": "Google Ads",
+      "account_type": "Google Ads Account",
+      "business_manager_name": "Google Ads Manager Account (MCC)",
+      "ads_manager_platform": "Google Ads"
+    },
+    {
+      "entity": "IST Real Estate",
+      "platform": "TikTok",
+      "account_type": "TikTok Business Account",
+      "business_manager_name": "TikTok Business Center",
+      "ads_manager_platform": "TikTok Ads Manager"
+    },
+    {
+      "entity": "IST Real Estate",
+      "platform": "LinkedIn",
+      "account_type": "LinkedIn Company Page",
+      "business_manager_name": "LinkedIn Business Manager",
+      "ads_manager_platform": "LinkedIn Campaign Manager"
+    },
+    {
+      "entity": "IST Real Estate",
+      "platform": "X (Twitter)",
+      "account_type": "X Business Profile",
+      "business_manager_name": "X Business Account",
+      "ads_manager_platform": "X Ads Manager"
+    },
+    {
+      "entity": "IST Real Estate",
+      "platform": "Pinterest",
+      "account_type": "Pinterest Business Profile",
+      "business_manager_name": "Pinterest Business Account",
+      "ads_manager_platform": "Pinterest Ads Manager"
+    },
+    {
+      "entity": "IST Real Estate",
+      "platform": "WhatsApp Business",
+      "account_type": "WhatsApp Business Account",
+      "business_manager_name": "Meta Business Portfolio / WhatsApp Manager",
+      "ads_manager_platform": "Meta Ads Manager"
+    },
+    {
+      "entity": "IST Real Estate",
+      "platform": "Telegram",
+      "account_type": "Telegram Channel / Group",
+      "business_manager_name": "Telegram Channel / Group Administration",
+      "ads_manager_platform": "Telegram Ads"
+    },
+    {
+      "entity": "IST Real Estate",
+      "platform": "Google Business Profile",
+      "account_type": "Google Business Profile",
+      "business_manager_name": "Google Business Profile Manager",
+      "ads_manager_platform": "Google Ads"
+    },
+    {
+      "entity": "IST Markets",
+      "platform": "Instagram",
+      "account_type": "Instagram Business Profile",
+      "business_manager_name": "Meta Business Portfolio / Meta Business Suite",
+      "ads_manager_platform": "Meta Ads Manager"
+    },
+    {
+      "entity": "IST Markets",
+      "platform": "Facebook",
+      "account_type": "Facebook Page",
+      "business_manager_name": "Meta Business Portfolio / Meta Business Suite",
+      "ads_manager_platform": "Meta Ads Manager"
+    },
+    {
+      "entity": "IST Markets",
+      "platform": "Threads",
+      "account_type": "Threads Profile",
+      "business_manager_name": "Meta Business Portfolio / Meta Business Suite",
+      "ads_manager_platform": "Meta Ads Manager"
+    },
+    {
+      "entity": "IST Markets",
+      "platform": "Snapchat",
+      "account_type": "Snapchat Public Profile",
+      "business_manager_name": "Snapchat Business Manager",
+      "ads_manager_platform": "Snapchat Ads Manager"
+    },
+    {
+      "entity": "IST Markets",
+      "platform": "YouTube",
+      "account_type": "YouTube Channel",
+      "business_manager_name": "Google Brand Account / YouTube Studio",
+      "ads_manager_platform": "Google Ads"
+    },
+    {
+      "entity": "IST Markets",
+      "platform": "Google Ads",
+      "account_type": "Google Ads Account",
+      "business_manager_name": "Google Ads Manager Account (MCC)",
+      "ads_manager_platform": "Google Ads"
+    },
+    {
+      "entity": "IST Markets",
+      "platform": "TikTok",
+      "account_type": "TikTok Business Account",
+      "business_manager_name": "TikTok Business Center",
+      "ads_manager_platform": "TikTok Ads Manager"
+    },
+    {
+      "entity": "IST Markets",
+      "platform": "LinkedIn",
+      "account_type": "LinkedIn Company Page",
+      "business_manager_name": "LinkedIn Business Manager",
+      "ads_manager_platform": "LinkedIn Campaign Manager"
+    },
+    {
+      "entity": "IST Markets",
+      "platform": "X (Twitter)",
+      "account_type": "X Business Profile",
+      "business_manager_name": "X Business Account",
+      "ads_manager_platform": "X Ads Manager"
+    },
+    {
+      "entity": "IST Markets",
+      "platform": "Pinterest",
+      "account_type": "Pinterest Business Profile",
+      "business_manager_name": "Pinterest Business Account",
+      "ads_manager_platform": "Pinterest Ads Manager"
+    },
+    {
+      "entity": "IST Markets",
+      "platform": "WhatsApp Business",
+      "account_type": "WhatsApp Business Account",
+      "business_manager_name": "Meta Business Portfolio / WhatsApp Manager",
+      "ads_manager_platform": "Meta Ads Manager"
+    },
+    {
+      "entity": "IST Markets",
+      "platform": "Telegram",
+      "account_type": "Telegram Channel / Group",
+      "business_manager_name": "Telegram Channel / Group Administration",
+      "ads_manager_platform": "Telegram Ads"
+    },
+    {
+      "entity": "IST Markets",
+      "platform": "Google Business Profile",
+      "account_type": "Google Business Profile",
+      "business_manager_name": "Google Business Profile Manager",
+      "ads_manager_platform": "Google Ads"
+    }
+  ]
+}

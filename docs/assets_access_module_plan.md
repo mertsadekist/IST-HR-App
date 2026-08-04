@@ -177,17 +177,32 @@ verification against the dev DB.
   into the employee profile's Assets & Accounts tab. That belongs with the Phase 6 cross-module
   wiring.
 
-### Phase 4 — Social media accounts and team access *(largest)*
+### Phase 4 — Social media accounts and team access ✅ *done (`apply_social_governance.mjs`, `routes/social.js`)*
 
-- `social_accounts` (34 fields) — one row per platform per entity, with the business-manager and
-  ads-manager blocks, both creator identity blocks, billing owner, pixel/catalogue IDs, recovery
-  email/phone, 2FA, last ownership review, vault reference.
-- `social_access` (28 fields) — one row per person **per asset layer per entity**, with the 7 boolean
-  rights, granted-by identity, 2FA, review and removal dates.
-- Seed the 26 account shells and the 3-layer structure so the team fills them in rather than
-  starting from a blank page.
-- Governance reports the PRD names explicitly: missing backup administrators, 2FA exceptions,
-  personal-email ownership risk, overdue reviews, cross-entity access, missing creator profile URLs.
+- `social_accounts` — one row per platform per entity, with the business-manager and ads-manager
+  blocks, **both creator identity blocks** (the six fields Phase 3 deliberately excluded), billing
+  and payment-method owners, pixel/catalogue IDs, recovery email/phone, 2FA, last ownership review
+  and vault reference. `owner_scope` here is **RE or MKT only** — rule 14 gives every social account
+  exactly one entity, so "shared" is not offered, unlike the platform catalogue. A unique key on
+  (company, entity, platform) stops the same platform being recorded twice for one entity.
+- `social_access` — one row per person **per asset layer**, with the seven rights as separate
+  booleans, granted-by identity, 2FA, review and removal dates. The grant's company always comes
+  from its account, never from the caller.
+- **26 account shells seeded** (13 platforms × 2 entities) pre-filled with account type, business
+  manager and ads platform, at status `To Be Completed`.
+- **The workbook's 78 empty access rows are deliberately NOT seeded.** In a spreadsheet an empty row
+  is a visual template; in a database it is a grant belonging to nobody, and it would pollute every
+  count and report the PRD asks for. The three-layer structure comes from the layer vocabulary
+  instead, and a row is created when a real person is actually granted access.
+- Guardrails that turn the rules into behaviour: an account cannot be marked **Active** until its
+  ownership is recorded (the 422 names exactly which fields are missing); a holder name must be a
+  complete profile name, so a single word or a team label is refused (rules 12, 13).
+- Governance checks: missing backup administrator, account 2FA gaps, **personal-email ownership
+  risk** (creator or recovery on a free provider), missing creator provenance, overdue ownership
+  review, privileged access without 2FA, billing-access holders listed apart, incomplete holder
+  identity, and cross-entity holders.
+- Offboarding gets `POST /social/access/remove-person`, which closes **every layer** of an account
+  for one person in a single call — doing it row by row is how a layer gets missed.
 
 ### Phase 5 — Domains / hosting / infrastructure
 
