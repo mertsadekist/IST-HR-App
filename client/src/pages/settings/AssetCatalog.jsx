@@ -16,6 +16,16 @@ import { useTranslation } from 'react-i18next';
 const assetTypeIcons = { Hardware: Monitor, Account: Globe, Software: Wrench };
 const assetTypeColors = { Hardware: 'text-blue-600', Account: 'text-green-600', Software: 'text-purple-600' };
 
+// Company ownership from the assets PRD. GRP = shared by both companies — a
+// state `company_id` cannot express. It labels and filters; the catalogue itself
+// is a shared library every company draws on.
+const OWNER_SCOPES = ['RE', 'MKT', 'GRP'];
+const ownerStyles = {
+  RE: 'bg-blue-50 text-blue-700',
+  MKT: 'bg-amber-50 text-amber-700',
+  GRP: 'bg-emerald-50 text-emerald-700',
+};
+
 export default function AssetCatalog() {
   const { t } = useTranslation();
   const { items: companies } = useSelector((s) => s.companies);
@@ -24,12 +34,14 @@ export default function AssetCatalog() {
   const [platforms, setPlatforms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState({});
+  const [ownerFilter, setOwnerFilter] = useState('');
+  const [search, setSearch] = useState('');
 
   // Category modal
   const [catModalOpen, setCatModalOpen] = useState(false);
   const [editingCat, setEditingCat] = useState(null);
   const [savingCat, setSavingCat] = useState(false);
-  const [catForm, setCatForm] = useState({ name: '', icon: '💻', color: '#374151' });
+  const [catForm, setCatForm] = useState({ name: '', icon: '💻', color: '#374151', purpose: '', recommended_owner: '' });
 
   // Platform modal
   const [platModalOpen, setPlatModalOpen] = useState(false);
@@ -38,16 +50,25 @@ export default function AssetCatalog() {
   const [platForm, setPlatForm] = useState({
     name: '', category_id: '', asset_type: 'Account', description: '',
     inventory_total: 0, status: 'Active', company_ids: [],
+    owner_scope: 'GRP', alias_of: '', application_url: '', development_type: '',
   });
 
-  useEffect(() => { loadAll(); }, []);
+  // The catalogue is ~100 rows now, so filtering happens server-side.
+  useEffect(() => {
+    const id = setTimeout(loadAll, search ? 300 : 0);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ownerFilter, search]);
 
   const loadAll = async () => {
     setLoading(true);
     try {
       const [catRes, platRes] = await Promise.all([
         settingsApi.getAssetCategories(),
-        settingsApi.getPlatformCatalog(),
+        settingsApi.getPlatformCatalog({
+          ...(ownerFilter ? { owner_scope: ownerFilter } : {}),
+          ...(search ? { search } : {}),
+        }),
       ]);
       setCategories(catRes.data);
       setPlatforms(platRes.data);
@@ -64,8 +85,15 @@ export default function AssetCatalog() {
   const toggle = (id) => setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
 
   // ======= Category CRUD =======
-  const openAddCat = () => { setEditingCat(null); setCatForm({ name: '', icon: '💻', color: '#374151' }); setCatModalOpen(true); };
-  const openEditCat = (cat) => { setEditingCat(cat); setCatForm({ name: cat.name, icon: cat.icon || '💻', color: cat.color || '#374151' }); setCatModalOpen(true); };
+  const openAddCat = () => { setEditingCat(null); setCatForm({ name: '', icon: '💻', color: '#374151', purpose: '', recommended_owner: '' }); setCatModalOpen(true); };
+  const openEditCat = (cat) => {
+    setEditingCat(cat);
+    setCatForm({
+      name: cat.name, icon: cat.icon || '💻', color: cat.color || '#374151',
+      purpose: cat.purpose || '', recommended_owner: cat.recommended_owner || '',
+    });
+    setCatModalOpen(true);
+  };
 
   const handleSaveCat = async (e) => {
     e.preventDefault();
@@ -95,7 +123,11 @@ export default function AssetCatalog() {
   // ======= Platform CRUD =======
   const openAddPlat = (categoryId) => {
     setEditingPlat(null);
-    setPlatForm({ name: '', category_id: String(categoryId || ''), asset_type: 'Account', description: '', inventory_total: 0, status: 'Active', company_ids: [] });
+    setPlatForm({
+      name: '', category_id: String(categoryId || ''), asset_type: 'Account', description: '',
+      inventory_total: 0, status: 'Active', company_ids: companies.map(c => c.id),
+      owner_scope: 'GRP', alias_of: '', application_url: '', development_type: '',
+    });
     setPlatModalOpen(true);
   };
 
@@ -106,6 +138,8 @@ export default function AssetCatalog() {
       description: plat.description || '', inventory_total: plat.inventory_total || 0,
       status: plat.status || 'Active',
       company_ids: plat.companies?.map(c => c.id) || [],
+      owner_scope: plat.owner_scope || 'GRP', alias_of: plat.alias_of || '',
+      application_url: plat.application_url || '', development_type: plat.development_type || '',
     });
     setPlatModalOpen(true);
   };
@@ -162,12 +196,28 @@ export default function AssetCatalog() {
   return (
     <>
       {/* Toolbar */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <Badge variant="brand">{t('asset_catalog.platforms_in_categories', { platforms: totalPlatforms, categories: categories.length })}</Badge>
         <div className="flex gap-2">
           <Button variant="secondary" onClick={() => openAddPlat('')}><Plus size={14} /> {t('asset_catalog.add_platform')}</Button>
           <Button onClick={openAddCat}><Plus size={16} /> {t('asset_catalog.add_category')}</Button>
         </div>
+      </div>
+
+      {/* Owner scope + search. The catalogue is shared by every company; the
+          owner scope records who owns and pays for each entry. */}
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <div className="flex gap-1">
+          {[['', t('asset_catalog.owner_all')], ...OWNER_SCOPES.map(s => [s, t(`asset_catalog.owner_${s}`)])].map(([val, label]) => (
+            <button key={val || 'all'} type="button" onClick={() => setOwnerFilter(val)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                ownerFilter === val ? 'bg-brand-600 text-white' : 'bg-surface-100 text-surface-600 hover:bg-surface-200'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('asset_catalog.search_ph')}
+          className="flex-1 min-w-[180px] px-3 py-2 text-sm bg-white border border-surface-200 rounded-xl input-focus transition-all" />
       </div>
 
       {/* Category list */}
@@ -229,17 +279,25 @@ export default function AssetCatalog() {
                             <div key={plat.id} className="px-5 py-3 flex items-center gap-3 group hover:bg-surface-50/50 transition-colors">
                               <TypeIcon size={16} className={assetTypeColors[plat.asset_type] || 'text-surface-500'} />
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 flex-wrap">
                                   <span className="font-medium text-surface-800 text-sm">{plat.name}</span>
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${ownerStyles[plat.owner_scope] || 'bg-surface-100 text-surface-600'}`}>
+                                    {t(`asset_catalog.owner_${plat.owner_scope || 'GRP'}`)}
+                                  </span>
                                   <Badge variant={plat.status === 'Active' ? 'active' : 'inactive'} className="text-[10px]">{plat.status}</Badge>
                                   <span className="text-xs text-surface-400 px-1.5 py-0.5 bg-surface-100 rounded">{plat.asset_type}</span>
+                                  {plat.development_type && (
+                                    <span className="text-[10px] px-1.5 py-0.5 bg-purple-50 text-purple-700 rounded">{t('asset_catalog.internally_developed')}</span>
+                                  )}
                                 </div>
-                                {plat.companies?.length > 0 && (
-                                  <div className="flex gap-1 mt-1">
-                                    {plat.companies.map(c => (
-                                      <span key={c.id} className="text-[10px] px-1.5 py-0.5 bg-brand-50 text-brand-700 rounded-md">{c.short_code}</span>
-                                    ))}
-                                  </div>
+                                {(plat.alias_of || plat.application_url) && (
+                                  <p className="text-[10px] text-surface-400 mt-0.5 truncate">
+                                    {plat.alias_of && <span>{t('asset_catalog.alias_of', { alias: plat.alias_of })}</span>}
+                                    {plat.alias_of && plat.application_url && ' · '}
+                                    {plat.application_url && (
+                                      <a href={plat.application_url} target="_blank" rel="noreferrer" className="text-brand-600 hover:underline">{plat.application_url}</a>
+                                    )}
+                                  </p>
                                 )}
                               </div>
                               <div className="flex items-center gap-3">
@@ -291,6 +349,16 @@ export default function AssetCatalog() {
               <input type="color" value={catForm.color} onChange={(e) => setCatForm(p => ({ ...p, color: e.target.value }))} className="w-full h-10 rounded-xl border-0 cursor-pointer" />
             </div>
           </div>
+          <div>
+            <label className="block text-sm font-medium text-surface-700 mb-1.5">{t('asset_catalog.purpose')}</label>
+            <textarea value={catForm.purpose} onChange={(e) => setCatForm(p => ({ ...p, purpose: e.target.value }))} rows={2}
+              className="w-full px-3 py-2.5 text-sm bg-white border border-surface-200 rounded-xl input-focus transition-all resize-none" />
+          </div>
+          <Input label={t('asset_catalog.recommended_owner')} placeholder="Admin / Facilities + HR + IT"
+            value={catForm.recommended_owner} onChange={(e) => setCatForm(p => ({ ...p, recommended_owner: e.target.value }))} />
+          {editingCat?.examples && (
+            <p className="text-[10px] text-surface-400">{t('asset_catalog.examples')}: {editingCat.examples}</p>
+          )}
           <div className="flex justify-end gap-3 pt-2">
             <Button type="button" variant="secondary" onClick={() => setCatModalOpen(false)}>{t('common.cancel')}</Button>
             <Button type="submit" loading={savingCat}>{editingCat ? t('common.save') : t('common.add')}</Button>
@@ -326,6 +394,23 @@ export default function AssetCatalog() {
               onChange={(e) => setPlatForm(p => ({ ...p, status: e.target.value }))}
               options={['Active', 'Inactive']}
             />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <Select
+              label={t('asset_catalog.owner_scope')}
+              value={platForm.owner_scope}
+              onChange={(e) => setPlatForm(p => ({ ...p, owner_scope: e.target.value }))}
+              options={OWNER_SCOPES.map(s => ({ value: s, label: t(`asset_catalog.owner_${s}`) }))}
+            />
+            <Input label={t('asset_catalog.alias_of_label')} placeholder="e.g. Youtuge"
+              value={platForm.alias_of} onChange={(e) => setPlatForm(p => ({ ...p, alias_of: e.target.value }))} />
+          </div>
+          <p className="text-[10px] text-surface-400 -mt-2">{t('asset_catalog.owner_scope_hint')}</p>
+          <div className="grid grid-cols-2 gap-4">
+            <Input label={t('asset_catalog.application_url')} placeholder="https://..."
+              value={platForm.application_url} onChange={(e) => setPlatForm(p => ({ ...p, application_url: e.target.value }))} />
+            <Input label={t('asset_catalog.development_type')} placeholder="Internally Developed"
+              value={platForm.development_type} onChange={(e) => setPlatForm(p => ({ ...p, development_type: e.target.value }))} />
           </div>
           <div>
             <label className="block text-sm font-medium text-surface-700 mb-1.5">{t('asset_catalog.description')}</label>

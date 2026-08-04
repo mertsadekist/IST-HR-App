@@ -5,6 +5,7 @@ import { authorize } from '../middleware/rbac.js';
 import { addAudit } from '../services/auditService.js';
 import { generateAssetCode, getCategoryPrefix, generateQRCodeDataURL, generateLabelHTML, generateBulkLabelsHTML } from '../services/barcodeService.js';
 import { tenantScope, companyClause, resolveWriteCompanyId } from '../middleware/tenant.js';
+import { OWNER_SCOPES } from '../config/ownerScopes.js';
 import multer from 'multer';
 import path from 'path';
 import { ensureUploadDir } from '../config/storage.js';
@@ -56,6 +57,11 @@ router.get('/', async (req, res) => {
     if (req.query.status) {
       sql += ' AND i.status = ?'; params.push(req.query.status);
       countSql += ' AND status = ?'; countParams.push(req.query.status);
+    }
+    // Owning company per the assets PRD: RE / MKT / GRP (GRP = shared).
+    if (OWNER_SCOPES.includes(req.query.owner_scope)) {
+      sql += ' AND i.owner_scope = ?'; params.push(req.query.owner_scope);
+      countSql += ' AND owner_scope = ?'; countParams.push(req.query.owner_scope);
     }
     if (req.query.search) {
       const s = `%${req.query.search}%`;
@@ -110,6 +116,14 @@ router.post('/', authorize('admin', 'hr_manager'), async (req, res) => {
     const data = { ...req.body };
     data.company_id = resolveWriteCompanyId(req, data.company_id);
     if (!data.company_id) return res.status(400).json({ error: 'Company is required' });
+    if (data.owner_scope && !OWNER_SCOPES.includes(data.owner_scope)) {
+      return res.status(422).json({ error: `owner_scope must be one of: ${OWNER_SCOPES.join(', ')}` });
+    }
+    // Unless stated, the unit inherits its platform's ownership.
+    if (!data.owner_scope && data.platform_id) {
+      const [[plat]] = await pool.query('SELECT owner_scope FROM platform_catalog WHERE id = ?', [data.platform_id]);
+      if (plat?.owner_scope) data.owner_scope = plat.owner_scope;
+    }
 
     // Auto-generate asset code if not provided
     if (!data.asset_code) {

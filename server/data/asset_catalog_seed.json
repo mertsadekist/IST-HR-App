@@ -1,0 +1,1138 @@
+{
+  "generated_from": "IST_Groups_Assets_Access_PRD_Social_Media_Full_Profile_Access_Repaired.xlsx",
+  "category_alias": {
+    "AI / Productivity / Creative": "Software Licenses / Seats",
+    "Social / Content / Ads": "Social / Digital Platforms",
+    "Telephony / Communication": "Telephony / Messaging / Communication",
+    "Vendor / Procurement / Services": "Vendor / Procurement / Service Accounts"
+  },
+  "removed": {
+    "Amazon": "duplicate of \"Amazone\"",
+    "Istlinks": "duplicate of \"IST Links\"",
+    "Headsets": "inventory item, not a platform"
+  },
+  "categories": [
+    {
+      "name": "Physical Assets",
+      "examples": "Laptop, desktop, phone, tablet, SIM card, access card, keys, monitor, printer, headsets",
+      "purpose": "Physical company-owned equipment and reusable office/employee assets",
+      "recommended_owner": "Admin / Facilities + HR + IT",
+      "icon": "💻",
+      "sort_order": 1
+    },
+    {
+      "name": "Software Licenses / Seats",
+      "examples": "Microsoft, Zoho, Adobe, Kaspersky Antivirus, CyberProtect, ChatGPT, Claude",
+      "purpose": "Named or pooled software seats with available vs assigned inventory",
+      "recommended_owner": "Technology / Data",
+      "icon": "🔑",
+      "sort_order": 2
+    },
+    {
+      "name": "Social / Digital Platforms",
+      "examples": "Instagram, Facebook, Threads, Snapchat, YouTube, Google Ads, TikTok, LinkedIn, X, Pinterest, WhatsApp Business, Telegram, Meta Business Portfolio, TikTok Business Center and related ads managers",
+      "purpose": "Company pages/profiles, business managers, ads accounts, creators, billing owners and person-level access by entity",
+      "recommended_owner": "Marketing / Growth + Technology / Data",
+      "icon": "📷",
+      "sort_order": 3
+    },
+    {
+      "name": "Real Estate Portals / CRM / Listing",
+      "examples": "Property Finder, Bayut, DXB Interact, Bitrix, Skale, Property Monitor",
+      "purpose": "Listing, lead, CRM and portal access used in brokerage operations",
+      "recommended_owner": "Property / Portfolio + Marketing + Technology / Data",
+      "icon": "🏢",
+      "sort_order": 4
+    },
+    {
+      "name": "Telephony / Messaging / Communication",
+      "examples": "WATI, WhatsApp Business, Yeastar VOIP, Voiso VOIP, Du",
+      "purpose": "Voice, calling and messaging access",
+      "recommended_owner": "Technology / Data",
+      "icon": "📱",
+      "sort_order": 5
+    },
+    {
+      "name": "Identity / Access / Security",
+      "examples": "Google Admin, Hikvision Access Control, CurrentDesk, Samsung Account, DNCR",
+      "purpose": "Access-control, admin and security-linked systems",
+      "recommended_owner": "Technology / Data + Admin / Facilities",
+      "icon": "🛡️",
+      "sort_order": 6
+    },
+    {
+      "name": "Domains / Hosting / Infrastructure",
+      "examples": "Hostinger, GoDaddy, HostGator, Cloudflare, Register.Mu, Linode, Tilda",
+      "purpose": "Domain, DNS, hosting and technical ownership controls",
+      "recommended_owner": "Technology / Data",
+      "icon": "☁️",
+      "sort_order": 7
+    },
+    {
+      "name": "Payments / Verification / Integrations",
+      "examples": "ShuftiPro, BridgerPay, MyFatoorah, Korapay, Swiffy, FE Prime",
+      "purpose": "Verification, payment and integration systems",
+      "recommended_owner": "Technology / Data + Finance",
+      "icon": "📁",
+      "sort_order": 8
+    },
+    {
+      "name": "Vendor / Procurement / Service Accounts",
+      "examples": "Amazon, Aramex, Aquacool, Bolt, Sharaf DG, Reed.co.uk, Shams",
+      "purpose": "Operational supplier and service accounts",
+      "recommended_owner": "Admin / Facilities + Finance",
+      "icon": "📦",
+      "sort_order": 9
+    },
+    {
+      "name": "Internally Developed Applications",
+      "examples": "IST Real Estate WATI App, HR App, IST Markets Publisher, IST Links, PropIntels, IST Markets WATI App, IST Markets Bridge",
+      "purpose": "Custom applications designed, developed and controlled internally by IST companies",
+      "recommended_owner": "Technology / Data + relevant business owner",
+      "icon": "🖥️",
+      "sort_order": 10
+    }
+  ],
+  "platforms": [
+    {
+      "name": "Cloudflare",
+      "alias_of": null,
+      "category": "Domains / Hosting / Infrastructure",
+      "asset_type": "Account",
+      "notes": "DNS / CDN / security",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Cloudinary",
+      "alias_of": null,
+      "category": "Domains / Hosting / Infrastructure",
+      "asset_type": "Account",
+      "notes": "Media hosting / CDN",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "GoDaddy",
+      "alias_of": "Godaddy",
+      "category": "Domains / Hosting / Infrastructure",
+      "asset_type": "Account",
+      "notes": "Hosting / registrar",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "HostGator",
+      "alias_of": "Hostgator",
+      "category": "Domains / Hosting / Infrastructure",
+      "asset_type": "Account",
+      "notes": "Hosting provider",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Hostinger",
+      "alias_of": null,
+      "category": "Domains / Hosting / Infrastructure",
+      "asset_type": "Account",
+      "notes": "Hosting / registrar",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Linode",
+      "alias_of": null,
+      "category": "Domains / Hosting / Infrastructure",
+      "asset_type": "Account",
+      "notes": "Hosting / infrastructure",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "OnlyDomains",
+      "alias_of": "Only Domains",
+      "category": "Domains / Hosting / Infrastructure",
+      "asset_type": "Account",
+      "notes": "Domain registrar",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Register.Mu",
+      "alias_of": null,
+      "category": "Domains / Hosting / Infrastructure",
+      "asset_type": "Account",
+      "notes": "Domain registrar",
+      "owner_scope": "MKT",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Tilda",
+      "alias_of": null,
+      "category": "Domains / Hosting / Infrastructure",
+      "asset_type": "Account",
+      "notes": "Website / landing page platform",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "CurrentDesk",
+      "alias_of": null,
+      "category": "Identity / Access / Security",
+      "asset_type": "Account",
+      "notes": "Internal ops / attendance / desk system",
+      "owner_scope": "MKT",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "CyberProtect",
+      "alias_of": null,
+      "category": "Identity / Access / Security",
+      "asset_type": "Account",
+      "notes": "Security / backup / protection",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "DNCR",
+      "alias_of": null,
+      "category": "Identity / Access / Security",
+      "asset_type": "Account",
+      "notes": "Compliance / telemarketing control",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Google Admin",
+      "alias_of": null,
+      "category": "Identity / Access / Security",
+      "asset_type": "Account",
+      "notes": "Admin workspace access",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Hikvision Access Control / Attendance Machine",
+      "alias_of": "HIkvision access control ( Attendance Machine)",
+      "category": "Identity / Access / Security",
+      "asset_type": "Account",
+      "notes": "Attendance and access control",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Kaspersky Antivirus",
+      "alias_of": "Kaspersky Anitvirus",
+      "category": "Identity / Access / Security",
+      "asset_type": "Account",
+      "notes": "Normalize spelling",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Samsung Account",
+      "alias_of": null,
+      "category": "Identity / Access / Security",
+      "asset_type": "Account",
+      "notes": "Device ecosystem account",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "IST Links",
+      "alias_of": "https://istlinks.com/",
+      "category": "Internally Developed Applications",
+      "asset_type": "Software",
+      "notes": "Internally developed shared links and branded routing application",
+      "owner_scope": "GRP",
+      "application_url": "https://istlinks.com/",
+      "development_type": "Internally Developed"
+    },
+    {
+      "name": "IST Markets Bridge",
+      "alias_of": "https://bridge.istmarkets.com",
+      "category": "Internally Developed Applications",
+      "asset_type": "Software",
+      "notes": "Internally developed bridge and operational integration application",
+      "owner_scope": "MKT",
+      "application_url": "https://bridge.istmarkets.com",
+      "development_type": "Internally Developed"
+    },
+    {
+      "name": "IST Markets Publisher",
+      "alias_of": "https://publisher.istmarkets.com/",
+      "category": "Internally Developed Applications",
+      "asset_type": "Software",
+      "notes": "Internally developed publishing and content-management application",
+      "owner_scope": "MKT",
+      "application_url": "https://publisher.istmarkets.com/",
+      "development_type": "Internally Developed"
+    },
+    {
+      "name": "IST Markets WATI App",
+      "alias_of": "https://wati.istmarkets.com",
+      "category": "Internally Developed Applications",
+      "asset_type": "Software",
+      "notes": "Internally developed WATI / WhatsApp workflow application for brokerage operations",
+      "owner_scope": "MKT",
+      "application_url": "https://wati.istmarkets.com",
+      "development_type": "Internally Developed"
+    },
+    {
+      "name": "IST Real Estate HR App",
+      "alias_of": "https://hrapp.istrealestate.ae/d",
+      "category": "Internally Developed Applications",
+      "asset_type": "Software",
+      "notes": "Internally developed HR and employee-management application",
+      "owner_scope": "RE",
+      "application_url": "https://hrapp.istrealestate.ae/d",
+      "development_type": "Internally Developed"
+    },
+    {
+      "name": "IST Real Estate WATI App",
+      "alias_of": "https://wati.istrealestate.ae/",
+      "category": "Internally Developed Applications",
+      "asset_type": "Software",
+      "notes": "Internally developed WATI / WhatsApp workflow application for real-estate operations",
+      "owner_scope": "RE",
+      "application_url": "https://wati.istrealestate.ae/",
+      "development_type": "Internally Developed"
+    },
+    {
+      "name": "PropIntels",
+      "alias_of": "Propintels",
+      "category": "Internally Developed Applications",
+      "asset_type": "Software",
+      "notes": "Internally developed property intelligence application",
+      "owner_scope": "RE",
+      "application_url": "http://cxmmsrbqebfx1dzih6tc1vvq.147.93.27.94.sslip.io/",
+      "development_type": "Internally Developed"
+    },
+    {
+      "name": "BridgerPay",
+      "alias_of": null,
+      "category": "Payments / Verification / Integrations",
+      "asset_type": "Account",
+      "notes": "Payment system",
+      "owner_scope": "MKT",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Centroid Bridge",
+      "alias_of": null,
+      "category": "Payments / Verification / Integrations",
+      "asset_type": "Account",
+      "notes": "Integration / bridge system",
+      "owner_scope": "MKT",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "FE Prime",
+      "alias_of": null,
+      "category": "Payments / Verification / Integrations",
+      "asset_type": "Account",
+      "notes": "Finance / integration platform",
+      "owner_scope": "MKT",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "FX Edge LP",
+      "alias_of": null,
+      "category": "Payments / Verification / Integrations",
+      "asset_type": "Account",
+      "notes": "Finance / LP integration",
+      "owner_scope": "MKT",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "FXVM",
+      "alias_of": null,
+      "category": "Payments / Verification / Integrations",
+      "asset_type": "Account",
+      "notes": "Finance / infrastructure tool",
+      "owner_scope": "MKT",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Korapay",
+      "alias_of": null,
+      "category": "Payments / Verification / Integrations",
+      "asset_type": "Account",
+      "notes": "Payment system",
+      "owner_scope": "MKT",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "MetaQuotes",
+      "alias_of": "Metaquotes",
+      "category": "Payments / Verification / Integrations",
+      "asset_type": "Account",
+      "notes": "Trading / finance platform",
+      "owner_scope": "MKT",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "MyFatoorah",
+      "alias_of": null,
+      "category": "Payments / Verification / Integrations",
+      "asset_type": "Account",
+      "notes": "Payment gateway",
+      "owner_scope": "MKT",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Paymaxis",
+      "alias_of": null,
+      "category": "Payments / Verification / Integrations",
+      "asset_type": "Account",
+      "notes": "Payment system",
+      "owner_scope": "MKT",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "ShuftiPro",
+      "alias_of": null,
+      "category": "Payments / Verification / Integrations",
+      "asset_type": "Account",
+      "notes": "Verification / compliance tool",
+      "owner_scope": "MKT",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Swiffy",
+      "alias_of": null,
+      "category": "Payments / Verification / Integrations",
+      "asset_type": "Account",
+      "notes": "Payment / integration tool",
+      "owner_scope": "MKT",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Bayut",
+      "alias_of": null,
+      "category": "Real Estate Portals / CRM / Listing",
+      "asset_type": "Account",
+      "notes": "Portal access / seat",
+      "owner_scope": "RE",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Bitrix",
+      "alias_of": null,
+      "category": "Real Estate Portals / CRM / Listing",
+      "asset_type": "Account",
+      "notes": "CRM / operations system",
+      "owner_scope": "RE",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "DXB Interact",
+      "alias_of": null,
+      "category": "Real Estate Portals / CRM / Listing",
+      "asset_type": "Account",
+      "notes": "Real-estate market / portal tool",
+      "owner_scope": "RE",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "houzezpropertyfeed.com",
+      "alias_of": null,
+      "category": "Real Estate Portals / CRM / Listing",
+      "asset_type": "Account",
+      "notes": "Listing feed / property site",
+      "owner_scope": "RE",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Listing Portal",
+      "alias_of": null,
+      "category": "Real Estate Portals / CRM / Listing",
+      "asset_type": "Account",
+      "notes": "Generic portal access slot",
+      "owner_scope": "RE",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Property Finder",
+      "alias_of": "PropertyFinder",
+      "category": "Real Estate Portals / CRM / Listing",
+      "asset_type": "Account",
+      "notes": "Portal access / seat",
+      "owner_scope": "RE",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Property Monitor",
+      "alias_of": "ProperyMonitor",
+      "category": "Real Estate Portals / CRM / Listing",
+      "asset_type": "Account",
+      "notes": "Normalize spelling",
+      "owner_scope": "RE",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Skale",
+      "alias_of": null,
+      "category": "Real Estate Portals / CRM / Listing",
+      "asset_type": "Account",
+      "notes": "Platform / CRM / listing tool",
+      "owner_scope": "MKT",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Facebook",
+      "alias_of": null,
+      "category": "Social / Digital Platforms",
+      "asset_type": "Account",
+      "notes": "Company page and advertising asset; separate account records required for each entity. Account-level ownership and staff permissions are tracked separately for IST Real Estate and IST Markets.",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Google Ads",
+      "alias_of": "GoogleAds",
+      "category": "Social / Digital Platforms",
+      "asset_type": "Account",
+      "notes": "Ad platform. Account-level ownership and staff permissions are tracked separately for IST Real Estate and IST Markets.",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Google Ads Manager Account (MCC)",
+      "alias_of": "Google Ads Manager Account",
+      "category": "Social / Digital Platforms",
+      "asset_type": "Account",
+      "notes": "Manager account for multiple Google Ads accounts. Account-level ownership and staff permissions are tracked separately for IST Real Estate and IST Markets.",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Google Brand Account",
+      "alias_of": null,
+      "category": "Social / Digital Platforms",
+      "asset_type": "Account",
+      "notes": "Shared ownership structure for YouTube channels and Google brand assets. Account-level ownership and staff permissions are tracked separately for IST Real Estate and IST Markets.",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Google Business Profile",
+      "alias_of": null,
+      "category": "Social / Digital Platforms",
+      "asset_type": "Account",
+      "notes": "Company location/profile ownership and administration. Account-level ownership and staff permissions are tracked separately for IST Real Estate and IST Markets.",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Google Business Profile Manager",
+      "alias_of": null,
+      "category": "Social / Digital Platforms",
+      "asset_type": "Account",
+      "notes": "Team and location administration for Google Business Profiles. Account-level ownership and staff permissions are tracked separately for IST Real Estate and IST Markets.",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Instagram",
+      "alias_of": null,
+      "category": "Social / Digital Platforms",
+      "asset_type": "Account",
+      "notes": "Social media access. Account-level ownership and staff permissions are tracked separately for IST Real Estate and IST Markets.",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "LinkedIn",
+      "alias_of": null,
+      "category": "Social / Digital Platforms",
+      "asset_type": "Account",
+      "notes": "Social media and employer branding. Account-level ownership and staff permissions are tracked separately for IST Real Estate and IST Markets.",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "LinkedIn Business Manager",
+      "alias_of": null,
+      "category": "Social / Digital Platforms",
+      "asset_type": "Account",
+      "notes": "Central administration of LinkedIn Pages and ad accounts. Account-level ownership and staff permissions are tracked separately for IST Real Estate and IST Markets.",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "LinkedIn Campaign Manager",
+      "alias_of": null,
+      "category": "Social / Digital Platforms",
+      "asset_type": "Account",
+      "notes": "LinkedIn advertising account and campaign administration. Account-level ownership and staff permissions are tracked separately for IST Real Estate and IST Markets.",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Meta Ads Manager",
+      "alias_of": "Ads Manager",
+      "category": "Social / Digital Platforms",
+      "asset_type": "Account",
+      "notes": "Ad platform / business manager. Account-level ownership and staff permissions are tracked separately for IST Real Estate and IST Markets.",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Meta Business Portfolio",
+      "alias_of": null,
+      "category": "Social / Digital Platforms",
+      "asset_type": "Account",
+      "notes": "Ownership container for Facebook, Instagram, Threads and related assets. Account-level ownership and staff permissions are tracked separately for IST Real Estate and IST Markets.",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Meta Business Suite",
+      "alias_of": null,
+      "category": "Social / Digital Platforms",
+      "asset_type": "Account",
+      "notes": "Content, messaging, analytics and business asset administration. Account-level ownership and staff permissions are tracked separately for IST Real Estate and IST Markets.",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Pinterest",
+      "alias_of": null,
+      "category": "Social / Digital Platforms",
+      "asset_type": "Account",
+      "notes": "Company business profile and organic content access. Account-level ownership and staff permissions are tracked separately for IST Real Estate and IST Markets.",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Pinterest Ads Manager",
+      "alias_of": "Pinterest Ads",
+      "category": "Social / Digital Platforms",
+      "asset_type": "Account",
+      "notes": "Pinterest advertising account and campaign administration. Account-level ownership and staff permissions are tracked separately for IST Real Estate and IST Markets.",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Snapchat",
+      "alias_of": null,
+      "category": "Social / Digital Platforms",
+      "asset_type": "Account",
+      "notes": "Social platform. Account-level ownership and staff permissions are tracked separately for IST Real Estate and IST Markets.",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Snapchat Ads Manager",
+      "alias_of": null,
+      "category": "Social / Digital Platforms",
+      "asset_type": "Account",
+      "notes": "Snapchat advertising account and campaign administration. Account-level ownership and staff permissions are tracked separately for IST Real Estate and IST Markets.",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Snapchat Business Manager",
+      "alias_of": null,
+      "category": "Social / Digital Platforms",
+      "asset_type": "Account",
+      "notes": "Business ownership and team administration. Account-level ownership and staff permissions are tracked separately for IST Real Estate and IST Markets.",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Telegram",
+      "alias_of": null,
+      "category": "Social / Digital Platforms",
+      "asset_type": "Account",
+      "notes": "Company channel, group or business communication profile. Account-level ownership and staff permissions are tracked separately for IST Real Estate and IST Markets.",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Telegram Ads",
+      "alias_of": null,
+      "category": "Social / Digital Platforms",
+      "asset_type": "Account",
+      "notes": "Telegram advertising account and campaign administration. Account-level ownership and staff permissions are tracked separately for IST Real Estate and IST Markets.",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Threads",
+      "alias_of": null,
+      "category": "Social / Digital Platforms",
+      "asset_type": "Account",
+      "notes": "Company profile linked to Meta business assets; separate account records required for each entity. Account-level ownership and staff permissions are tracked separately for IST Real Estate and IST Markets.",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "TikTok",
+      "alias_of": null,
+      "category": "Social / Digital Platforms",
+      "asset_type": "Account",
+      "notes": "Company social profile; separate account records required for each entity. Account-level ownership and staff permissions are tracked separately for IST Real Estate and IST Markets.",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "TikTok Ads Manager",
+      "alias_of": null,
+      "category": "Social / Digital Platforms",
+      "asset_type": "Account",
+      "notes": "TikTok advertising account and campaign administration. Account-level ownership and staff permissions are tracked separately for IST Real Estate and IST Markets.",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "TikTok Business Center",
+      "alias_of": null,
+      "category": "Social / Digital Platforms",
+      "asset_type": "Account",
+      "notes": "Business ownership, partner and team access administration. Account-level ownership and staff permissions are tracked separately for IST Real Estate and IST Markets.",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "TikTok Business Suite",
+      "alias_of": "Tiktok Business Suite",
+      "category": "Social / Digital Platforms",
+      "asset_type": "Account",
+      "notes": "Social / ads platform. Account-level ownership and staff permissions are tracked separately for IST Real Estate and IST Markets.",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Watermark",
+      "alias_of": null,
+      "category": "Social / Digital Platforms",
+      "asset_type": "Account",
+      "notes": "Content / media tool. Account-level ownership and staff permissions are tracked separately for IST Real Estate and IST Markets.",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "WhatsApp Manager",
+      "alias_of": null,
+      "category": "Social / Digital Platforms",
+      "asset_type": "Account",
+      "notes": "WhatsApp Business account, phone-number and template administration. Account-level ownership and staff permissions are tracked separately for IST Real Estate and IST Markets.",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "WordPress",
+      "alias_of": null,
+      "category": "Social / Digital Platforms",
+      "asset_type": "Account",
+      "notes": "CMS / website access. Account-level ownership and staff permissions are tracked separately for IST Real Estate and IST Markets.",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "X (Twitter)",
+      "alias_of": "X",
+      "category": "Social / Digital Platforms",
+      "asset_type": "Account",
+      "notes": "Company profile and publishing access. Account-level ownership and staff permissions are tracked separately for IST Real Estate and IST Markets.",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "X Ads Manager",
+      "alias_of": "X Ads",
+      "category": "Social / Digital Platforms",
+      "asset_type": "Account",
+      "notes": "X advertising account and campaign administration. Account-level ownership and staff permissions are tracked separately for IST Real Estate and IST Markets.",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "YouTube",
+      "alias_of": "Youtuge",
+      "category": "Social / Digital Platforms",
+      "asset_type": "Account",
+      "notes": "Normalized from earlier typo. Account-level ownership and staff permissions are tracked separately for IST Real Estate and IST Markets.",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "YouTube Studio",
+      "alias_of": null,
+      "category": "Social / Digital Platforms",
+      "asset_type": "Account",
+      "notes": "YouTube channel publishing, analytics and permissions. Account-level ownership and staff permissions are tracked separately for IST Real Estate and IST Markets.",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "ActiveCampaign",
+      "alias_of": "Active Campaign",
+      "category": "Software Licenses / Seats",
+      "asset_type": "Software",
+      "notes": "CRM / email automation",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Adobe",
+      "alias_of": null,
+      "category": "Software Licenses / Seats",
+      "asset_type": "Software",
+      "notes": "Creative software seat",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "ChatGPT",
+      "alias_of": null,
+      "category": "Software Licenses / Seats",
+      "asset_type": "Software",
+      "notes": "Digital seat / license",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Claude",
+      "alias_of": null,
+      "category": "Software Licenses / Seats",
+      "asset_type": "Software",
+      "notes": "Digital seat / license",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Envato",
+      "alias_of": null,
+      "category": "Software Licenses / Seats",
+      "asset_type": "Software",
+      "notes": "Creative assets / templates",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Freepik",
+      "alias_of": null,
+      "category": "Software Licenses / Seats",
+      "asset_type": "Software",
+      "notes": "Creative assets",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "GitHub",
+      "alias_of": "Github",
+      "category": "Software Licenses / Seats",
+      "asset_type": "Software",
+      "notes": "Code / repository access",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Higgsfield",
+      "alias_of": null,
+      "category": "Software Licenses / Seats",
+      "asset_type": "Software",
+      "notes": "Creative / AI tool",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Mailchimp",
+      "alias_of": null,
+      "category": "Software Licenses / Seats",
+      "asset_type": "Software",
+      "notes": "Email marketing",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Make.com",
+      "alias_of": null,
+      "category": "Software Licenses / Seats",
+      "asset_type": "Software",
+      "notes": "Automation platform",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Metricool",
+      "alias_of": null,
+      "category": "Software Licenses / Seats",
+      "asset_type": "Software",
+      "notes": "Marketing analytics / scheduling",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Microsoft",
+      "alias_of": null,
+      "category": "Software Licenses / Seats",
+      "asset_type": "Software",
+      "notes": "Productivity suite / license",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Multilogin",
+      "alias_of": null,
+      "category": "Software Licenses / Seats",
+      "asset_type": "Software",
+      "notes": "Browser profile / identity management",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "n8n",
+      "alias_of": "N8N",
+      "category": "Software Licenses / Seats",
+      "asset_type": "Software",
+      "notes": "Automation platform",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Semrush",
+      "alias_of": null,
+      "category": "Software Licenses / Seats",
+      "asset_type": "Software",
+      "notes": "SEO / marketing intelligence",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Skool",
+      "alias_of": null,
+      "category": "Software Licenses / Seats",
+      "asset_type": "Software",
+      "notes": "Community / learning platform",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Zoho",
+      "alias_of": null,
+      "category": "Software Licenses / Seats",
+      "asset_type": "Software",
+      "notes": "Workspace / productivity",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Du",
+      "alias_of": null,
+      "category": "Telephony / Messaging / Communication",
+      "asset_type": "Account",
+      "notes": "Telecom / line account",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Voiso VOIP",
+      "alias_of": null,
+      "category": "Telephony / Messaging / Communication",
+      "asset_type": "Account",
+      "notes": "VOIP system",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "WATI",
+      "alias_of": "Wati",
+      "category": "Telephony / Messaging / Communication",
+      "asset_type": "Account",
+      "notes": "Messaging / WhatsApp automation",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "WhatsApp Business",
+      "alias_of": "Wazzup",
+      "category": "Telephony / Messaging / Communication",
+      "asset_type": "Account",
+      "notes": "Normalize to company WhatsApp access",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Yeastar VOIP",
+      "alias_of": null,
+      "category": "Telephony / Messaging / Communication",
+      "asset_type": "Account",
+      "notes": "VOIP / PBX system",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Amazon",
+      "alias_of": "Amazone",
+      "category": "Vendor / Procurement / Service Accounts",
+      "asset_type": "Account",
+      "notes": "Normalize duplicate spelling",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Aquacool",
+      "alias_of": null,
+      "category": "Vendor / Procurement / Service Accounts",
+      "asset_type": "Account",
+      "notes": "Service vendor account",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Aramex",
+      "alias_of": null,
+      "category": "Vendor / Procurement / Service Accounts",
+      "asset_type": "Account",
+      "notes": "Logistics vendor account",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Bolt",
+      "alias_of": null,
+      "category": "Vendor / Procurement / Service Accounts",
+      "asset_type": "Account",
+      "notes": "Transport / vendor account",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Reed.co.uk",
+      "alias_of": null,
+      "category": "Vendor / Procurement / Service Accounts",
+      "asset_type": "Account",
+      "notes": "Recruitment / sourcing portal",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Shams",
+      "alias_of": null,
+      "category": "Vendor / Procurement / Service Accounts",
+      "asset_type": "Account",
+      "notes": "Business / licensing / service entity",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Sharaf DG",
+      "alias_of": null,
+      "category": "Vendor / Procurement / Service Accounts",
+      "asset_type": "Account",
+      "notes": "Procurement vendor",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    },
+    {
+      "name": "Temu",
+      "alias_of": null,
+      "category": "Vendor / Procurement / Service Accounts",
+      "asset_type": "Account",
+      "notes": "Procurement / vendor account",
+      "owner_scope": "GRP",
+      "application_url": null,
+      "development_type": null
+    }
+  ]
+}

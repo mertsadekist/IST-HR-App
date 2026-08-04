@@ -37,6 +37,18 @@ const COLUMN_GUARDS = [
   { table: 'companies', column: 'wps_contact_phone', ddl: 'ALTER TABLE companies ADD COLUMN wps_contact_phone VARCHAR(40) NULL' },
   { table: 'companies', column: 'wps_contact_fax', ddl: 'ALTER TABLE companies ADD COLUMN wps_contact_fax VARCHAR(40) NULL' },
   { table: 'companies', column: 'wps_contact_email', ddl: 'ALTER TABLE companies ADD COLUMN wps_contact_email VARCHAR(150) NULL' },
+  // Company ownership of assets — see server/apply_asset_ownership.mjs.
+  // GRP = shared by IST Real Estate and IST Markets, which company_id alone
+  // cannot express. Defaults to GRP so an unclassified asset stays visible.
+  { table: 'platform_catalog', column: 'owner_scope', ddl: "ALTER TABLE platform_catalog ADD COLUMN owner_scope ENUM('RE','MKT','GRP') NOT NULL DEFAULT 'GRP'" },
+  { table: 'platform_catalog', column: 'alias_of', ddl: 'ALTER TABLE platform_catalog ADD COLUMN alias_of VARCHAR(255) NULL' },
+  { table: 'platform_catalog', column: 'application_url', ddl: 'ALTER TABLE platform_catalog ADD COLUMN application_url VARCHAR(500) NULL' },
+  { table: 'platform_catalog', column: 'development_type', ddl: 'ALTER TABLE platform_catalog ADD COLUMN development_type VARCHAR(50) NULL' },
+  { table: 'asset_categories', column: 'examples', ddl: 'ALTER TABLE asset_categories ADD COLUMN examples VARCHAR(1000) NULL' },
+  { table: 'asset_categories', column: 'purpose', ddl: 'ALTER TABLE asset_categories ADD COLUMN purpose VARCHAR(1000) NULL' },
+  { table: 'asset_categories', column: 'recommended_owner', ddl: 'ALTER TABLE asset_categories ADD COLUMN recommended_owner VARCHAR(200) NULL' },
+  { table: 'asset_assignments', column: 'owner_scope', ddl: "ALTER TABLE asset_assignments ADD COLUMN owner_scope ENUM('RE','MKT','GRP') NOT NULL DEFAULT 'GRP'" },
+  { table: 'asset_inventory', column: 'owner_scope', ddl: "ALTER TABLE asset_inventory ADD COLUMN owner_scope ENUM('RE','MKT','GRP') NOT NULL DEFAULT 'GRP'" },
 ];
 
 // Tiny key/value store for global app settings (e.g. timezone).

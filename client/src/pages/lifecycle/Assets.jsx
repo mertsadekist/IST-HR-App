@@ -35,6 +35,8 @@ export default function Assets() {
   const [assets, setAssets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
+  // Owning company per the assets PRD: RE / MKT / GRP (GRP = shared).
+  const [ownerFilter, setOwnerFilter] = useState('');
   const [search, setSearch] = useState('');
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -65,7 +67,7 @@ export default function Assets() {
   const [revealedPasswords, setRevealedPasswords] = useState({});
   const [revealingId, setRevealingId] = useState(null);
 
-  useEffect(() => { loadAssets(); }, [currentCompanyId, statusFilter]);
+  useEffect(() => { loadAssets(); /* eslint-disable-next-line */ }, [currentCompanyId, statusFilter, ownerFilter]);
 
   const loadAssets = async () => {
     setLoading(true);
@@ -73,6 +75,7 @@ export default function Assets() {
       const params = {};
       if (currentCompanyId) params.company_id = currentCompanyId;
       if (statusFilter) params.status = statusFilter;
+      if (ownerFilter) params.owner_scope = ownerFilter;
       const { data } = await assetsApi.getAssets(params);
       setAssets(data);
     } catch { toast.error(t('toasts.t_failed_to_load_assets')); }
@@ -271,6 +274,14 @@ export default function Assets() {
         <div className="flex gap-1">
           {['', 'Active', 'Returned', 'Deactivated', 'Missing'].map(s => (
             <button key={s} onClick={() => setStatusFilter(s)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${statusFilter === s ? 'bg-brand-700 text-white' : 'bg-surface-100 text-surface-600 hover:bg-surface-200'}`}>{s ? t(`lifecycle.${s.toLowerCase()}`) : t('lifecycle.all')}</button>
+          ))}
+        </div>
+        <div className="flex gap-1">
+          {['', 'RE', 'MKT', 'GRP'].map(o => (
+            <button key={o || 'all'} onClick={() => setOwnerFilter(o)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${ownerFilter === o ? 'bg-brand-700 text-white' : 'bg-surface-100 text-surface-600 hover:bg-surface-200'}`}>
+              {o ? t(`asset_catalog.owner_${o}`) : t('asset_catalog.owner_all')}
+            </button>
           ))}
         </div>
         <Badge variant="brand">{filtered.length} {t('lifecycle.assets', 'assets')}</Badge>

@@ -5,6 +5,7 @@ import { authorize } from '../middleware/rbac.js';
 import { addAudit } from '../services/auditService.js';
 import { getAppSetting, setAppSetting } from '../services/appSettings.js';
 import { tenantScope, companyClause, resolveWriteCompanyId } from '../middleware/tenant.js';
+import { OWNER_SCOPES } from '../config/ownerScopes.js';
 
 const router = Router();
 
@@ -118,6 +119,17 @@ router.delete('/ats-stages/:id', auth, authorize('admin'), async (req, res) => {
 // ASSET CATEGORIES
 // ==============================================
 
+// Explicit field allowlists — these two routes used to write req.body straight
+// into the table, which let any caller set any column.
+const CATEGORY_FIELDS = ['name', 'icon', 'color', 'examples', 'purpose', 'recommended_owner', 'sort_order'];
+const PLATFORM_FIELDS = ['category_id', 'name', 'asset_type', 'description', 'owner_scope',
+  'alias_of', 'application_url', 'development_type', 'inventory_total', 'status'];
+const pick = (body, fields) => {
+  const out = {};
+  for (const f of fields) if (body[f] !== undefined) out[f] = body[f] === '' ? null : body[f];
+  return out;
+};
+
 // GET /api/settings/asset-categories
 router.get('/asset-categories', auth, async (req, res) => {
   try {
@@ -140,9 +152,11 @@ router.get('/asset-categories', auth, async (req, res) => {
 // POST /api/settings/asset-categories
 router.post('/asset-categories', auth, authorize('admin', 'hr_manager'), async (req, res) => {
   try {
-    const [result] = await pool.query('INSERT INTO asset_categories SET ?', req.body);
-    await addAudit(pool, req.user, 'Settings', 'Asset Category Created', `Category "${req.body.name}" created`);
-    res.status(201).json({ id: result.insertId, ...req.body });
+    const data = pick(req.body, CATEGORY_FIELDS);
+    if (!data.name) return res.status(422).json({ error: 'Category name is required' });
+    const [result] = await pool.query('INSERT INTO asset_categories SET ?', data);
+    await addAudit(pool, req.user, 'Settings', 'Asset Category Created', `Category "${data.name}" created`);
+    res.status(201).json({ id: result.insertId, ...data });
   } catch (err) {
     console.error('POST /settings/asset-categories error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -152,7 +166,9 @@ router.post('/asset-categories', auth, authorize('admin', 'hr_manager'), async (
 // PUT /api/settings/asset-categories/:id
 router.put('/asset-categories/:id', auth, authorize('admin', 'hr_manager'), async (req, res) => {
   try {
-    await pool.query('UPDATE asset_categories SET ? WHERE id = ?', [req.body, req.params.id]);
+    const data = pick(req.body, CATEGORY_FIELDS);
+    if (!Object.keys(data).length) return res.status(400).json({ error: 'Nothing to update' });
+    await pool.query('UPDATE asset_categories SET ? WHERE id = ?', [data, req.params.id]);
     res.json({ success: true });
   } catch (err) {
     console.error('PUT /settings/asset-categories/:id error:', err);
@@ -178,22 +194,31 @@ router.delete('/asset-categories/:id', auth, authorize('admin'), async (req, res
 // GET /api/settings/platform-catalog?category_id=X
 router.get('/platform-catalog', auth, async (req, res) => {
   try {
-    let sql = `SELECT pc.*, ac.name as category_name FROM platform_catalog pc 
+    let sql = `SELECT pc.*, ac.name as category_name FROM platform_catalog pc
                LEFT JOIN asset_categories ac ON pc.category_id = ac.id WHERE 1=1`;
     const params = [];
     if (req.query.category_id) { sql += ' AND pc.category_id = ?'; params.push(req.query.category_id); }
+    if (OWNER_SCOPES.includes(req.query.owner_scope)) { sql += ' AND pc.owner_scope = ?'; params.push(req.query.owner_scope); }
+    if (req.query.search) {
+      // The alias is searchable too, so looking up an old spelling still lands
+      // on the normalized entry.
+      sql += ' AND (pc.name LIKE ? OR pc.alias_of LIKE ?)';
+      params.push(`%${req.query.search}%`, `%${req.query.search}%`);
+    }
     sql += ' ORDER BY ac.sort_order, pc.name';
     const [rows] = await pool.query(sql, params);
 
-    // Fetch assigned companies for each
-    for (const item of rows) {
-      const [companies] = await pool.query(
-        `SELECT c.id, c.name, c.short_code FROM platform_companies pco 
-         JOIN companies c ON pco.company_id = c.id WHERE pco.platform_id = ?`,
-        [item.id]
-      );
-      item.companies = companies;
+    // One grouped query for the company links instead of one per platform —
+    // the catalogue is now ~100 rows, not 2.
+    const [links] = await pool.query(
+      `SELECT pco.platform_id, c.id, c.name, c.short_code FROM platform_companies pco
+       JOIN companies c ON pco.company_id = c.id`);
+    const byPlatform = new Map();
+    for (const l of links) {
+      if (!byPlatform.has(l.platform_id)) byPlatform.set(l.platform_id, []);
+      byPlatform.get(l.platform_id).push({ id: l.id, name: l.name, short_code: l.short_code });
     }
+    for (const item of rows) item.companies = byPlatform.get(item.id) || [];
 
     res.json(rows);
   } catch (err) {
@@ -207,7 +232,12 @@ router.post('/platform-catalog', auth, authorize('admin', 'hr_manager'), async (
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
-    const { company_ids, ...data } = req.body;
+    const { company_ids } = req.body;
+    const data = pick(req.body, PLATFORM_FIELDS);
+    if (!data.name || !data.category_id) { await conn.rollback(); return res.status(422).json({ error: 'Name and category are required' }); }
+    if (data.owner_scope && !OWNER_SCOPES.includes(data.owner_scope)) {
+      await conn.rollback(); return res.status(422).json({ error: `owner_scope must be one of: ${OWNER_SCOPES.join(', ')}` });
+    }
     const [result] = await conn.query('INSERT INTO platform_catalog SET ?', data);
     const platformId = result.insertId;
 
@@ -234,8 +264,12 @@ router.put('/platform-catalog/:id', auth, authorize('admin', 'hr_manager'), asyn
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
-    const { company_ids, ...data } = req.body;
-    await conn.query('UPDATE platform_catalog SET ? WHERE id = ?', [data, req.params.id]);
+    const { company_ids } = req.body;
+    const data = pick(req.body, PLATFORM_FIELDS);
+    if (data.owner_scope && !OWNER_SCOPES.includes(data.owner_scope)) {
+      await conn.rollback(); return res.status(422).json({ error: `owner_scope must be one of: ${OWNER_SCOPES.join(', ')}` });
+    }
+    if (Object.keys(data).length) await conn.query('UPDATE platform_catalog SET ? WHERE id = ?', [data, req.params.id]);
 
     if (company_ids !== undefined) {
       await conn.query('DELETE FROM platform_companies WHERE platform_id = ?', [req.params.id]);

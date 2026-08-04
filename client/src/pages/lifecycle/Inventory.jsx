@@ -53,6 +53,8 @@ export default function Inventory() {
   // Filters & pagination
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
+  // Owning company per the assets PRD: RE / MKT / GRP (GRP = shared).
+  const [ownerFilter, setOwnerFilter] = useState('');
   const [platformFilter, setPlatformFilter] = useState('');
   const [page, setPage] = useState(1);
 
@@ -86,6 +88,7 @@ export default function Inventory() {
       if (currentCompanyId) params.company_id = currentCompanyId;
       if (statusFilter && statusFilter !== 'All') params.status = statusFilter;
       if (platformFilter) params.platform_id = platformFilter;
+      if (ownerFilter) params.owner_scope = ownerFilter;
       if (search) params.search = search;
       params.page = page;
       params.limit = PAGE_SIZE;
@@ -103,7 +106,7 @@ export default function Inventory() {
     } finally {
       setLoading(false);
     }
-  }, [currentCompanyId, statusFilter, platformFilter, search, page, t]);
+  }, [currentCompanyId, statusFilter, platformFilter, ownerFilter, search, page, t]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -435,6 +438,14 @@ export default function Inventory() {
               }`}
             >
               {s === 'All' ? t('inventory.all', 'All') : t(`inventory.${s.toLowerCase().replace(' ', '_')}`, s)}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-1">
+          {['', 'RE', 'MKT', 'GRP'].map(o => (
+            <button key={o || 'all'} onClick={() => { setOwnerFilter(o); setPage(1); setSelected(new Set()); }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${ownerFilter === o ? 'bg-brand-700 text-white shadow-sm' : 'bg-surface-100 text-surface-600 hover:bg-surface-200'}`}>
+              {o ? t(`asset_catalog.owner_${o}`) : t('asset_catalog.owner_all')}
             </button>
           ))}
         </div>

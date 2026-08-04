@@ -441,6 +441,11 @@ CREATE TABLE IF NOT EXISTS asset_categories (
     name            VARCHAR(255) NOT NULL,
     icon            VARCHAR(10) DEFAULT '💻',
     color           VARCHAR(20) DEFAULT '#374151',
+    -- From the assets PRD: illustrative items, why the category exists, and the
+    -- function accountable for it.
+    examples        VARCHAR(1000) NULL,
+    purpose         VARCHAR(1000) NULL,
+    recommended_owner VARCHAR(200) NULL,
     sort_order      INT DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -450,8 +455,15 @@ CREATE TABLE IF NOT EXISTS platform_catalog (
     name            VARCHAR(255) NOT NULL,
     asset_type      ENUM('Hardware', 'Account', 'Software') DEFAULT 'Account',
     description     TEXT NULL,
+    -- Which company owns the platform. GRP = shared by IST Real Estate and IST
+    -- Markets — a state company_id cannot express. See apply_asset_ownership.mjs.
+    owner_scope     ENUM('RE', 'MKT', 'GRP') NOT NULL DEFAULT 'GRP',
+    alias_of        VARCHAR(255) NULL,          -- original spelling this entry normalizes
+    application_url VARCHAR(500) NULL,          -- deployment URL for internally built apps
+    development_type VARCHAR(50) NULL,          -- e.g. "Internally Developed"
     inventory_total INT DEFAULT 0,
     status          ENUM('Active', 'Inactive') DEFAULT 'Active',
+    INDEX idx_owner_scope (owner_scope),
     FOREIGN KEY (category_id) REFERENCES asset_categories(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -477,6 +489,7 @@ CREATE TABLE IF NOT EXISTS asset_assignments (
     expected_return DATE NULL,
     returned_date   DATE NULL,
     status          ENUM('Active', 'Returned', 'Deactivated', 'Missing') DEFAULT 'Active',
+    owner_scope     ENUM('RE', 'MKT', 'GRP') NOT NULL DEFAULT 'GRP',
     condition_note  VARCHAR(100) NULL,
     notes           TEXT NULL,
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
