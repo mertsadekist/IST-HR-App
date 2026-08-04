@@ -62,6 +62,7 @@ const PerformancePage = lazy(() => import('@pages/lifecycle/Performance'));
 const OffboardingPage = lazy(() => import('@pages/lifecycle/Offboarding'));
 const HandoverSheet = lazy(() => import('@pages/lifecycle/HandoverSheet'));
 const InventoryPage = lazy(() => import('@pages/lifecycle/Inventory'));
+const DigitalAccessPage = lazy(() => import('@pages/lifecycle/DigitalAccess'));
 
 // Portal
 const MyAssets = lazy(() => import('@pages/portal/MyAssets'));
@@ -118,6 +119,7 @@ export default function App() {
                 <Route path="/salary-reviews" element={<SalaryReviewsPage />} />
                 <Route path="/assets" element={<AssetsPage />} />
                 <Route path="/inventory" element={<InventoryPage />} />
+                <Route path="/digital-access" element={<DigitalAccessPage />} />
                 <Route path="/performance" element={<PerformancePage />} />
                 <Route path="/offboarding" element={<OffboardingPage />} />
 

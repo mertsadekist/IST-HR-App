@@ -8,7 +8,7 @@ import {
   Laptop, TrendingUp, DoorOpen, Scale, FileArchive, Calculator,
   BarChart3, ClipboardList, Trophy, Network, UserCog, Settings,
   Sparkles, ChevronDown, X, Package, Shield, Mail, Send,
-  CalendarDays, Clock, Banknote, Inbox, HelpCircle
+  CalendarDays, Clock, Banknote, Inbox, HelpCircle, KeyRound
 } from 'lucide-react';
 import { cn } from '@utils/cn';
 
@@ -119,6 +119,7 @@ export default function Sidebar({ isOpen, onClose }) {
         { path: '/salary-reviews', icon: TrendingUp, label: t('nav.salary_reviews', 'Salary Reviews') },
         { path: '/assets', icon: Laptop, label: t('nav.assets') },
         { path: '/inventory', icon: Package, label: t('nav.inventory', 'Inventory') },
+        { path: '/digital-access', icon: KeyRound, label: t('nav.digital_access') },
         { path: '/performance', icon: TrendingUp, label: t('nav.performance', 'Performance') },
         { path: '/offboarding', icon: DoorOpen, label: t('nav.offboarding') },
       ],

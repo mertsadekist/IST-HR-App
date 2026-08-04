@@ -151,15 +151,31 @@ verification against the dev DB.
   (which today does not reconcile with anything).
 - Dashboard widgets: total / available / assigned / pending inspection / damaged-lost, split by owner.
 
-### Phase 3 — Digital access registry
+### Phase 3 — Digital access registry ✅ *done (`apply_digital_access.mjs`, `routes/digitalAccess.js`)*
 
-- New table `digital_access` with the 40 PRD fields: platform, category, owner, workspace,
-  `access_level` (ranked 0–9 ladder), `has_admin_access`, `has_owner_access`, username, login email,
-  registered phone, seat type, `seat_consumes_inventory`, business/ad-account/page IDs, status,
-  granted/revoked dates, `two_factor_enabled`, `last_access_review`, `vault_secret_reference`.
-- Seat accounting: when `seat_consumes_inventory = Yes`, granting reduces available seats and
-  revoking returns them (**acceptance criteria 2, 3, 7**).
-- Reports: admin-access holders, owner-access holders, unused seats, pending revocations.
+- New table `digital_access`, one row per grant, carrying **34 of the sheet's 40 fields**: platform,
+  category, owner, workspace, `access_level` on the ranked 0–9 ladder plus a stored `access_rank`,
+  separate `page_access_level` / `ads_access_level`, `has_admin_access`, `has_owner_access`,
+  `can_manage_users`, username, login email, registered phone, seat type,
+  `seat_consumes_inventory`, business / ad-account / page / portfolio IDs, status,
+  granted / revoked dates, `two_factor_enabled`, `last_access_review`, `vault_secret_reference`.
+- **The six excluded fields are the creator-provenance ones** (page creator full name / profile URL /
+  email, and the same three for the ads-manager creator). They describe the *account*, not a
+  person's access to it, so one value serves every grant on that account — storing them per grant
+  would let two rows disagree about who created the same page. They belong to `social_accounts` in
+  Phase 4.
+- Admin and owner flags are validated against the ladder rather than set independently, and the
+  check runs against the merged row so a partial update cannot dodge it.
+- Seat accounting: when `seat_consumes_inventory` is set, activating a grant reduces the platform's
+  available seats and revoking returns one — **once**, tracked by `seat_reclaimed`, so a double
+  revoke cannot inflate the count (**acceptance criteria 2, 3, 7**). Deleting a live grant releases
+  the seat first. `Suspended` deliberately does *not* release: the seat is still being paid for.
+- `GET /digital-access/reports` covers the views the PRD names: admin-and-above, owner-level, 2FA
+  exceptions, overdue reviews (90 days by default), pending revocation, reclaimable seats, and
+  cross-entity holders.
+- **Loose end:** `GET /digital-access/by-employee/:id` exists and is verified but is not yet wired
+  into the employee profile's Assets & Accounts tab. That belongs with the Phase 6 cross-module
+  wiring.
 
 ### Phase 4 — Social media accounts and team access *(largest)*
 

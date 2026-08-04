@@ -28,5 +28,6 @@ node apply_wps_fields.mjs
 node apply_asset_ownership.mjs
 node apply_secret_tiers.mjs
 node apply_inventory_lifecycle.mjs
+node apply_digital_access.mjs
 node seed_asset_catalog.mjs
 echo "✅ All migrations applied."
