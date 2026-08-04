@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useSelector, useDispatch } from 'react-redux';
@@ -8,88 +8,15 @@ import {
   Laptop, TrendingUp, DoorOpen, Scale, FileArchive, Calculator,
   BarChart3, ClipboardList, Trophy, Network, UserCog, Settings,
   Sparkles, ChevronDown, X, Package, Shield, Mail, Send,
-  CalendarDays, Clock, Banknote, Inbox, HelpCircle, KeyRound, Share2, Globe
+  CalendarDays, Clock, Banknote, Inbox, HelpCircle, KeyRound, Share2, Globe,
+  Boxes, Layers
 } from 'lucide-react';
 import { cn } from '@utils/cn';
 
-const menuGroups = [
+// The single source of the navigation structure, built from `t` so there is no
+// second untranslated copy to drift out of sync.
+const buildMenuGroups = (t) => [
   {
-    label: '',
-    items: [
-      { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    ],
-  },
-  {
-    label: 'RECRUITMENT',
-    roles: ['admin', 'hr_manager', 'recruiter'],
-    items: [
-      { path: '/ats', icon: Kanban, label: 'ATS Pipeline' },
-      { path: '/candidates', icon: Users, label: 'Candidates' },
-      { path: '/vacancies', icon: FileText, label: 'Vacancies' },
-      { path: '/cv-scorer', icon: Target, label: 'CV Scorer' },
-    ],
-  },
-  {
-    label: 'EMPLOYEE LIFECYCLE',
-    roles: ['admin', 'hr_manager'],
-    items: [
-      { path: '/employees', icon: Users, label: 'Employees' },
-      { path: '/onboarding', icon: UserCheck, label: 'Onboarding' },
-      { path: '/assets', icon: Laptop, label: 'Assets' },
-      { path: '/performance', icon: TrendingUp, label: 'Performance' },
-      { path: '/offboarding', icon: DoorOpen, label: 'Offboarding' },
-    ],
-  },
-  {
-    label: 'LEGAL / DOCS',
-    roles: ['admin', 'hr_manager'],
-    items: [
-      { path: '/legal-letters', icon: Scale, label: 'Legal Letters' },
-      { path: '/company-docs', icon: FileArchive, label: 'Company Docs' },
-      { path: '/payroll', icon: Calculator, label: 'Payroll & Law' },
-    ],
-  },
-  {
-    label: 'ANALYTICS',
-    roles: ['admin', 'hr_manager'],
-    items: [
-      { path: '/reports', icon: BarChart3, label: 'Reports' },
-      { path: '/audit', icon: ClipboardList, label: 'Audit Log', roles: ['admin'] },
-      { path: '/kpi', icon: Trophy, label: 'KPI Tracker' },
-    ],
-  },
-  {
-    label: 'ADMIN',
-    roles: ['admin'],
-    items: [
-      { path: '/org-chart', icon: Network, label: 'Org Chart' },
-      { path: '/users', icon: UserCog, label: 'Users' },
-      { path: '/settings', icon: Settings, label: 'Settings' },
-    ],
-  },
-];
-
-export default function Sidebar({ isOpen, onClose }) {
-  const dispatch = useDispatch();
-  const location = useLocation();
-  const { t } = useTranslation();
-  const { user } = useSelector((state) => state.auth);
-  const { items: companies } = useSelector((state) => state.companies);
-  const { currentCompanyId } = useSelector((state) => state.entity);
-
-  // A company must always be selected (no "ALL" mode). When companies load, if
-  // none is selected — or the persisted one is no longer available — default to
-  // the first company.
-  useEffect(() => {
-    if (companies.length > 0) {
-      const valid = companies.some((c) => c.id === currentCompanyId);
-      if (!valid) dispatch(setCurrentCompany(companies[0].id));
-    }
-  }, [companies, currentCompanyId, dispatch]);
-
-  // Localized menu groups
-  const localizedMenuGroups = [
-    {
       label: '',
       items: [
         { path: '/dashboard', icon: LayoutDashboard, label: t('nav.dashboard') },
@@ -117,13 +44,27 @@ export default function Sidebar({ isOpen, onClose }) {
         { path: '/attendance', icon: Clock, label: t('nav.attendance', 'Attendance') },
         { path: '/payroll-runs', icon: Banknote, label: t('nav.payroll_runs', 'Payroll Runs') },
         { path: '/salary-reviews', icon: TrendingUp, label: t('nav.salary_reviews', 'Salary Reviews') },
+        { path: '/performance', icon: TrendingUp, label: t('nav.performance', 'Performance') },
+        { path: '/offboarding', icon: DoorOpen, label: t('nav.offboarding') },
+      ],
+    },
+    {
+      // Everything the Company Assets & Access module covers: physical stock,
+      // what is issued to whom, platform seats and credentials, social accounts,
+      // and the domains the rest of it depends on. Six entries, so the group can
+      // be folded away — it starts open, and a collapse the user chooses sticks.
+      label: t('nav.assets_access'),
+      key: 'assets_access',
+      collapsible: true,
+      icon: Boxes,
+      roles: ['admin', 'hr_manager'],
+      items: [
         { path: '/assets', icon: Laptop, label: t('nav.assets') },
         { path: '/inventory', icon: Package, label: t('nav.inventory', 'Inventory') },
         { path: '/digital-access', icon: KeyRound, label: t('nav.digital_access') },
         { path: '/social-governance', icon: Share2, label: t('nav.social_governance') },
         { path: '/domains', icon: Globe, label: t('nav.domains') },
-        { path: '/performance', icon: TrendingUp, label: t('nav.performance', 'Performance') },
-        { path: '/offboarding', icon: DoorOpen, label: t('nav.offboarding') },
+        { path: '/settings/catalog', icon: Layers, label: t('nav.asset_catalog') },
       ],
     },
     {
@@ -169,6 +110,41 @@ export default function Sidebar({ isOpen, onClose }) {
       ],
     },
   ];
+
+const COLLAPSE_KEY = 'sidebar.collapsedGroups';
+
+export default function Sidebar({ isOpen, onClose }) {
+  const dispatch = useDispatch();
+  const location = useLocation();
+  const { t } = useTranslation();
+  const { user } = useSelector((state) => state.auth);
+  const { items: companies } = useSelector((state) => state.companies);
+  const { currentCompanyId } = useSelector((state) => state.entity);
+
+  // Which collapsible groups the user has closed. Persisted, because a sidebar
+  // that reopens every group on reload is not actually collapsible.
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(COLLAPSE_KEY)) || {}; } catch { return {}; }
+  });
+  const toggleGroup = (key) => {
+    setCollapsed((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify(next)); } catch { /* private mode */ }
+      return next;
+    });
+  };
+
+  // A company must always be selected (no "ALL" mode). When companies load, if
+  // none is selected — or the persisted one is no longer available — default to
+  // the first company.
+  useEffect(() => {
+    if (companies.length > 0) {
+      const valid = companies.some((c) => c.id === currentCompanyId);
+      if (!valid) dispatch(setCurrentCompany(companies[0].id));
+    }
+  }, [companies, currentCompanyId, dispatch]);
+
+  const localizedMenuGroups = buildMenuGroups(t);
 
   return (
     <>
@@ -241,38 +217,76 @@ export default function Sidebar({ isOpen, onClose }) {
         <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
           {localizedMenuGroups
             .filter(group => !group.roles || group.roles.includes(user?.role))
-            .map((group, gi) => (
-            <div key={gi}>
-              {group.label && (
-                <p className="text-[10px] font-semibold text-surface-400 uppercase tracking-wider px-3 pt-4 pb-1.5">
-                  {group.label}
-                </p>
-              )}
-              {group.items
-                .filter(item => !item.roles || item.roles.includes(user?.role))
-                .map((item) => {
-                const Icon = item.icon;
-                const isActive = location.pathname === item.path ||
-                  (item.path === '/settings' && location.pathname.startsWith('/settings'));
-                return (
-                  <NavLink
-                    key={item.path}
-                    to={item.path}
-                    onClick={onClose}
+            .map((group, gi) => {
+            const items = group.items.filter(item => !item.roles || item.roles.includes(user?.role));
+            if (!items.length) return null;
+
+            const isItemActive = (item) => location.pathname === item.path
+              // Settings owns its sub-routes, except the catalogue, which is
+              // listed under Assets & Access and highlights there instead.
+              || (item.path === '/settings' && location.pathname.startsWith('/settings')
+                  && location.pathname !== '/settings/catalog');
+
+            const holdsCurrentPage = items.some(isItemActive);
+            // The user's choice wins; the effect above handles landing inside a
+            // group that was closed.
+            const isCollapsed = group.collapsible && !!collapsed[group.key];
+            const GroupIcon = group.icon;
+
+            return (
+              <div key={group.key || gi}>
+                {group.label && (group.collapsible ? (
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(group.key)}
+                    aria-expanded={!isCollapsed}
                     className={cn(
-                      'flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-200',
-                      isActive
-                        ? 'bg-brand-50 text-brand-700'
-                        : 'text-surface-600 hover:bg-surface-50 hover:text-surface-900'
+                      'w-full flex items-center gap-2 px-3 py-2 mt-3 rounded-xl transition-colors',
+                      holdsCurrentPage ? 'text-brand-700' : 'text-surface-500 hover:bg-surface-50 hover:text-surface-800'
                     )}
                   >
-                    <Icon size={18} className={isActive ? 'text-brand-600' : 'text-surface-400'} />
-                    {item.label}
-                  </NavLink>
-                );
-              })}
-            </div>
-          ))}
+                    {GroupIcon && <GroupIcon size={16} className={holdsCurrentPage ? 'text-brand-600' : 'text-surface-400'} />}
+                    <span className="text-[10px] font-semibold uppercase tracking-wider flex-1 text-start">{group.label}</span>
+                    <ChevronDown
+                      size={14}
+                      className={cn('transition-transform duration-200 text-surface-400', isCollapsed && '-rotate-90 rtl:rotate-90')}
+                    />
+                  </button>
+                ) : (
+                  <p className="text-[10px] font-semibold text-surface-400 uppercase tracking-wider px-3 pt-4 pb-1.5">
+                    {group.label}
+                  </p>
+                ))}
+
+                {/* Collapsed still shows the page you are on, so landing here by
+                    URL never hides it — and the group stays folded, which is
+                    what the user asked for by folding it. */}
+                {(isCollapsed ? items.filter(isItemActive) : items).map((item) => {
+                  const Icon = item.icon;
+                  const isActive = isItemActive(item);
+                  return (
+                    <NavLink
+                      key={item.path}
+                      to={item.path}
+                      onClick={onClose}
+                      className={cn(
+                        'flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-200',
+                        // Nested items sit in from the group header so the
+                        // hierarchy is visible at a glance.
+                        group.collapsible && 'ms-3',
+                        isActive
+                          ? 'bg-brand-50 text-brand-700'
+                          : 'text-surface-600 hover:bg-surface-50 hover:text-surface-900'
+                      )}
+                    >
+                      <Icon size={18} className={isActive ? 'text-brand-600' : 'text-surface-400'} />
+                      {item.label}
+                    </NavLink>
+                  );
+                })}
+              </div>
+            );
+          })}
         </nav>
 
         {/* Footer */}
