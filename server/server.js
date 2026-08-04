@@ -4,6 +4,7 @@ import { ensureSchema } from './config/ensureSchema.js';
 import { verifySecrets } from './config/verifySecrets.js';
 import { getAppSetting } from './services/appSettings.js';
 import { applyDueSalaryChanges } from './services/salaryReviewService.js';
+import { checkDomainRenewals } from './services/domainRenewalService.js';
 
 const PORT = process.env.PORT || 3001;
 
@@ -26,6 +27,18 @@ async function runSalaryReviewScheduler() {
   }
 }
 
+// Warn before a domain lapses. A lapsed domain takes the website, company email
+// and every social login depending on it down at once, and the only warning is a
+// date nobody is looking at. Notifies once per threshold, not once per run.
+async function runDomainRenewalCheck() {
+  try {
+    const sent = await checkDomainRenewals(pool);
+    if (sent) console.log(`🌐 Domain renewal check: ${sent} alert(s) sent`);
+  } catch (err) {
+    console.error('Domain renewal check failed:', err.message);
+  }
+}
+
 app.listen(PORT, async () => {
   console.log(`\n🚀 IST HR API Server running on http://localhost:${PORT}`);
   console.log(`📋 Health check: http://localhost:${PORT}/api/health`);
@@ -37,4 +50,7 @@ app.listen(PORT, async () => {
 
   await runSalaryReviewScheduler();
   setInterval(runSalaryReviewScheduler, 6 * 60 * 60 * 1000); // every 6 hours
+
+  await runDomainRenewalCheck();
+  setInterval(runDomainRenewalCheck, 6 * 60 * 60 * 1000); // every 6 hours
 });

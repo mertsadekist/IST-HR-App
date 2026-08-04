@@ -64,6 +64,7 @@ const HandoverSheet = lazy(() => import('@pages/lifecycle/HandoverSheet'));
 const InventoryPage = lazy(() => import('@pages/lifecycle/Inventory'));
 const DigitalAccessPage = lazy(() => import('@pages/lifecycle/DigitalAccess'));
 const SocialGovernancePage = lazy(() => import('@pages/lifecycle/SocialGovernance'));
+const DomainsPage = lazy(() => import('@pages/lifecycle/Domains'));
 
 // Portal
 const MyAssets = lazy(() => import('@pages/portal/MyAssets'));
@@ -122,6 +123,7 @@ export default function App() {
                 <Route path="/inventory" element={<InventoryPage />} />
                 <Route path="/digital-access" element={<DigitalAccessPage />} />
                 <Route path="/social-governance" element={<SocialGovernancePage />} />
+                <Route path="/domains" element={<DomainsPage />} />
                 <Route path="/performance" element={<PerformancePage />} />
                 <Route path="/offboarding" element={<OffboardingPage />} />
 

@@ -204,11 +204,26 @@ verification against the dev DB.
 - Offboarding gets `POST /social/access/remove-person`, which closes **every layer** of an account
   for one person in a single call — doing it row by row is how a layer gets missed.
 
-### Phase 5 — Domains / hosting / infrastructure
+### Phase 5 — Domains / hosting / infrastructure ✅ *done (`apply_domain_assets.mjs`, `routes/domains.js`)*
 
-- `domain_assets` (15 fields) — registrar, account/technical/billing owner, domain, **renewal date**,
-  DNS and hosting control owners, status.
-- Renewal alerts reusing the existing notification service.
+- `domain_assets` covers all **12** fields of the Domain_Infrastructure sheet (the plan's earlier
+  "15" was a miscount): registrar/provider, business account owner, technical owner, billing owner,
+  DNS control owner, hosting control owner, domain, **renewal date**, status, and the named employee
+  when it is one person rather than a function. `owner_scope` allows **GRP** here — unlike social
+  accounts, a shared registrar account genuinely serves both companies.
+- Added beyond the sheet because the alerting needs it: `auto_renew`, `renewal_alert_sent`, and a
+  vault reference. `asset_kind` separates Domain / Hosting / DNS / CDN / Infrastructure.
+- **Renewal alerts** at 30, 14, 7 and 1 days, plus a distinct already-expired case, delivered through
+  the existing notification service to admins and HR managers. Scheduled in-process every six hours
+  alongside the salary-review scheduler.
+- **Once per threshold, not once per run.** `renewal_alert_sent` records the tightest threshold
+  already alerted, so a domain 20 days out gets the 30-day notice and later the 14-day notice —
+  rather than the same notice every six hours until everyone learns to ignore it. Changing the
+  renewal date clears the history, because a new cycle must be able to alert again.
+- `PUT /domains/:id/renew` records that a renewal was paid: rolls the date forward, reactivates the
+  record and clears the alert history. It refuses a date in the past.
+- `GET /domains/expiring` is the watch-list, and it counts the accountability gaps too: how many
+  renewals have **no billing owner named** and how many have auto-renew off.
 
 ### Phase 6 — Workflow wiring and reporting
 
