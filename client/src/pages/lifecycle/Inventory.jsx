@@ -16,21 +16,29 @@ import {
   BarChart3, Tag, ChevronLeft, ChevronRight, Eye, History,
   DollarSign, MapPin, Shield, Wrench, CheckSquare, Square,
   X, Copy, Calendar, Clock, AlertTriangle, CheckCircle2,
-  Monitor, Info, ExternalLink,
+  Monitor, Info, ExternalLink, ClipboardCheck,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 
-const STATUSES = ['All', 'Available', 'Assigned', 'In Repair', 'Retired', 'Lost'];
+// Full physical-asset lifecycle from the assets PRD. Reserved and Returned
+// Pending Inspection are the two states that make business rule 1 possible:
+// a returned item does not re-enter available stock until it is inspected.
+const STATUSES = ['All', 'Available', 'Reserved', 'Assigned', 'Returned Pending Inspection',
+  'In Repair', 'Damaged', 'Retired', 'Lost', 'Disposed'];
 const CONDITIONS = ['New', 'Good', 'Fair', 'Poor', 'Damaged'];
 const PAGE_SIZE = 15;
 
 const statusConfig = {
   Available:  { color: 'active',  icon: CheckCircle2, gradient: 'from-emerald-500 to-emerald-600' },
+  Reserved:   { color: 'info',    icon: Clock,        gradient: 'from-sky-500 to-sky-600' },
   Assigned:   { color: 'info',    icon: Monitor,      gradient: 'from-blue-500 to-blue-600' },
+  'Returned Pending Inspection': { color: 'warning', icon: ClipboardCheck, gradient: 'from-orange-500 to-orange-600' },
   'In Repair':{ color: 'warning', icon: Wrench,       gradient: 'from-amber-500 to-amber-600' },
+  Damaged:    { color: 'danger',  icon: AlertTriangle,gradient: 'from-rose-500 to-rose-600' },
   Retired:    { color: 'inactive',icon: X,            gradient: 'from-gray-400 to-gray-500' },
   Lost:       { color: 'danger',  icon: AlertTriangle,gradient: 'from-red-500 to-red-600' },
+  Disposed:   { color: 'inactive',icon: X,            gradient: 'from-gray-400 to-gray-500' },
 };
 
 const conditionColors = {
@@ -71,6 +79,14 @@ export default function Inventory() {
   const [qrcodeData, setQrcodeData] = useState(null);
   const [historyData, setHistoryData] = useState([]);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  // Inspection of a returned unit + the PRD availability view
+  const [inspectModal, setInspectModal] = useState(null);
+  const [inspectNote, setInspectNote] = useState('');
+  const [inspectOutcome, setInspectOutcome] = useState('In Repair');
+  const [inspecting, setInspecting] = useState(false);
+  const [showAvailability, setShowAvailability] = useState(false);
+  const [availability, setAvailability] = useState(null);
+  const [availLoading, setAvailLoading] = useState(false);
 
   // Form
   const [form, setForm] = useState({
@@ -225,6 +241,40 @@ export default function Inventory() {
         toast.error(t('inventory.delete_error', 'Failed to delete'));
       }
     }
+  };
+
+  // Inspection of a returned unit (assets PRD business rule 1). Passing releases
+  // it into available stock; failing has to say where the item goes and why,
+  // because "failed" alone leaves it out of every count.
+  const submitInspection = async (passed) => {
+    if (!inspectModal) return;
+    if (!passed && !inspectNote.trim()) { toast.error(t('inventory.inspect_note_required')); return; }
+    setInspecting(true);
+    try {
+      await inventoryApi.inspectItem(inspectModal.id,
+        { passed, note: inspectNote.trim() || null, outcome_status: passed ? undefined : inspectOutcome },
+        currentCompanyId ? { company_id: currentCompanyId } : {});
+      toast.success(passed ? t('inventory.inspect_passed_toast') : t('inventory.inspect_failed_toast', { status: inspectOutcome }));
+      setInspectModal(null); setInspectNote(''); setInspectOutcome('In Repair');
+      loadData();
+      if (showAvailability) loadAvailability();
+    } catch (err) {
+      toast.error(err.response?.data?.error || t('inventory.inspect_error'));
+    } finally { setInspecting(false); }
+  };
+
+  // The PRD availability line, computed from the real per-unit rows rather than
+  // the manual platform_catalog counter.
+  const loadAvailability = async () => {
+    setAvailLoading(true);
+    try {
+      const { data } = await inventoryApi.getAvailability({
+        ...(currentCompanyId ? { company_id: currentCompanyId } : {}),
+        ...(ownerFilter ? { owner_scope: ownerFilter } : {}),
+      });
+      setAvailability(data);
+    } catch { toast.error(t('inventory.availability_error')); }
+    finally { setAvailLoading(false); }
   };
 
   // Detail modal
@@ -394,6 +444,92 @@ export default function Inventory() {
           );
         })}
       </div>
+
+      {/* Availability by platform — the assets PRD formula, computed from the
+          real per-unit rows. Collapsed by default so the page stays quick. */}
+      <Card className="!p-0 overflow-hidden">
+        <button type="button"
+          onClick={() => { const next = !showAvailability; setShowAvailability(next); if (next && !availability) loadAvailability(); }}
+          className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-surface-50 transition-colors text-start">
+          <BarChart3 size={16} className="text-brand-600" />
+          <span className="font-semibold text-surface-900 flex-1">{t('inventory.availability_title')}</span>
+          {availability && (
+            <span className="text-xs text-surface-500">
+              {t('inventory.avail_available')}: <b className="text-emerald-600">{availability.totals.available || 0}</b>
+              {' · '}{t('inventory.avail_pending')}: <b className="text-orange-600">{availability.totals.pending_inspection || 0}</b>
+            </span>
+          )}
+          {showAvailability ? <ChevronLeft size={16} className="rotate-90 text-surface-400" /> : <ChevronRight size={16} className="text-surface-400" />}
+        </button>
+        {showAvailability && (
+          <div className="border-t border-surface-100">
+            <p className="px-5 py-2 text-[11px] text-surface-500 bg-surface-50">{t('inventory.availability_formula')}</p>
+            {availLoading ? (
+              <div className="p-5 animate-pulse"><div className="h-4 bg-surface-200 rounded w-1/3" /></div>
+            ) : !availability?.lines?.length ? (
+              <p className="px-5 py-6 text-center text-sm text-surface-400">{t('inventory.availability_empty')}</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-surface-50 text-surface-500">
+                    <tr>
+                      <th className="text-start p-3">{t('inventory.avail_platform')}</th>
+                      <th className="p-3">{t('inventory.avail_total')}</th>
+                      <th className="p-3 text-emerald-700">{t('inventory.avail_available')}</th>
+                      <th className="p-3">{t('inventory.avail_assigned')}</th>
+                      <th className="p-3">{t('inventory.avail_reserved')}</th>
+                      <th className="p-3 text-orange-700">{t('inventory.avail_pending')}</th>
+                      <th className="p-3">{t('inventory.avail_maintenance')}</th>
+                      <th className="p-3">{t('inventory.avail_damaged')}</th>
+                      <th className="p-3">{t('inventory.avail_lost')}</th>
+                      <th className="p-3">{t('inventory.avail_disposed')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {availability.lines.map((l, i) => (
+                      <tr key={`${l.platform_id}-${l.owner_scope}-${i}`} className="border-t border-surface-50">
+                        <td className="p-3">
+                          <span className="me-1">{l.category_icon}</span>
+                          <span className="font-medium text-surface-800">{l.platform_name || t('inventory.avail_unlinked')}</span>
+                          <span className="ms-2 text-[10px] px-1.5 py-0.5 rounded bg-surface-100 text-surface-600">{l.owner_scope}</span>
+                          {/* The manual platform counter drifts from reality the
+                              moment anyone edits it; show it rather than hide it. */}
+                          {l.counter_drift !== 0 && (
+                            <span className="ms-2 text-[10px] text-amber-600" title={t('inventory.avail_drift_hint')}>
+                              {t('inventory.avail_drift', { n: l.counter_drift })}
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-3 text-center font-semibold">{l.total}</td>
+                        <td className="p-3 text-center font-bold text-emerald-600">{l.available}</td>
+                        <td className="p-3 text-center">{l.assigned}</td>
+                        <td className="p-3 text-center">{l.reserved}</td>
+                        <td className="p-3 text-center text-orange-600 font-semibold">{l.pending_inspection}</td>
+                        <td className="p-3 text-center">{l.under_maintenance}</td>
+                        <td className="p-3 text-center text-red-500">{l.damaged}</td>
+                        <td className="p-3 text-center text-red-500">{l.lost}</td>
+                        <td className="p-3 text-center text-surface-400">{l.disposed}</td>
+                      </tr>
+                    ))}
+                    <tr className="border-t-2 border-surface-200 bg-surface-50 font-semibold">
+                      <td className="p-3">{t('inventory.avail_totals')}</td>
+                      <td className="p-3 text-center">{availability.totals.total}</td>
+                      <td className="p-3 text-center text-emerald-600">{availability.totals.available}</td>
+                      <td className="p-3 text-center">{availability.totals.assigned}</td>
+                      <td className="p-3 text-center">{availability.totals.reserved}</td>
+                      <td className="p-3 text-center text-orange-600">{availability.totals.pending_inspection}</td>
+                      <td className="p-3 text-center">{availability.totals.under_maintenance}</td>
+                      <td className="p-3 text-center">{availability.totals.damaged}</td>
+                      <td className="p-3 text-center">{availability.totals.lost}</td>
+                      <td className="p-3 text-center">{availability.totals.disposed}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+      </Card>
 
       {/* Bulk Actions Bar */}
       {selected.size > 0 && (
@@ -577,6 +713,18 @@ export default function Inventory() {
                         {formatCurrency(item.purchase_cost)}
                       </td>
                       <td className="px-4 py-3 text-right">
+                        <div className="flex justify-end gap-1">
+                          {/* A unit awaiting inspection cannot re-enter stock
+                              until someone verifies it, so the action stays
+                              visible rather than appearing on hover. */}
+                          {item.status === 'Returned Pending Inspection' && (
+                            <button onClick={() => { setInspectModal(item); setInspectNote(''); setInspectOutcome('In Repair'); }}
+                              className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-orange-100 text-orange-800 hover:bg-orange-200 transition-colors whitespace-nowrap"
+                              title={t('inventory.inspect')}>
+                              <ClipboardCheck size={12} className="inline me-1" />{t('inventory.inspect')}
+                            </button>
+                          )}
+                        </div>
                         <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button onClick={() => openDetail(item)} className="p-1.5 text-surface-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title={t('inventory.view_details', 'View Details')}>
                             <Eye size={14} />
@@ -980,6 +1128,47 @@ export default function Inventory() {
                 )}
               </div>
             )}
+          </div>
+        )}
+      </Modal>
+
+      {/* Inspection of a returned unit — the gate that keeps a damaged item out
+          of available stock (assets PRD business rule 1). */}
+      <Modal open={!!inspectModal} onClose={() => setInspectModal(null)} title={t('inventory.inspect_title')} size="md">
+        {inspectModal && (
+          <div className="space-y-4">
+            <div className="p-3 bg-surface-50 rounded-xl text-sm">
+              <p className="font-semibold text-surface-800">{inspectModal.asset_code}</p>
+              <p className="text-xs text-surface-500">{[inspectModal.brand, inspectModal.model].filter(Boolean).join(' ')} · {inspectModal.serial_number || '—'}</p>
+              {inspectModal.condition_status && (
+                <p className="text-xs text-surface-500 mt-1">{t('inventory.condition', 'Condition')}: {inspectModal.condition_status}</p>
+              )}
+            </div>
+            <p className="text-xs text-surface-600">{t('inventory.inspect_desc')}</p>
+
+            <div>
+              <label className="block text-sm font-medium text-surface-700 mb-1.5">{t('inventory.inspect_note')}</label>
+              <textarea value={inspectNote} onChange={(e) => setInspectNote(e.target.value)} rows={2}
+                placeholder={t('inventory.inspect_note_ph')}
+                className="w-full px-3 py-2.5 text-sm bg-white border border-surface-200 rounded-xl input-focus transition-all resize-none" />
+            </div>
+
+            <div className="p-3 rounded-xl border border-surface-200 space-y-2">
+              <label className="block text-sm font-medium text-surface-700">{t('inventory.inspect_fail_outcome')}</label>
+              <Select value={inspectOutcome} onChange={(e) => setInspectOutcome(e.target.value)}
+                options={['In Repair', 'Damaged', 'Disposed', 'Lost'].map((s) => ({ value: s, label: t(`inventory.${s.toLowerCase().replace(' ', '_')}`, s) }))} />
+              <p className="text-[10px] text-surface-400">{t('inventory.inspect_fail_hint')}</p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="secondary" onClick={() => setInspectModal(null)}>{t('common.cancel')}</Button>
+              <Button variant="danger" onClick={() => submitInspection(false)} loading={inspecting}>
+                <AlertTriangle size={14} /> {t('inventory.inspect_fail')}
+              </Button>
+              <Button onClick={() => submitInspection(true)} loading={inspecting}>
+                <CheckCircle2 size={14} /> {t('inventory.inspect_pass')}
+              </Button>
+            </div>
           </div>
         )}
       </Modal>

@@ -90,6 +90,71 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /api/inventory/availability — the PRD's availability line per platform (scoped)
+//
+// Available = Total − Assigned − Reserved − Returned Pending Inspection
+//             − Under Maintenance − Damaged − Lost − Disposed
+//
+// Derived from the real per-unit rows rather than the manual
+// platform_catalog.inventory_total counter, which nothing reconciles against and
+// which drifts the moment anyone edits it by hand. Both numbers are returned so
+// the drift is visible instead of silent.
+router.get('/availability', async (req, res) => {
+  try {
+    const co = companyClause(req, 'i.company_id');
+    const params = [...co.params];
+    let ownerClause = '';
+    if (OWNER_SCOPES.includes(req.query.owner_scope)) { ownerClause = ' AND i.owner_scope = ?'; params.push(req.query.owner_scope); }
+
+    const [rows] = await pool.query(
+      `SELECT pc.id AS platform_id, pc.name AS platform_name, pc.inventory_total AS counter_total,
+              ac.name AS category_name, ac.icon AS category_icon, i.owner_scope,
+              COUNT(*)                                                       AS total,
+              SUM(i.status = 'Available')                                    AS available,
+              SUM(i.status = 'Reserved')                                     AS reserved,
+              SUM(i.status = 'Assigned')                                     AS assigned,
+              SUM(i.status = 'Returned Pending Inspection')                  AS pending_inspection,
+              SUM(i.status = 'In Repair')                                    AS under_maintenance,
+              SUM(i.status = 'Damaged')                                      AS damaged,
+              SUM(i.status = 'Lost')                                         AS lost,
+              SUM(i.status IN ('Disposed','Retired'))                        AS disposed
+         FROM asset_inventory i
+         LEFT JOIN platform_catalog pc ON i.platform_id = pc.id
+         LEFT JOIN asset_categories ac ON pc.category_id = ac.id
+        WHERE 1=1${co.clause}${ownerClause}
+        GROUP BY pc.id, pc.name, pc.inventory_total, ac.name, ac.icon, i.owner_scope
+        ORDER BY ac.sort_order, pc.name`, params);
+
+    const lines = rows.map((r) => {
+      const n = (v) => Number(v || 0);
+      const unavailable = n(r.assigned) + n(r.reserved) + n(r.pending_inspection)
+        + n(r.under_maintenance) + n(r.damaged) + n(r.lost) + n(r.disposed);
+      return {
+        ...r,
+        total: n(r.total), available: n(r.available), reserved: n(r.reserved), assigned: n(r.assigned),
+        pending_inspection: n(r.pending_inspection), under_maintenance: n(r.under_maintenance),
+        damaged: n(r.damaged), lost: n(r.lost), disposed: n(r.disposed),
+        // What the PRD formula yields. It should equal `available`; when it does
+        // not, a unit is in a state this view does not account for.
+        computed_available: n(r.total) - unavailable,
+        counter_drift: n(r.counter_total) - (n(r.total) - unavailable),
+      };
+    });
+
+    const totals = lines.reduce((acc, l) => {
+      for (const k of ['total', 'available', 'reserved', 'assigned', 'pending_inspection', 'under_maintenance', 'damaged', 'lost', 'disposed']) {
+        acc[k] = (acc[k] || 0) + l[k];
+      }
+      return acc;
+    }, {});
+
+    res.json({ lines, totals });
+  } catch (err) {
+    console.error('GET /inventory/availability error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // GET /api/inventory/:id (scoped)
 router.get('/:id', async (req, res) => {
   try {
@@ -200,6 +265,68 @@ router.delete('/:id', authorize('admin'), async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error('DELETE /inventory/:id error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/inventory/:id/inspect — verify a returned unit (scoped)
+//
+// The gate business rule 1 of the assets PRD asks for: an item returned by an
+// employee sits in "Returned Pending Inspection" and re-enters available stock
+// only when someone checks it and signs for the result. Passing releases it;
+// failing routes it to repair, damaged or disposed according to what was found.
+const INSPECTION_FAIL_STATES = ['In Repair', 'Damaged', 'Disposed', 'Lost'];
+
+router.post('/:id/inspect', authorize('admin', 'hr_manager'), async (req, res) => {
+  try {
+    const item = await getScopedInventory(req, req.params.id, 'id, status, platform_id, asset_code');
+    if (!item) return res.status(404).json({ error: 'Item not found' });
+    if (item.status !== 'Returned Pending Inspection') {
+      return res.status(409).json({ error: `Only an item awaiting inspection can be inspected — this one is "${item.status}"` });
+    }
+
+    const passed = req.body?.passed === true || req.body?.passed === 'true';
+    const note = String(req.body?.note || '').trim() || null;
+    // A failed inspection has to say where the item goes; "failed" alone leaves
+    // it in limbo and out of every count.
+    let outcome = 'Available';
+    if (!passed) {
+      outcome = req.body?.outcome_status;
+      if (!INSPECTION_FAIL_STATES.includes(outcome)) {
+        return res.status(422).json({ error: `A failed inspection must set outcome_status to one of: ${INSPECTION_FAIL_STATES.join(', ')}` });
+      }
+      if (!note) return res.status(422).json({ error: 'A failed inspection requires a note describing what was found' });
+    }
+
+    await pool.query(
+      'UPDATE asset_inventory SET status = ?, inspected_by = ?, inspected_at = NOW(), inspection_note = ? WHERE id = ?',
+      [outcome, req.user.id, note, item.id]);
+
+    // Close the assignment that was waiting on this inspection.
+    await pool.query(
+      "UPDATE asset_assignments SET status = 'Returned' WHERE inventory_id = ? AND status = 'Returned Pending Inspection'",
+      [item.id]);
+
+    // Only a passed inspection puts the seat back into the platform's count.
+    if (passed && item.platform_id) {
+      await pool.query('UPDATE platform_catalog SET inventory_total = inventory_total + 1 WHERE id = ?', [item.platform_id]);
+    }
+
+    await pool.query('INSERT INTO asset_assignment_history SET ?', {
+      inventory_id: item.id,
+      employee_id: req.body?.employee_id || null,
+      assigned_by: req.user.id,
+      action: passed ? 'Inspection Passed' : 'Inspection Failed',
+      action_date: new Date(),
+      condition_at_action: note,
+      notes: `Inspection ${passed ? 'passed' : 'failed'} — item set to ${outcome}`,
+    }).catch(() => { /* history is a convenience; never fail the inspection on it */ });
+
+    await addAudit(pool, req.user, 'Inventory', passed ? 'Inspection Passed' : 'Inspection Failed',
+      `Asset "${item.asset_code}" inspection ${passed ? 'passed and returned to available stock' : `failed — set to ${outcome}`}${note ? `: ${note}` : ''}`);
+    res.json({ success: true, status: outcome });
+  } catch (err) {
+    console.error('POST /inventory/:id/inspect error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

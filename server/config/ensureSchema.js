@@ -56,6 +56,12 @@ const COLUMN_GUARDS = [
   { table: 'asset_assignments', column: 'vault_secret_reference', ddl: 'ALTER TABLE asset_assignments ADD COLUMN vault_secret_reference VARCHAR(200) NULL' },
   { table: 'asset_assignments', column: 'secret_justification', ddl: 'ALTER TABLE asset_assignments ADD COLUMN secret_justification VARCHAR(500) NULL' },
   { table: 'asset_assignments', column: 'secret_approved_by', ddl: 'ALTER TABLE asset_assignments ADD COLUMN secret_approved_by INT NULL' },
+  // Who verified a returned unit — see server/apply_inventory_lifecycle.mjs.
+  // The status enum changes there are not expressible as COLUMN_GUARDS (they
+  // MODIFY rather than ADD), so the migration script is the only path for those.
+  { table: 'asset_inventory', column: 'inspected_by', ddl: 'ALTER TABLE asset_inventory ADD COLUMN inspected_by INT NULL' },
+  { table: 'asset_inventory', column: 'inspected_at', ddl: 'ALTER TABLE asset_inventory ADD COLUMN inspected_at TIMESTAMP NULL' },
+  { table: 'asset_inventory', column: 'inspection_note', ddl: 'ALTER TABLE asset_inventory ADD COLUMN inspection_note VARCHAR(500) NULL' },
 ];
 
 // Tiny key/value store for global app settings (e.g. timezone).

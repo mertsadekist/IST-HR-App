@@ -171,19 +171,34 @@ router.put('/:id', authorize('admin', 'hr_manager'), async (req, res) => {
 });
 
 // PUT /api/assets/:id/return (company-scoped)
+//
+// Business rule 1 of the assets PRD: a returned item must NOT become available
+// again on the word of whoever accepted it — it goes to Returned Pending
+// Inspection and only re-enters stock once someone verifies its condition
+// (POST /inventory/:id/inspect). Physical goods are not the same asset after a
+// year in a bag, and a damaged laptop counted as available is a promise the
+// company cannot keep at the next onboarding.
+//
+// A digital seat has nothing to inspect, so it is reclaimed immediately.
 router.put('/:id/return', authorize('admin', 'hr_manager'), async (req, res) => {
   try {
     const { condition_note } = req.body;
-    const asset = await getScopedAsset(req, req.params.id, 'platform_id, inventory_id, employee_id');
+    const asset = await getScopedAsset(req, req.params.id, 'platform_id, inventory_id, employee_id, asset_type');
     if (!asset) return res.status(404).json({ error: 'Asset not found' });
+
+    const needsInspection = !!asset.inventory_id;
     await pool.query('UPDATE asset_assignments SET status = ?, returned_date = ?, condition_note = ? WHERE id = ?',
-      ['Returned', new Date(), condition_note || null, req.params.id]);
-    if (asset?.platform_id) {
+      [needsInspection ? 'Returned Pending Inspection' : 'Returned', new Date(), condition_note || null, req.params.id]);
+
+    // A seat returns to the pool at once; a physical unit does not, so its
+    // platform's seat count is only restored after the inspection passes.
+    if (asset.platform_id && !needsInspection) {
       await pool.query('UPDATE platform_catalog SET inventory_total = inventory_total + 1 WHERE id = ?', [asset.platform_id]);
     }
-    // Release inventory item back to Available
-    if (asset?.inventory_id) {
-      await pool.query("UPDATE asset_inventory SET status = 'Available' WHERE id = ?", [asset.inventory_id]);
+
+    if (needsInspection) {
+      await pool.query("UPDATE asset_inventory SET status = 'Returned Pending Inspection', inspected_by = NULL, inspected_at = NULL, inspection_note = NULL WHERE id = ?",
+        [asset.inventory_id]);
       await pool.query('INSERT INTO asset_assignment_history SET ?', {
         inventory_id: asset.inventory_id,
         assignment_id: parseInt(req.params.id),
@@ -192,11 +207,12 @@ router.put('/:id/return', authorize('admin', 'hr_manager'), async (req, res) => 
         action: 'Returned',
         action_date: new Date(),
         condition_at_action: condition_note || null,
-        notes: 'Asset returned by employee',
+        notes: 'Returned by employee — awaiting inspection',
       });
     }
-    await addAudit(pool, req.user, 'Assets', 'Returned', `Asset #${req.params.id} returned`);
-    res.json({ success: true });
+    await addAudit(pool, req.user, 'Assets', 'Returned',
+      `Asset #${req.params.id} returned${needsInspection ? ' — pending inspection before it re-enters stock' : ''}`);
+    res.json({ success: true, pending_inspection: needsInspection });
   } catch (err) { console.error('PUT /assets/:id/return error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
