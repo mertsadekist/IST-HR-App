@@ -47,11 +47,13 @@ router.get('/', async (req, res) => {
     const co = companyClause(req, 'ca.company_id');
     const coCount = companyClause(req, 'company_id');
     let sql = `SELECT ca.*, co.name as company_name, co.short_code, co.color_primary,
-               v.title as vacancy_title, s.name as stage_name, s.color as stage_color, s.text_color as stage_text_color
+               v.title as vacancy_title, s.name as stage_name, s.color as stage_color, s.text_color as stage_text_color,
+               COALESCE(u.name, ca.created_by_name) AS added_by_name
                FROM candidates ca
                LEFT JOIN companies co ON ca.company_id = co.id
                LEFT JOIN vacancies v ON ca.vacancy_id = v.id
                LEFT JOIN ats_stages s ON ca.current_stage_id = s.id
+               LEFT JOIN users u ON ca.created_by = u.id
                WHERE 1=1` + co.clause;
     let countSql = 'SELECT COUNT(*) as total FROM candidates WHERE 1=1' + coCount.clause;
     const params = [...co.params];
@@ -163,6 +165,10 @@ router.post('/', authorize('admin', 'hr_manager', 'recruiter'), validate({
       const [[defaultStage]] = await conn.query('SELECT id FROM ats_stages WHERE is_default = TRUE LIMIT 1');
       if (defaultStage) data.current_stage_id = defaultStage.id;
     }
+
+    data.created_by = req.user.id;
+    data.created_by_name = req.user.name;
+    data.created_source = 'Manual';
 
     const [result] = await conn.query('INSERT INTO candidates SET ?', data);
     const candidateId = result.insertId;

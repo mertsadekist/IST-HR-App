@@ -56,6 +56,12 @@ const COLUMN_GUARDS = [
   { table: 'asset_assignments', column: 'vault_secret_reference', ddl: 'ALTER TABLE asset_assignments ADD COLUMN vault_secret_reference VARCHAR(200) NULL' },
   { table: 'asset_assignments', column: 'secret_justification', ddl: 'ALTER TABLE asset_assignments ADD COLUMN secret_justification VARCHAR(500) NULL' },
   { table: 'asset_assignments', column: 'secret_approved_by', ddl: 'ALTER TABLE asset_assignments ADD COLUMN secret_approved_by INT NULL' },
+  // Who added each candidate — see server/apply_candidate_created_by.mjs.
+  // The name is snapshotted next to the FK so the record survives the account
+  // being deleted, and the historical name is kept after a rename.
+  { table: 'candidates', column: 'created_by', ddl: 'ALTER TABLE candidates ADD COLUMN created_by INT NULL, ADD FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL' },
+  { table: 'candidates', column: 'created_by_name', ddl: 'ALTER TABLE candidates ADD COLUMN created_by_name VARCHAR(200) NULL' },
+  { table: 'candidates', column: 'created_source', ddl: "ALTER TABLE candidates ADD COLUMN created_source ENUM('Manual','Careers Portal','Import') NOT NULL DEFAULT 'Manual'" },
   // Who verified a returned unit — see server/apply_inventory_lifecycle.mjs.
   // The status enum changes there are not expressible as COLUMN_GUARDS (they
   // MODIFY rather than ADD), so the migration script is the only path for those.

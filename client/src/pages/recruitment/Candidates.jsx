@@ -383,6 +383,7 @@ export default function Candidates() {
                     <th className="text-left px-5 py-3 font-medium text-surface-500">{t('recruitment.vacancy')}</th>
                     <th className="text-left px-5 py-3 font-medium text-surface-500">{t('recruitment.stage')}</th>
                     <th className="text-left px-5 py-3 font-medium text-surface-500">{t('recruitment.status')}</th>
+                    <th className="text-left px-5 py-3 font-medium text-surface-500">{t('recruitment.added_by')}</th>
                     <th className="text-right px-5 py-3 font-medium text-surface-500">{t('recruitment.actions')}</th>
                   </tr>
                 </thead>
@@ -423,6 +424,23 @@ export default function Candidates() {
                         <Badge variant={c.status === 'Active' ? 'active' : c.status === 'Hired' ? 'success' : 'danger'} className="text-[10px]">
                           {t(`recruitment.${c.status.toLowerCase().replace(' ', '_')}`)}
                         </Badge>
+                      </td>
+                      <td className="px-5 py-3">
+                        {/* A candidate from the public form was added by the
+                            applicant, not by staff — say so rather than showing
+                            a dash that reads as missing data. */}
+                        {c.created_source === 'Careers Portal' ? (
+                          <span className="text-xs text-surface-500">{t('recruitment.via_careers')}</span>
+                        ) : c.added_by_name ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-5 h-5 rounded-full bg-brand-100 text-brand-700 text-[9px] font-semibold flex items-center justify-center shrink-0">
+                              {c.added_by_name.charAt(0).toUpperCase()}
+                            </span>
+                            <span className="text-xs text-surface-700 truncate max-w-[110px]" title={c.added_by_name}>{c.added_by_name}</span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-surface-300">—</span>
+                        )}
                       </td>
                       <td className="px-5 py-3 text-right">
                         <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -616,6 +634,14 @@ export default function Candidates() {
                     <span className="text-surface-500">{t('recruitment.ai_score')}</span>
                     <span className="font-bold text-brand-700">{profileCandidate.ai_score}%</span>
                   </div>}
+                  <div className="flex justify-between py-1.5 px-3 bg-surface-50 rounded-lg text-sm">
+                    <span className="text-surface-500">{t('recruitment.added_by')}</span>
+                    <span className="font-medium text-surface-800">
+                      {profileCandidate.created_source === 'Careers Portal'
+                        ? t('recruitment.via_careers')
+                        : profileCandidate.added_by_name || '—'}
+                    </span>
+                  </div>
                 </div>
               </div>
             )}

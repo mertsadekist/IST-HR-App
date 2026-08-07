@@ -106,6 +106,9 @@ router.post('/jobs/:slug/apply', upload.single('cv'), async (req, res) => {
         first_name: b.first_name, last_name: b.last_name, email: b.email, phone: b.phone,
         nationality: b.nationality || null, company_id: companyId, vacancy_id: v.id,
         current_stage_id: defStage?.id || null, status: 'Active', applied_date: new Date(),
+        // Nobody on staff added this one — the applicant did, through the public
+        // form. Recorded so the list distinguishes it from an unattributed row.
+        created_source: 'Careers Portal',
       });
       candidateId = r.insertId;
     }
