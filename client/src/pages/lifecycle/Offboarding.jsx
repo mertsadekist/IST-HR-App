@@ -10,6 +10,7 @@ import Input from '@components/ui/Input';
 import Select from '@components/ui/Select';
 import EmptyState from '@components/ui/EmptyState';
 import { toast } from 'react-toastify';
+import { confirmDelete } from '@utils/confirm';
 import { UserMinus, Check, Lock, ChevronRight, Loader2, Plus, DollarSign, Calendar, RefreshCw, Printer } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
@@ -44,6 +45,9 @@ export default function Offboarding() {
   const [detailModal, setDetailModal] = useState(null);
   const [detail, setDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  // Per-step override of the default expansion. Undefined means "follow the
+  // default", which is: the active step open, the rest folded.
+  const [expandedSteps, setExpandedSteps] = useState({});
   const [employeeDocs, setEmployeeDocs] = useState([]);
 
   // Initiate modal
@@ -89,7 +93,7 @@ export default function Offboarding() {
   };
 
   const openDetail = async (record) => {
-    setDetailModal(record); setDetailLoading(true);
+    setDetailModal(record); setDetailLoading(true); setExpandedSteps({});
     setEmployeeDocs([]);
     try {
       const { data } = await offboardingApi.getOffboarding(record.id);
@@ -210,7 +214,7 @@ export default function Offboarding() {
       </Modal>
 
       {/* Detail Modal */}
-      <Modal open={!!detailModal} onClose={() => { setDetailModal(null); setDetail(null); }}
+      <Modal open={!!detailModal} onClose={() => { setDetailModal(null); setDetail(null); setExpandedSteps({}); }}
         title={detail ? `${t('lifecycle.offboarding')} — ${detail.first_name} ${detail.last_name}` : t('common.loading')} size="lg">
         {detailLoading ? (
           <div className="flex items-center justify-center py-12"><Loader2 className="w-8 h-8 text-brand-600 animate-spin" /></div>
@@ -258,46 +262,79 @@ export default function Offboarding() {
                   const isStepWithHandoverConstraint = isHandoverStep || isAssetReturnStep;
                   const hasHandoverDoc = employeeDocs.some(d => d.category === 'Handover Sheet');
 
+                  // Every step opens, not only the active one: a completed step
+                  // has to be able to answer "what was actually ticked, and
+                  // when", and a locked one "what will this ask of me".
+                  const isExpanded = expandedSteps[step.id] !== undefined ? expandedSteps[step.id] : isOpen;
+                  const checkedCount = step.checklist_items?.filter(i => i.is_checked).length || 0;
+
                   return (
-                    <div key={step.id} className={`rounded-xl border ${isDone ? 'border-emerald-200 bg-emerald-50/30' : isOpen ? 'border-red-200 bg-red-50/20' : 'border-surface-100 bg-surface-50/50 opacity-60'}`}>
-                      <div className="flex items-center gap-3 px-4 py-3">
-                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${isDone ? 'bg-emerald-100 text-emerald-700' : isOpen ? 'bg-red-100 text-red-700' : 'bg-surface-200 text-surface-400'}`}>
+                    <div key={step.id} className={`rounded-xl border ${isDone ? 'border-emerald-200 bg-emerald-50/30' : isOpen ? 'border-red-200 bg-red-50/20' : 'border-surface-100 bg-surface-50/50'} ${isLocked && !isExpanded ? 'opacity-60' : ''}`}>
+                      <button
+                        type="button"
+                        onClick={() => setExpandedSteps(prev => ({ ...prev, [step.id]: !isExpanded }))}
+                        aria-expanded={isExpanded}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-start hover:bg-black/[0.02] rounded-xl transition-colors"
+                      >
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${isDone ? 'bg-emerald-100 text-emerald-700' : isOpen ? 'bg-red-100 text-red-700' : 'bg-surface-200 text-surface-400'}`}>
                           {isDone ? <Check size={14} /> : isLocked ? <Lock size={12} /> : step.step_number}
                         </div>
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-0">
                           <h4 className="font-semibold text-surface-800 text-sm">{step.name}</h4>
-                          <div className="flex gap-2 text-[10px] text-surface-400 mt-0.5">
+                          <div className="flex gap-2 text-[10px] text-surface-400 mt-0.5 flex-wrap">
                             {step.owner && <span>{t('lifecycle.owner')}: {step.owner}</span>}
                             {step.sla && <span>{t('lifecycle.sla')}: {step.sla}</span>}
+                            {step.checklist_items?.length > 0 && (
+                              <span className={isDone ? 'text-emerald-600' : ''}>
+                                {checkedCount}/{step.checklist_items.length} {t('lifecycle.items_done')}
+                              </span>
+                            )}
+                            {isDone && step.completed_at && (
+                              <span className="text-emerald-600">{t('lifecycle.completed_on')} {dayjs(step.completed_at).format('MMM D, YYYY HH:mm')}</span>
+                            )}
                           </div>
                         </div>
-                        <Badge variant={isDone ? 'success' : isOpen ? 'danger' : 'info'} className="text-[10px]">{t(`lifecycle.status_${step.status.toLowerCase()}`, step.status)}</Badge>
+                        <Badge variant={isDone ? 'success' : isOpen ? 'danger' : 'info'} className="text-[10px] shrink-0">{t(`lifecycle.status_${step.status.toLowerCase()}`, step.status)}</Badge>
                         {isOpen && allChecked && (
                           <Button
                             size="sm"
                             disabled={isStepWithHandoverConstraint && !hasHandoverDoc}
-                            onClick={() => handleCompleteStep(step.id)}
+                            onClick={(e) => { e.stopPropagation(); handleCompleteStep(step.id); }}
                           >
                             {t('lifecycle.complete')}
                           </Button>
                         )}
-                      </div>
-                      
-                      {isOpen && (
+                        <ChevronRight size={15} className={`text-surface-400 shrink-0 transition-transform ${isExpanded ? 'rotate-90' : 'rtl:rotate-180'}`} />
+                      </button>
+
+                      {isExpanded && (
                         <div className="px-4 pb-3 border-t border-surface-100/60 pt-2 space-y-3">
+                          {isLocked && (
+                            <p className="text-[11px] text-surface-500 bg-surface-100 rounded-lg px-2.5 py-1.5">
+                              {t('lifecycle.locked_preview')}
+                            </p>
+                          )}
+
                           {step.checklist_items?.length > 0 && (
                             <div className="space-y-1.5">
                               {step.checklist_items.map(item => (
-                                <label key={item.id} className="flex items-center gap-2.5 cursor-pointer">
-                                  <input type="checkbox" checked={!!item.is_checked} onChange={(e) => handleToggleItem(item.id, e.target.checked)}
-                                    className="w-4 h-4 rounded border-surface-300 text-brand-600" />
+                                // Only the active step is editable. Elsewhere the
+                                // boxes are a record, not a control.
+                                <label key={item.id} className={`flex items-center gap-2.5 ${isOpen ? 'cursor-pointer' : 'cursor-default'}`}>
+                                  <input type="checkbox" checked={!!item.is_checked} disabled={!isOpen}
+                                    onChange={(e) => handleToggleItem(item.id, e.target.checked)}
+                                    className="w-4 h-4 rounded border-surface-300 text-brand-600 disabled:opacity-70" />
                                   <span className={`text-sm ${item.is_checked ? 'text-surface-400 line-through' : 'text-surface-700'}`}>{item.label}</span>
                                 </label>
                               ))}
                             </div>
                           )}
 
-                          {detail?.email && (
+                          {step.notes && (
+                            <p className="text-xs text-surface-600 bg-white border border-surface-200 rounded-lg p-2.5 whitespace-pre-wrap">{step.notes}</p>
+                          )}
+
+                          {isOpen && detail?.email && (
                             <EmailButton
                               variant="button"
                               size="sm"
@@ -329,8 +366,8 @@ export default function Offboarding() {
                               {hasHandoverDoc ? (
                                 <div className="space-y-1">
                                   {employeeDocs.filter(d => d.category === 'Handover Sheet').map(doc => (
-                                    <div key={doc.id} className="flex justify-between items-center text-xs bg-surface-50 border border-surface-200 rounded-lg p-2.5">
-                                      <span className="text-surface-600 truncate max-w-[200px] font-medium">{doc.file_name}</span>
+                                    <div key={doc.id} className="flex justify-between items-center gap-2 text-xs bg-surface-50 border border-surface-200 rounded-lg p-2.5">
+                                      <span className="text-surface-600 truncate flex-1 font-medium">{doc.file_name}</span>
                                       <button
                                         type="button"
                                         onClick={async () => {
@@ -347,13 +384,40 @@ export default function Offboarding() {
                                             toast.error(t('toasts.t_failed_to_download_document'));
                                           }
                                         }}
-                                        className="text-brand-600 hover:text-brand-700 font-semibold"
+                                        className="text-brand-600 hover:text-brand-700 font-semibold shrink-0"
                                       >
                                         {t('common.download', 'Download / تحميل')}
                                       </button>
+                                      {/* A wrong scan can be swapped out. Deleting also
+                                          removes the file from disk, so the step goes
+                                          back to Pending until the right one is up.
+                                          Not offered on a locked step, which is a
+                                          read-only preview of what is coming. */}
+                                      {!isLocked && (
+                                      <button
+                                        type="button"
+                                        onClick={async () => {
+                                          const res = await confirmDelete(`"${doc.file_name}"`);
+                                          if (!res.isConfirmed) return;
+                                          try {
+                                            await employeesApi.deleteEmployeeDocument(detail.employee_id, doc.id);
+                                            toast.success(t('lifecycle.handover_removed'));
+                                            refreshEmployeeDocs(detail.employee_id);
+                                          } catch (err) {
+                                            toast.error(err.response?.data?.error || t('lifecycle.handover_remove_failed'));
+                                          }
+                                        }}
+                                        className="text-red-500 hover:text-red-700 font-semibold shrink-0"
+                                      >
+                                        {t('lifecycle.replace_file')}
+                                      </button>
+                                      )}
                                     </div>
                                   ))}
+                                  {!isLocked && <p className="text-[10px] text-surface-400">{t('lifecycle.replace_hint')}</p>}
                                 </div>
+                              ) : isLocked ? (
+                                <p className="text-[11px] text-surface-400 text-center py-2">{t('lifecycle.upload_when_open')}</p>
                               ) : (
                                 <div className="border-2 border-dashed border-surface-200 rounded-xl p-4 text-center bg-surface-50 hover:border-brand-500 transition relative">
                                   <input
@@ -385,7 +449,7 @@ export default function Offboarding() {
                                 </div>
                               )}
 
-                              {!hasHandoverDoc && (
+                              {!hasHandoverDoc && isOpen && (
                                 <p className="text-[10px] text-red-500 font-semibold mt-1.5 flex items-center gap-1">
                                   <span>⚠</span>
                                   {t('lifecycle.require_signed_handover', 'You must upload the signed Handover Sheet to complete this step / يجب عليك رفع ورقة الاستلام والتسليم الموقعة لإكمال هذه الخطوة')}

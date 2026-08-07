@@ -674,6 +674,49 @@ router.post('/:id/documents', authorize('admin', 'hr_manager', 'hr_specialist'),
   }
 });
 
+// DELETE /api/employees/:id/documents/:docId — remove a document
+//
+// Needed because a document uploaded by mistake had no way out: the UI offered
+// download and nothing else, so a wrong scan stayed attached to the employee
+// permanently and satisfied any step that only checks "a file exists".
+//
+// Admin and hr_manager only, and the file on disk goes with the row — leaving
+// the file behind would keep a document the record says was removed.
+router.delete('/:id/documents/:docId', authorize('admin', 'hr_manager'), async (req, res) => {
+  try {
+    const employeeId = parseInt(req.params.id);
+    const docId = parseInt(req.params.docId);
+
+    if (!(await getScopedEmployee(req, employeeId))) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+    const [[doc]] = await pool.query(
+      'SELECT id, category, file_name, file_url FROM employee_documents WHERE id = ? AND employee_id = ?',
+      [docId, employeeId]);
+    if (!doc) return res.status(404).json({ error: 'Document not found' });
+
+    await pool.query('DELETE FROM employee_documents WHERE id = ?', [doc.id]);
+
+    // Best-effort on disk: the row is already gone, and a leftover file must not
+    // turn a successful delete into an error the user cannot act on.
+    if (doc.file_url) {
+      try {
+        const filePath = uploadPath('employee_docs', doc.file_url);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      } catch (fsErr) {
+        console.error('Document row deleted but file remained:', fsErr.message);
+      }
+    }
+
+    await addAudit(pool, req.user, 'Employees', 'Document Deleted',
+      `Deleted ${doc.category || 'General'} document "${doc.file_name}" from employee #${employeeId}`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('DELETE /employees/:id/documents/:docId error:', err);
+    res.status(500).json({ error: 'Failed to delete document' });
+  }
+});
+
 // GET /api/employees/:id/documents/:docId/download — Securely download a document
 router.get('/:id/documents/:docId/download', async (req, res) => {
   try {

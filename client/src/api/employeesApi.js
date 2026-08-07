@@ -26,6 +26,9 @@ export const getEmployeeDocuments = (id) => api.get(`/employees/${id}/documents`
 export const uploadEmployeeDocument = (id, formData) => api.post(`/employees/${id}/documents`, formData, {
   headers: { 'Content-Type': 'multipart/form-data' }
 });
+// Removing a document deletes the file from disk too, so a wrong upload can be
+// replaced rather than left attached forever.
+export const deleteEmployeeDocument = (id, docId) => api.delete(`/employees/${id}/documents/${docId}`);
 export const downloadEmployeeDocument = (id, docId) => api.get(`/employees/${id}/documents/${docId}/download`, {
   responseType: 'blob'
 });
