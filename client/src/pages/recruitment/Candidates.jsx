@@ -261,8 +261,13 @@ export default function Candidates() {
       const { data: updatedCand } = await candidatesApi.getCandidate(profileCandidate.id);
       setProfileCandidate(updatedCand);
       loadCandidates();
-    } catch { toast.error(t('common.upload_failed')); }
-    finally { setUploading(false); }
+    } catch (err) { toast.error(err.response?.data?.error || t('common.upload_failed')); }
+    finally {
+      setUploading(false);
+      // Clear the input, or picking the SAME file again after a failed attempt
+      // fires no change event and the retry silently does nothing.
+      e.target.value = '';
+    }
   };
 
   const handleReadCV = async () => {

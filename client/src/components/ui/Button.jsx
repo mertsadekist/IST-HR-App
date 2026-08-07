@@ -23,15 +23,24 @@ const Button = forwardRef(({
   disabled = false,
   className,
   children,
+  // Render as something other than <button>. The usual case is a file picker:
+  // a real <button> inside a <label> swallows the click and never activates the
+  // input, so those call sites need a <span> that only looks like a button.
+  as: Component = 'button',
   ...props
 }, ref) => {
+  const isButton = Component === 'button';
+  const isDisabled = disabled || loading;
   return (
-    <button
+    <Component
       ref={ref}
-      disabled={disabled || loading}
+      // `disabled` is meaningless on a span and React would warn; convey the
+      // state to assistive tech and block the pointer instead.
+      {...(isButton ? { disabled: isDisabled } : { 'aria-disabled': isDisabled || undefined })}
       className={cn(
         'inline-flex items-center justify-center gap-2 font-medium transition-all duration-200',
         'disabled:opacity-50 disabled:cursor-not-allowed',
+        !isButton && isDisabled && 'opacity-50 cursor-not-allowed pointer-events-none',
         'active:scale-[0.97]',
         variants[variant],
         sizes[size],
@@ -46,7 +55,7 @@ const Button = forwardRef(({
         </svg>
       )}
       {children}
-    </button>
+    </Component>
   );
 });
 
