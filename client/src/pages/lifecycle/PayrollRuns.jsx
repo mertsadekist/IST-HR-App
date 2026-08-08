@@ -6,10 +6,11 @@ import Card from '@components/ui/Card';
 import Button from '@components/ui/Button';
 import Badge from '@components/ui/Badge';
 import Modal from '@components/ui/Modal';
+import Input from '@components/ui/Input';
 import EmptyState from '@components/ui/EmptyState';
 import { toast } from 'react-toastify';
 import { confirmDelete } from '@utils/confirm';
-import { Banknote, Plus, RefreshCw, Loader2, CheckCircle2, Trash2, FileSpreadsheet, AlertTriangle } from 'lucide-react';
+import { Banknote, Plus, RefreshCw, Loader2, CheckCircle2, Trash2, FileSpreadsheet, AlertTriangle, Send } from 'lucide-react';
 import { downloadBlob } from '@utils/pdf';
 import dayjs from 'dayjs';
 
@@ -22,6 +23,10 @@ export default function PayrollRuns() {
   const { user } = useSelector((s) => s.auth);
   const { currentCompanyId } = useSelector((s) => s.entity);
   const isAdmin = user?.role === 'admin';
+  // The accountant runs this page end to end: generate, approve, produce the
+  // WPS file, send it, and close the cycle once the transfer has gone out.
+  // Deleting a run stays admin-only — see server/routes/payroll.js.
+  const canClosePayroll = isAdmin || user?.role === 'accountant';
   const [runs, setRuns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState(dayjs().format('YYYY-MM'));
@@ -31,6 +36,8 @@ export default function PayrollRuns() {
   const [myslips, setMyslips] = useState([]);
   const [wps, setWps] = useState(null);       // readiness report for the open run
   const [wpsBusy, setWpsBusy] = useState(false);
+  const [sendOpen, setSendOpen] = useState(false);
+  const [sendForm, setSendForm] = useState({ to: '', toName: '', cc: '', message: '' });
 
   const load = async () => {
     setLoading(true);
@@ -71,6 +78,26 @@ export default function PayrollRuns() {
       toast.success(t('payroll_runs.wps_downloaded'));
       setWps(null);
     } catch (e) { toast.error(apiErr(e, t('payroll_runs.wps_failed'))); }
+    finally { setWpsBusy(false); }
+  };
+
+  // Sending goes straight from the server: it rebuilds the same workbook and
+  // attaches it, so nothing passes through the browser on the way to the bank.
+  const sendWps = async (e) => {
+    e.preventDefault();
+    if (!sendForm.to.trim()) { toast.error(t('payroll_runs.wps_send_to_required')); return; }
+    setWpsBusy(true);
+    try {
+      const { data } = await payApi.wpsSend(detail.id, {
+        to: sendForm.to.trim(),
+        toName: sendForm.toName.trim(),
+        cc: sendForm.cc.trim(),
+        message: sendForm.message.trim(),
+        force: !wps.ready, // the confirmation below is the deliberate step
+      });
+      toast.success(t('payroll_runs.wps_sent', { to: sendForm.to.trim(), count: data.count }));
+      setSendOpen(false); setWps(null);
+    } catch (err) { toast.error(apiErr(err, t('payroll_runs.wps_send_failed'))); }
     finally { setWpsBusy(false); }
   };
 
@@ -132,7 +159,7 @@ export default function PayrollRuns() {
               <div className="ml-auto flex gap-2">
                 <Button size="sm" variant="secondary" onClick={openWps} loading={wpsBusy && !wps}><FileSpreadsheet size={14} /> {t('payroll_runs.wps_export')}</Button>
                 {detail.status === 'Draft' && <Button size="sm" onClick={() => approve(detail)}><CheckCircle2 size={14} /> {t('payroll_runs.approve')}</Button>}
-                {detail.status === 'Approved' && isAdmin && <Button size="sm" onClick={() => pay(detail)}>{t('payroll_runs.mark_paid')}</Button>}
+                {detail.status === 'Approved' && canClosePayroll && <Button size="sm" onClick={() => pay(detail)}>{t('payroll_runs.mark_paid')}</Button>}
                 {detail.status === 'Draft' && isAdmin && <Button size="sm" variant="danger" onClick={() => del(detail)}><Trash2 size={14} /></Button>}
               </div>
             </div>
@@ -238,14 +265,50 @@ export default function PayrollRuns() {
               </p>
             )}
 
-            <div className="flex justify-end gap-2 pt-1">
+            <div className="flex justify-end gap-2 pt-1 flex-wrap">
               <Button variant="secondary" onClick={() => setWps(null)}>{t('common.cancel')}</Button>
+              {wps.included_count > 0 && (
+                <Button variant="secondary" onClick={() => { setSendForm({ to: '', toName: '', cc: '', message: '' }); setSendOpen(true); }}>
+                  <Send size={14} /> {t('payroll_runs.wps_send')}
+                </Button>
+              )}
               {wps.included_count === 0 ? null : wps.ready
                 ? <Button onClick={() => downloadWps(false)} loading={wpsBusy}><FileSpreadsheet size={14} /> {t('payroll_runs.wps_download')}</Button>
                 : <Button variant="secondary" onClick={() => downloadWps(true)} loading={wpsBusy}>{t('payroll_runs.wps_download_draft')}</Button>}
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Send the WPS file to the bank or the PRO who files it */}
+      <Modal open={sendOpen} onClose={() => setSendOpen(false)} title={t('payroll_runs.wps_send_title')} size="md">
+        <form onSubmit={sendWps} className="space-y-4">
+          <p className="text-xs text-surface-500">{t('payroll_runs.wps_send_desc')}</p>
+          {wps && !wps.ready && (
+            <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-2 flex items-start gap-2">
+              <AlertTriangle size={14} className="shrink-0 mt-0.5" /> {t('payroll_runs.wps_send_draft_warning')}
+            </p>
+          )}
+          <div className="grid grid-cols-2 gap-4">
+            <Input label={t('payroll_runs.wps_send_to')} type="email" required placeholder="wps@bank.example"
+              value={sendForm.to} onChange={(e) => setSendForm(p => ({ ...p, to: e.target.value }))} />
+            <Input label={t('payroll_runs.wps_send_to_name')} placeholder={t('payroll_runs.wps_send_to_name_ph')}
+              value={sendForm.toName} onChange={(e) => setSendForm(p => ({ ...p, toName: e.target.value }))} />
+          </div>
+          <Input label={t('payroll_runs.wps_send_cc')} placeholder={t('payroll_runs.wps_send_cc_ph')}
+            value={sendForm.cc} onChange={(e) => setSendForm(p => ({ ...p, cc: e.target.value }))} />
+          <div>
+            <label className="block text-sm font-medium text-surface-700 mb-1.5">{t('payroll_runs.wps_send_message')}</label>
+            <textarea rows={3} placeholder={t('payroll_runs.wps_send_message_ph')} value={sendForm.message}
+              onChange={(e) => setSendForm(p => ({ ...p, message: e.target.value }))}
+              className="w-full px-3 py-2.5 text-sm bg-white border border-surface-200 rounded-xl input-focus transition-all resize-none" />
+            <p className="text-[11px] text-surface-400 mt-1">{t('payroll_runs.wps_send_summary_note')}</p>
+          </div>
+          <div className="flex justify-end gap-3 pt-1">
+            <Button type="button" variant="secondary" onClick={() => setSendOpen(false)}>{t('common.cancel')}</Button>
+            <Button type="submit" loading={wpsBusy}><Send size={14} /> {t('payroll_runs.wps_send')}</Button>
+          </div>
+        </form>
       </Modal>
     </div>
   );

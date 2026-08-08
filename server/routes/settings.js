@@ -13,7 +13,7 @@ const router = Router();
 // Carries the ATS stage editor and the asset catalogue both, so either
 // audience opens it. Every route here already required auth individually;
 // this adds the module check in front so reads are refused too.
-router.use(auth, requireModule(MODULES.OPERATIONS, MODULES.ASSETS));
+router.use(auth, requireModule(MODULES.OPERATIONS, MODULES.ASSETS, MODULES.RECRUITMENT));
 
 // ==============================================
 // GENERAL APP SETTINGS (timezone, …)

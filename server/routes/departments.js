@@ -11,7 +11,7 @@ const router = Router();
 // Module-gated so reads are refused too, not just writes.
 // The employee directory reads departments.
 // See config/permissions.js and docs/roles_and_permissions.md.
-router.use(auth, tenantScope, requireModule(MODULES.OPERATIONS, MODULES.HR));
+router.use(auth, tenantScope, requireModule(MODULES.OPERATIONS, MODULES.HR, MODULES.RECRUITMENT));
 
 // GET /api/departments (scoped to caller's company)
 router.get('/', async (req, res) => {

@@ -29,9 +29,9 @@ A role never widens company scope, and an entity never widens permissions.
    router, reads included. It exists because a role can be defined by what it
    must *not* see, and hiding a sidebar entry is not a permission.
 
-`ROLE_MODULES` maps a role to the modules it may reach. `'*'` means unrestricted.
-`accountant` and `employee` carry real module lists; `admin`, `hr_manager` and
-`recruiter` are still `'*'`.
+`ROLE_MODULES` maps a role to the modules it may reach. `'*'` means unrestricted
+and is now carried only by `admin` and `hr_manager`; `recruiter`, `accountant`
+and `employee` all have real module lists.
 
 Several modules may be passed — `requireModule(OPERATIONS, ASSETS)` — and any
 one of them grants access. A few routers serve more than one audience:
@@ -61,25 +61,26 @@ approver whose account happens to carry a self-service role.
 | Module | admin | hr_manager | recruiter | **accountant** | **employee** |
 |---|---|---|---|---|---|
 | Recruitment (candidates, vacancies, applicants, CV scorer) | ✅ | ✅ | ✅ | **❌** | **❌** |
-| Employees, onboarding, offboarding | ✅ | ✅ | 👁 ⚠️ | **👁** | **❌** |
-| Leave, attendance | ✅ | ✅ | own only | own only | **own only** |
-| Payroll runs, WPS export | ✅ | ✅ | ❌ | **✅** | **❌** |
-| Payslips | ✅ | ✅ | ❌ | **✅** | **own only** |
-| Salary reviews | ✅ | ✅ | ❌ | **👁** | **❌** |
-| Assets, inventory, digital access, social, domains | ✅ | ✅ | 👁 ⚠️ | **✅** | **own only** |
-| Company documents, legal letters | ✅ | ✅ | 👁 ⚠️ | **✅** | **❌** |
-| Reports, KPI, audit log, email log | ✅ | ✅ | 👁 ⚠️ | **❌** | **❌** |
-| Settings, departments, skills | ✅ | ✅ | 👁 ⚠️ | catalogue only | **❌** |
-| Users | ✅ | ❌ | ❌ | **❌** | **❌** |
-| Own portal, notifications, company list | ✅ | ✅ | ✅ | **✅** | **✅** |
-| Deletes (anywhere) | ✅ | ❌ | ❌ | **❌** | **❌** |
+| Employees, onboarding, offboarding | ✅ | ✅ | **❌** | 👁 | ❌ |
+| Leave, attendance | ✅ | ✅ | own only | own only | own only |
+| Payroll runs, WPS export + send, mark paid | ✅ | ✅ (no mark paid) | ❌ | **✅** | ❌ |
+| Payslips | ✅ | ✅ | ❌ | ✅ | own only |
+| Salary reviews | ✅ | ✅ | **❌** | 👁 | ❌ |
+| Assets, inventory, digital access, social, domains | ✅ | ✅ | **❌** | ✅ | own only |
+| Company documents, legal letters | ✅ | ✅ | **❌** | ✅ | ❌ |
+| Reports, KPI, audit log, email log | ✅ | ✅ | **❌** | ❌ | ❌ |
+| Departments, ATS stages | ✅ | ✅ | **✅** | departments only | ❌ |
+| Settings, skills | ✅ | ✅ | **❌** | catalogue only | ❌ |
+| Users | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Own portal, notifications, company list | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Deletes (anywhere) | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Reveal a stored password | ✅ | ❌ | ❌ | **❌** | own only |
-| Mark a payroll run Paid | ✅ | ❌ | ❌ | **❌** | **❌** |
+| Mark a payroll run Paid | ✅ | ❌ | ❌ | **✅** | ❌ |
 
 "own only" means the route resolves the employee from the token, so the caller
 sees their own record and nobody else's.
 
-⚠️ marks the **remaining gap** described below, not an intended grant.
+Every role now carries a real module list except `admin` and `hr_manager`.
 
 ---
 
@@ -105,16 +106,23 @@ Added 2026-08-08 for the organization's accountant.
 - Reach reports, KPI, the audit log or the email log. The reporting suite
   aggregates the hiring pipeline, so it follows the recruitment denial.
 - Change employee records, run onboarding/offboarding, or decide leave.
-- Delete anything, reveal a stored password, mark a run Paid, or manage users.
+- Delete anything, reveal a stored password, or manage users.
 
-Two deliberate separations worth knowing:
+The Payroll Runs page is theirs end to end: generate a run, approve it, check
+WPS readiness, export the file, **email it to the bank or the PRO**, and mark
+the run Paid once the transfer has gone out. Sending rebuilds the workbook
+server-side and attaches it, so the file never makes a round trip through the
+browser — what arrives is exactly what the download produces. An incomplete file
+needs the same explicit force flag to send as it does to download.
 
-- **Mark-paid stays with the admin.** The accountant prepares and exports the
-  payroll; someone else confirms the money left. That split is worth keeping.
+Two limits remain on that page:
+
+- **Deleting a run stays admin-only**, in line with deletes everywhere else.
+  That is destroying the record of a payment, not completing one.
 - **Salary reviews are read-only.** Proposing and approving a raise is a
   management decision, not an accounting one.
 
-Either can be opened up by adding `'accountant'` to the relevant `authorize()`
+Either can be opened by adding `'accountant'` to the relevant `authorize()`
 list — say so explicitly rather than assuming.
 
 ---
@@ -146,13 +154,16 @@ employee reads the employee directory, filtered to their company. They now
 assert 403, plus a new case proving the portal still serves that same employee
 their own assets and cannot be widened by a `company_id` in the query.
 
-### Remaining gap: recruiter
+### The recruiter, closed the same way
 
-`recruiter` is still `'*'`, so it can read HR, assets, compliance and analytics
-data that the sidebar never offers it. Lower severity than the employee case —
-recruiters are a small, trusted group rather than all staff — but it is the same
-hole. To close it, give the role a module list (`[RECRUITMENT, PORTAL]` plus
-whatever the hiring workflow genuinely needs) and re-run the suite.
+`recruiter` had the same shape of hole and was closed straight after, mapping to
+`[RECRUITMENT, PORTAL]`. Hiring needs two things outside its own module — the
+department a vacancy is filed under, and the ATS stage configuration — so
+`departments` and `settings` accept `RECRUITMENT` as one of their modules.
+Leave and attendance stay reachable because those routers are self-service: a
+recruiter is a member of staff who books their own leave.
+
+No role is `'*'` now except `admin` and `hr_manager`.
 
 ---
 

@@ -1509,7 +1509,22 @@
     "st_paid": "Paid",
     "st_cancelled": "Cancelled",
     "wps_offboarding": "Not in the file — being offboarded ({{count}})",
-    "wps_offboarding_hint": "These employees are on the settlement path, so no monthly transfer is instructed for them. Their earned final period is paid through the offboarding settlement, not this file."
+    "wps_offboarding_hint": "These employees are on the settlement path, so no monthly transfer is instructed for them. Their earned final period is paid through the offboarding settlement, not this file.",
+    "wps_send": "Send file",
+    "wps_send_title": "Send the WPS file",
+    "wps_send_desc": "The file is built on the server and attached to the email — exactly the same file the download produces.",
+    "wps_send_to": "To",
+    "wps_send_to_name": "Recipient name",
+    "wps_send_to_name_ph": "e.g. WPS Desk",
+    "wps_send_cc": "CC",
+    "wps_send_cc_ph": "Comma-separated, optional",
+    "wps_send_message": "Message",
+    "wps_send_message_ph": "Optional note to the recipient...",
+    "wps_send_summary_note": "The period, employee count, total and any exclusions are appended automatically.",
+    "wps_send_to_required": "Enter a recipient email address",
+    "wps_send_draft_warning": "This file is still incomplete. Sending it now submits a draft — fix the missing identifiers first unless the recipient asked for a preview.",
+    "wps_sent": "WPS file sent to {{to}} ({{count}} employees)",
+    "wps_send_failed": "Could not send the WPS file"
   },
   "salary_reviews": {
     "title": "Salary Reviews",

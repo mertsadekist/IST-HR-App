@@ -8,6 +8,8 @@ import { validate } from '../middleware/validate.js';
 import { computePayrollItem } from '../services/payrollService.js';
 import { buildWpsWorkbook, wpsReadiness } from '../services/wpsService.js';
 import { notifyRole } from '../services/notificationService.js';
+import { sendEmail } from '../services/emailService.js';
+import { getTemplate } from '../services/emailTemplates.js';
 
 const router = Router();
 router.use(auth, tenantScope);
@@ -135,7 +137,10 @@ router.put('/runs/:id/approve', authorize('admin', 'hr_manager', 'accountant'), 
   } catch (err) { console.error('PUT /payroll/runs/:id/approve error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
-router.put('/runs/:id/mark-paid', authorize('admin'), async (req, res) => {
+// The accountant is the person who actually moves the money, so they close the
+// cycle too. Deleting a run stays admin-only — that is destroying the record of
+// a payment, not completing one.
+router.put('/runs/:id/mark-paid', authorize('admin', 'accountant'), async (req, res) => {
   try {
     const co = companyClause(req, 'company_id');
     const [[run]] = await pool.query('SELECT status FROM payroll_runs WHERE id = ?' + co.clause, [req.params.id, ...co.params]);
@@ -264,6 +269,90 @@ router.get('/runs/:id/wps-export', authorize('admin', 'hr_manager', 'accountant'
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
     res.send(buffer);
   } catch (err) { console.error('GET /payroll/runs/:id/wps-export error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// POST /api/payroll/runs/:id/wps-send — email the submittable file to the bank
+// or the PRO who files it.
+//
+// The workbook is rebuilt here rather than uploaded from the browser: the
+// server already knows how to make it, and a file that made a round trip
+// through the client is a file that could have been edited on the way. What is
+// sent is exactly what /wps-export would produce.
+router.post('/runs/:id/wps-send', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
+  try {
+    const { to, cc, message } = req.body;
+    if (!to || !/^\S+@\S+\.\S+$/.test(String(to).trim())) {
+      return res.status(422).json({ error: 'A valid recipient email is required' });
+    }
+
+    const data = await loadWpsData(req, req.params.id);
+    if (!data) return res.status(404).json({ error: 'Payroll run not found' });
+    if (!data.items.length) return res.status(409).json({ error: 'This payroll run has no employees' });
+
+    const report = wpsReadiness(data);
+    if (!report.included_count) {
+      return res.status(409).json({ error: 'No employee in this run has an issued labour contract, so the WPS file would be empty', ...report });
+    }
+    // An incomplete file must never leave the building by accident. Downloading
+    // a draft to inspect the layout is one thing; emailing it to the bank is
+    // another, so this needs the same explicit force flag.
+    const force = req.body.force === true || req.body.force === '1';
+    if (!report.ready && !force) {
+      return res.status(422).json({ error: 'WPS data is incomplete', ...report });
+    }
+
+    const { buffer, grandTotal, count, excluded } = buildWpsWorkbook({
+      company: data.company, period: data.run.period, items: data.items,
+    });
+    const draft = !report.ready;
+    const companyName = data.company?.name || '';
+    const fileName = `WPS-${(companyName || 'company').replace(/[^\w-]+/g, '_')}-${data.run.period}${draft ? '-DRAFT' : ''}.xlsx`;
+    const title = `WPS salary file — ${companyName} — ${data.run.period}`;
+
+    const summary = [
+      `Period: ${data.run.period}`,
+      `Employees in the file: ${count}`,
+      `Total: AED ${grandTotal.toFixed(2)}`,
+      data.company?.mol_id ? `MOL ID: ${data.company.mol_id}` : null,
+      excluded.length ? `Excluded (labour contract not issued): ${excluded.map((e) => e.name).join(', ')}` : null,
+      data.offboarding?.length ? `Excluded (offboarding, settled separately): ${data.offboarding.map((e) => e.name).join(', ')}` : null,
+      draft ? 'WARNING: this file is an INCOMPLETE DRAFT and is not ready for submission.' : null,
+    ].filter(Boolean).join('\n');
+
+    const { subject, html } = getTemplate('document_delivery', {
+      name: req.body.toName || '',
+      title,
+      message: [message, summary].filter(Boolean).join('\n\n'),
+      company: companyName,
+    });
+
+    const result = await sendEmail({
+      to: String(to).trim(),
+      toName: req.body.toName || '',
+      subject, html,
+      companyId: data.run.company_id,
+      templateType: 'document_delivery',
+      relatedModule: 'Payroll',
+      relatedId: data.run.id,
+      sentBy: req.user.id,
+      cc: cc ? (Array.isArray(cc) ? cc : String(cc).split(',').map((s) => s.trim()).filter(Boolean)) : undefined,
+      attachments: [{
+        filename: fileName,
+        content: buffer,
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      }],
+    });
+
+    if (!result.success) return res.status(502).json({ success: false, error: result.error || 'Send failed' });
+
+    await addAudit(pool, req.user, 'Payroll', 'WPS Sent',
+      `WPS file for run #${data.run.id} (${data.run.period}) emailed to ${to}`
+      + (cc ? ` (cc ${Array.isArray(cc) ? cc.join(', ') : cc})` : '')
+      + `: ${count} employee(s), total AED ${grandTotal.toFixed(2)}`
+      + (draft ? ' — INCOMPLETE DRAFT' : ''));
+
+    res.json({ success: true, messageId: result.messageId, file_name: fileName, count, total: grandTotal, draft });
+  } catch (err) { console.error('POST /payroll/runs/:id/wps-send error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
 // ─── Payslips ────────────────────────────────────────────────────────────────

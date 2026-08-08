@@ -22,7 +22,7 @@ export const MODULES = {
 export const ROLE_MODULES = {
   admin: '*',
   hr_manager: '*',
-  recruiter: '*',
+  recruiter: [MODULES.RECRUITMENT, MODULES.PORTAL],
   employee: [MODULES.PORTAL],
   accountant: [MODULES.PAYROLL, MODULES.ASSETS, MODULES.COMPLIANCE, MODULES.HR, MODULES.PORTAL],
 };

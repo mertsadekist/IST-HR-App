@@ -37,7 +37,13 @@ const ALL = Object.values(MODULES);
 export const ROLE_MODULES = Object.freeze({
   admin: '*',
   hr_manager: '*',
-  recruiter: '*',
+
+  // Hiring, and nothing else. The pipeline needs two things outside its own
+  // module — the department list a vacancy is filed under, and the ATS stage
+  // configuration — so `departments` and `settings` accept RECRUITMENT as well.
+  // Leave and attendance stay reachable because those routers are self-service:
+  // a recruiter is a member of staff too and books their own leave.
+  recruiter: [MODULES.RECRUITMENT, MODULES.PORTAL],
 
   // Self-service only. An employee's own assets, accounts and payslips come
   // from routes/portal.js and the `/payslips/my` endpoint, both of which

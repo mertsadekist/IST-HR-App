@@ -10,5 +10,8 @@ export const wpsReadiness = (id) => api.get(`/payroll/runs/${id}/wps-readiness`)
 export const wpsExport = (id, force) => api.get(`/payroll/runs/${id}/wps-export`, {
   params: force ? { force: 1 } : {}, responseType: 'blob',
 });
+// The server rebuilds the workbook and attaches it, so the file never makes a
+// round trip through the browser on its way to the bank.
+export const wpsSend = (id, data) => api.post(`/payroll/runs/${id}/wps-send`, data);
 export const myPayslips = (params) => api.get('/payroll/payslips/my', { params });
 export const employeePayslips = (employeeId, params) => api.get(`/payroll/payslips/${employeeId}`, { params });
