@@ -67,6 +67,25 @@ const SELECT_BASE = `SELECT d.*, DATE_FORMAT(d.renewal_date, '%Y-%m-%d') AS rene
    LEFT JOIN platform_catalog pc ON d.platform_id = pc.id
    LEFT JOIN employees e ON d.assigned_employee_id = e.id`;
 
+
+/**
+ * Which company a record belongs in, given its owner scope.
+ *
+ * RE and MKT name a specific entity, so the record must live under it — setting
+ * "Company owner: IST Markets" and leaving the row filed under IST Real Estate
+ * means it stays invisible from the IST Markets entity, which is exactly the
+ * confusion this resolves. GRP is shared and has no single home, so it stays
+ * wherever it was filed.
+ *
+ * @returns {Promise<number|null>} the company id to use, or null to leave as-is
+ */
+async function companyForOwnerScope(scope) {
+  if (scope !== 'RE' && scope !== 'MKT') return null;
+  const needle = scope === 'RE' ? 'real estate' : 'markets';
+  const [companies] = await pool.query("SELECT id, name FROM companies WHERE status = 'Active'");
+  return companies.find((c) => c.name.toLowerCase().includes(needle))?.id || null;
+}
+
 router.get('/options', (req, res) => {
   res.json({ asset_kinds: ASSET_KINDS, statuses: STATUSES, owner_scopes: OWNER_SCOPES, renewal_thresholds: RENEWAL_THRESHOLDS });
 });
@@ -144,6 +163,10 @@ router.post('/', authorize('admin', 'hr_manager'), async (req, res) => {
     const err = validate(data);
     if (err) return res.status(422).json({ error: err });
 
+    // A record owned by a named entity is filed under that entity.
+    const scopedCompany = await companyForOwnerScope(data.owner_scope);
+    if (scopedCompany) data.company_id = scopedCompany;
+
     // Take the registrar name from the catalogue rather than asking for it twice.
     if (data.platform_id && !data.registrar_provider) {
       const [[plat]] = await pool.query('SELECT name FROM platform_catalog WHERE id = ?', [data.platform_id]);
@@ -174,11 +197,21 @@ router.put('/:id', authorize('admin', 'hr_manager'), async (req, res) => {
       data.renewal_alert_sent = null;
     }
 
+    // Changing the owner to a named entity moves the record there. Without this
+    // the label said IST Markets while the row stayed filed under IST Real
+    // Estate, so it never appeared when browsing IST Markets.
+    let moved = null;
+    if (data.owner_scope && data.owner_scope !== existing.owner_scope) {
+      const target = await companyForOwnerScope(data.owner_scope);
+      if (target && target !== existing.company_id) { data.company_id = target; moved = target; }
+    }
+
     await pool.query('UPDATE domain_assets SET ? WHERE id = ?', [data, existing.id]);
     await addAudit(pool, req.user, 'Domains', 'Updated',
       `"${existing.account_or_domain_name}" updated`
-      + (data.renewal_date !== undefined ? ` — renewal ${existing.renewal_date || 'unset'} → ${data.renewal_date || 'unset'}` : ''));
-    res.json({ success: true });
+      + (data.renewal_date !== undefined ? ` — renewal ${existing.renewal_date || 'unset'} → ${data.renewal_date || 'unset'}` : '')
+      + (moved ? ` — moved to company #${moved} to match owner ${data.owner_scope}` : ''));
+    res.json({ success: true, ...(moved ? { moved_to_company: moved } : {}) });
   } catch (err) { console.error('PUT /domains/:id error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
