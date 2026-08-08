@@ -2293,6 +2293,7 @@
     "run_check": "Run renewal check",
     "saved": "Record saved",
     "search_ph": "Search domain, account or registrar…",
+    "shared_notice": "Shared across both companies — the entity selector does not filter this page. Use the owner buttons to slice it.",
     "subtitle": "Who owns each domain and hosting account, who controls DNS, and when it renews",
     "th_auto": "Auto",
     "th_name": "Domain / account",

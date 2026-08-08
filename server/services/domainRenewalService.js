@@ -46,6 +46,12 @@ export function alreadyAlerted(sent, threshold) {
  */
 export async function checkDomainRenewals(pool) {
   const maxDays = Math.max(...RENEWAL_THRESHOLDS);
+  // A shared domain concerns both companies, so its alert goes to the admins of
+  // each — notifying only the entity it happens to be filed under would leave
+  // the other side unaware of a renewal they also depend on.
+  const [activeCompanies] = await pool.query("SELECT id FROM companies WHERE status = 'Active'");
+  const allCompanyIds = activeCompanies.map((c) => c.id);
+
   const [rows] = await pool.query(
     `SELECT id, company_id, owner_scope, account_or_domain_name, domain_name, registrar_provider,
             billing_owner, auto_renew, renewal_alert_sent,
@@ -75,9 +81,12 @@ export async function checkDomainRenewals(pool) {
       d.auto_renew ? 'Auto-renew is on — confirm the payment method is still valid.' : 'Auto-renew is OFF.',
     ].filter(Boolean).join(' · ');
 
-    await notifyRole(pool, d.company_id, ['admin', 'hr_manager'], {
-      type: expired ? 'error' : 'warning', title, body, link: '/domains',
-    });
+    const targets = d.owner_scope === 'GRP' ? allCompanyIds : [d.company_id];
+    for (const companyId of targets) {
+      await notifyRole(pool, companyId, ['admin', 'hr_manager'], {
+        type: expired ? 'error' : 'warning', title, body, link: '/domains',
+      });
+    }
     await pool.query('UPDATE domain_assets SET renewal_alert_sent = ? WHERE id = ?', [threshold, d.id]);
     sent++;
   }

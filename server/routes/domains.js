@@ -5,13 +5,23 @@
  * business owner, technical owner, DNS controller, hosting controller and the
  * person who pays are often four different people, and a domain lapses when each
  * of them assumes it was somebody else's renewal.
+ *
+ * SCOPING: this register is deliberately ORGANIZATION-WIDE, unlike every other
+ * module here. Domains and hosting are one estate — istmarkets.com and
+ * istrealestate.ae sit in the same registrar accounts, often on the same
+ * invoice, and whoever is chasing a renewal needs the whole list in front of
+ * them. Splitting it by selected entity only hid half the estate from whoever
+ * was looking, which is how a renewal goes unwatched.
+ *
+ * `owner_scope` still records which company owns each one and is the filter for
+ * slicing the list; `company_id` remains for notification routing and history.
  */
 import { Router } from 'express';
 import pool from '../config/db.js';
 import { auth } from '../middleware/auth.js';
 import { authorize } from '../middleware/rbac.js';
 import { addAudit } from '../services/auditService.js';
-import { tenantScope, companyClause, resolveWriteCompanyId } from '../middleware/tenant.js';
+import { tenantScope, resolveWriteCompanyId } from '../middleware/tenant.js';
 import { OWNER_SCOPES } from '../config/ownerScopes.js';
 import { checkDomainRenewals, RENEWAL_THRESHOLDS } from '../services/domainRenewalService.js';
 
@@ -94,12 +104,12 @@ router.get('/options', (req, res) => {
 router.get('/expiring', async (req, res) => {
   try {
     const days = Math.max(1, Math.min(365, parseInt(req.query.days) || 60));
-    const co = companyClause(req, 'd.company_id');
+    // No entity filter: the estate is shared — see the note at the top.
     const [rows] = await pool.query(
       `${SELECT_BASE} WHERE d.renewal_date IS NOT NULL
          AND d.account_status IN ('Active','Pending')
-         AND DATEDIFF(d.renewal_date, CURDATE()) <= ?${co.clause}
-       ORDER BY d.renewal_date`, [days, ...co.params]);
+         AND DATEDIFF(d.renewal_date, CURDATE()) <= ?
+       ORDER BY d.renewal_date`, [days]);
 
     // Accountability gaps: a renewal nobody is named for, and an expiry already past.
     const noBillingOwner = rows.filter((r) => !r.billing_owner);
@@ -129,9 +139,9 @@ router.post('/run-renewal-check', authorize('admin'), async (req, res) => {
 
 router.get('/', async (req, res) => {
   try {
-    const co = companyClause(req, 'd.company_id');
-    let sql = `${SELECT_BASE} WHERE 1=1${co.clause}`;
-    const params = [...co.params];
+    // Org-wide by design; slice with ?owner_scope= instead of the selected entity.
+    let sql = `${SELECT_BASE} WHERE 1=1`;
+    const params = [];
     if (OWNER_SCOPES.includes(req.query.owner_scope)) { sql += ' AND d.owner_scope = ?'; params.push(req.query.owner_scope); }
     if (ASSET_KINDS.includes(req.query.asset_kind)) { sql += ' AND d.asset_kind = ?'; params.push(req.query.asset_kind); }
     if (STATUSES.includes(req.query.account_status)) { sql += ' AND d.account_status = ?'; params.push(req.query.account_status); }
@@ -146,11 +156,16 @@ router.get('/', async (req, res) => {
   } catch (err) { console.error('GET /domains error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
+/**
+ * Looks a record up without an entity filter, matching the org-wide read model.
+ * Editing is still gated by role (admin / hr_manager), which are cross-company
+ * roles in this system — so a shared estate stays editable by the people who
+ * maintain it, from whichever entity they happen to have selected.
+ */
 async function getScoped(req, id) {
-  const co = companyClause(req, 'company_id');
   const [[row]] = await pool.query(
-    `SELECT *, DATE_FORMAT(renewal_date, '%Y-%m-%d') AS renewal_date FROM domain_assets WHERE id = ?` + co.clause,
-    [id, ...co.params]);
+    `SELECT *, DATE_FORMAT(renewal_date, '%Y-%m-%d') AS renewal_date FROM domain_assets WHERE id = ?`,
+    [id]);
   return row || null;
 }
 

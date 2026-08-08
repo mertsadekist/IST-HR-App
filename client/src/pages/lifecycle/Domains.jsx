@@ -75,20 +75,21 @@ export default function Domains() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
+      // No company_id: this register is shared across both entities, so the
+      // selected entity must not narrow it. Slice by owner instead.
       const [listRes, watchRes] = await Promise.all([
         domainsApi.getDomains({
-          ...scopeParams,
           ...(ownerFilter ? { owner_scope: ownerFilter } : {}),
           ...(kindFilter ? { asset_kind: kindFilter } : {}),
           ...(search ? { search } : {}),
         }),
-        domainsApi.getExpiring({ ...scopeParams, days: 90 }),
+        domainsApi.getExpiring({ days: 90 }),
       ]);
       setRows(listRes.data); setWatch(watchRes.data);
     } catch { toast.error(t('domains.load_failed')); }
     finally { setLoading(false); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentCompanyId, ownerFilter, kindFilter, search, t]);
+  }, [ownerFilter, kindFilter, search, t]);
 
   useEffect(() => { const id = setTimeout(load, search ? 300 : 0); return () => clearTimeout(id); }, [load, search]);
 
@@ -190,6 +191,7 @@ export default function Domains() {
         <div>
           <h1 className="text-2xl font-bold text-surface-900">{t('domains.title')}</h1>
           <p className="text-surface-500 mt-0.5 text-sm">{t('domains.subtitle')}</p>
+          <p className="text-[11px] text-brand-600 mt-1">{t('domains.shared_notice')}</p>
         </div>
         <div className="flex items-center gap-2">
           {isAdmin && <Button variant="secondary" onClick={runCheck}><BellRing size={14} /> {t('domains.run_check')}</Button>}
