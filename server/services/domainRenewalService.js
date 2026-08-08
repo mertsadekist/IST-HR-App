@@ -66,7 +66,7 @@ export async function checkDomainRenewals(pool) {
 
     const targets = d.owner_scope === 'GRP' ? allCompanyIds : [d.company_id];
     for (const companyId of targets) {
-      await notifyRole(pool, companyId, ['admin', 'hr_manager'], {
+      await notifyRole(pool, companyId, ['admin', 'hr_manager', 'accountant'], {
         type: expired ? 'error' : 'warning', title, body, link: '/domains',
       });
     }

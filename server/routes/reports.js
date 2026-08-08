@@ -2,9 +2,13 @@ import { Router } from 'express';
 import pool from '../config/db.js';
 import { auth } from '../middleware/auth.js';
 import { tenantScope, companyClause } from '../middleware/tenant.js';
+import { requireModule, MODULES } from '../config/permissions.js';
 
 const router = Router();
-router.use(auth, tenantScope);
+// Reports, KPI and the audit trail are the analytics module — reports even
+// aggregates the hiring pipeline, so a role denied recruitment cannot be handed
+// this router by default. See config/permissions.js.
+router.use(auth, tenantScope, requireModule(MODULES.ANALYTICS));
 
 // GET /api/reports/pipeline — Pipeline report (scoped to caller's company)
 router.get('/pipeline', async (req, res) => {

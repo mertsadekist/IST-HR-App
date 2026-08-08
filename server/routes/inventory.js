@@ -176,7 +176,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/inventory — Create inventory item + auto-generate asset code & barcode
-router.post('/', authorize('admin', 'hr_manager'), async (req, res) => {
+router.post('/', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
   try {
     const data = { ...req.body };
     data.company_id = resolveWriteCompanyId(req, data.company_id);
@@ -234,7 +234,7 @@ router.post('/', authorize('admin', 'hr_manager'), async (req, res) => {
 });
 
 // PUT /api/inventory/:id (scoped; cannot re-tenant)
-router.put('/:id', authorize('admin', 'hr_manager'), async (req, res) => {
+router.put('/:id', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
   try {
     if (!(await getScopedInventory(req, req.params.id, 'id'))) {
       return res.status(404).json({ error: 'Item not found' });
@@ -277,7 +277,7 @@ router.delete('/:id', authorize('admin'), async (req, res) => {
 // failing routes it to repair, damaged or disposed according to what was found.
 const INSPECTION_FAIL_STATES = ['In Repair', 'Damaged', 'Disposed', 'Lost'];
 
-router.post('/:id/inspect', authorize('admin', 'hr_manager'), async (req, res) => {
+router.post('/:id/inspect', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
   try {
     const item = await getScopedInventory(req, req.params.id, 'id, status, platform_id, asset_code');
     if (!item) return res.status(404).json({ error: 'Item not found' });
@@ -435,7 +435,7 @@ router.post('/bulk-labels', async (req, res) => {
 });
 
 // POST /api/inventory/:id/upload-image (scoped)
-router.post('/:id/upload-image', authorize('admin', 'hr_manager'), upload.single('image'), async (req, res) => {
+router.post('/:id/upload-image', authorize('admin', 'hr_manager', 'accountant'), upload.single('image'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     if (!(await getScopedInventory(req, req.params.id, 'id'))) {

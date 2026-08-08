@@ -175,7 +175,7 @@ router.get('/', async (req, res) => {
 // actually sit. Counted across assignments, digital access and social access
 // together, because a department holding three laptops and eleven admin seats is
 // a different picture from one holding eleven laptops.
-router.get('/reports/allocation', authorize('admin', 'hr_manager'), async (req, res) => {
+router.get('/reports/allocation', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
   try {
     const co = companyClause(req, 'a.company_id');
     const coDa = companyClause(req, 'da.company_id');
@@ -248,7 +248,7 @@ router.get('/reports/allocation', authorize('admin', 'hr_manager'), async (req, 
 });
 
 // POST /api/assets — with inventory linking
-router.post('/', authorize('admin', 'hr_manager'), async (req, res) => {
+router.post('/', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
   try {
     const data = { ...req.body };
     data.company_id = resolveWriteCompanyId(req, data.company_id);
@@ -300,7 +300,7 @@ router.post('/', authorize('admin', 'hr_manager'), async (req, res) => {
 });
 
 // PUT /api/assets/:id (company-scoped; cannot re-tenant)
-router.put('/:id', authorize('admin', 'hr_manager'), async (req, res) => {
+router.put('/:id', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
   try {
     const { company_id, ...data } = req.body;
     if (!(await getScopedAsset(req, req.params.id, 'id'))) {
@@ -334,7 +334,7 @@ router.put('/:id', authorize('admin', 'hr_manager'), async (req, res) => {
 // company cannot keep at the next onboarding.
 //
 // A digital seat has nothing to inspect, so it is reclaimed immediately.
-router.put('/:id/return', authorize('admin', 'hr_manager'), async (req, res) => {
+router.put('/:id/return', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
   try {
     const { condition_note } = req.body;
     const asset = await getScopedAsset(req, req.params.id, 'platform_id, inventory_id, employee_id, asset_type');

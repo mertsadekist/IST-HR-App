@@ -2,6 +2,7 @@ import { Router } from 'express';
 import pool from '../config/db.js';
 import { auth } from '../middleware/auth.js';
 import { authorize } from '../middleware/rbac.js';
+import { requireModule, MODULES } from '../config/permissions.js';
 import { addAudit } from '../services/auditService.js';
 import multer from 'multer';
 import path from 'path';
@@ -23,7 +24,10 @@ const upload = multer({
 });
 
 const router = Router();
-router.use(auth, tenantScope);
+// Recruitment is a module the accountant role has no access to at all, reads
+// included — see config/permissions.js. Mounted here rather than per-route so a
+// new endpoint in this file cannot forget it.
+router.use(auth, tenantScope, requireModule(MODULES.RECRUITMENT));
 
 // Verifies a candidate exists, scoped only by the "browsing" entity filter
 // (query string) — never by the request body. A PUT body may legitimately

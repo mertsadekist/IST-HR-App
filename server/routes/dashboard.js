@@ -2,9 +2,15 @@ import { Router } from 'express';
 import pool from '../config/db.js';
 import { auth } from '../middleware/auth.js';
 import { tenantScope, companyClause } from '../middleware/tenant.js';
+import { canAccessModule, MODULES } from '../config/permissions.js';
 
 const router = Router();
 router.use(auth, tenantScope);
+
+// The dashboard is the one place recruitment figures reach a role that is
+// otherwise blocked from the module. Blanking them here keeps the denial whole
+// rather than relying on the page not to draw the card.
+const seesRecruitment = (req) => canAccessModule(req.user.role, MODULES.RECRUITMENT);
 
 // GET /api/dashboard/stats — scoped to caller's company (admin: all or ?company_id=X)
 router.get('/stats', async (req, res) => {
@@ -13,12 +19,13 @@ router.get('/stats', async (req, res) => {
     const companyFilter = co.clause;
     const params = co.params;
 
-    const [[candidateCount]] = await pool.query(
+    const recruitment = seesRecruitment(req);
+    const [[candidateCount]] = recruitment ? await pool.query(
       `SELECT COUNT(*) as count FROM candidates WHERE status = 'Active'${companyFilter}`, params
-    );
-    const [[vacancyCount]] = await pool.query(
+    ) : [[{ count: 0 }]];
+    const [[vacancyCount]] = recruitment ? await pool.query(
       `SELECT COUNT(*) as count FROM vacancies WHERE status = 'Open'${companyFilter}`, params
-    );
+    ) : [[{ count: 0 }]];
     const [[employeeCount]] = await pool.query(
       `SELECT COUNT(*) as count FROM employees WHERE status IN ('Active', 'Onboarding')${companyFilter}`, params
     );
@@ -31,6 +38,7 @@ router.get('/stats', async (req, res) => {
       vacancies: vacancyCount.count,
       employees: employeeCount.count,
       monthHires: monthHires.count,
+      recruitment, // lets the page drop the two cards instead of showing zeros
     });
   } catch (err) {
     console.error('GET /dashboard/stats error:', err);
@@ -41,6 +49,7 @@ router.get('/stats', async (req, res) => {
 // GET /api/dashboard/pipeline — scoped to caller's company
 router.get('/pipeline', async (req, res) => {
   try {
+    if (!seesRecruitment(req)) return res.json([]);
     const co = companyClause(req, 'c.company_id');
     let sql = `SELECT s.id, s.name, s.color, s.text_color, s.sort_order,
                COUNT(c.id) as candidate_count

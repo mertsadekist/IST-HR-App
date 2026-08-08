@@ -66,9 +66,14 @@ export default function Dashboard() {
     }
   };
 
+  // The server blanks recruitment figures for roles denied that module and says
+  // so via `recruitment`. Dropping the cards beats showing two honest zeros.
+  const showsRecruitment = stats.recruitment !== false;
   const statCards = [
-    { icon: Users, label: t('dashboard.total_candidates'), value: stats.candidates, color: 'text-blue-600', bg: 'bg-blue-50', ring: 'ring-blue-100' },
-    { icon: FileText, label: t('dashboard.open_vacancies'), value: stats.vacancies, color: 'text-brand-600', bg: 'bg-brand-50', ring: 'ring-brand-100' },
+    ...(showsRecruitment ? [
+      { icon: Users, label: t('dashboard.total_candidates'), value: stats.candidates, color: 'text-blue-600', bg: 'bg-blue-50', ring: 'ring-blue-100' },
+      { icon: FileText, label: t('dashboard.open_vacancies'), value: stats.vacancies, color: 'text-brand-600', bg: 'bg-brand-50', ring: 'ring-brand-100' },
+    ] : []),
     { icon: UserCheck, label: t('dashboard.active_employees'), value: stats.employees, color: 'text-emerald-600', bg: 'bg-emerald-50', ring: 'ring-emerald-100' },
     { icon: TrendingUp, label: t('dashboard.this_month_hires'), value: stats.monthHires, color: 'text-amber-600', bg: 'bg-amber-50', ring: 'ring-amber-100' },
   ];
@@ -191,7 +196,8 @@ export default function Dashboard() {
 
       {/* Pipeline + Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Pipeline Funnel */}
+        {/* Pipeline Funnel — absent for roles without recruitment access */}
+        {showsRecruitment && (
         <Card>
           <Card.Header>
             <Card.Title>{t('dashboard.pipeline_title')}</Card.Title>
@@ -229,6 +235,7 @@ export default function Dashboard() {
             </div>
           )}
         </Card>
+        )}
 
         {/* Hires/Month Chart */}
         <Card>

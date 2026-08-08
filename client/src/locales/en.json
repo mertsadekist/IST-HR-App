@@ -734,7 +734,12 @@
     "password": "Password",
     "active": "Active",
     "inactive": "Inactive",
-    "min_6_chars": "Min. 6 characters"
+    "min_6_chars": "Min. 6 characters",
+    "role_hint_admin": "Full access, including deletes, user management and revealing stored passwords.",
+    "role_hint_hr_manager": "All HR, recruitment, payroll, assets and reporting. No user management.",
+    "role_hint_recruiter": "Recruitment only: candidates, vacancies, applicants and CV scoring.",
+    "role_hint_accountant": "Payroll and WPS, assets, subscriptions, domains and company documents. No recruitment, no reports, no deletes.",
+    "role_hint_employee": "Self-service only: their own assets, accounts and payslips."
   },
   "lifecycle": {
     "access_level": "Access Level",

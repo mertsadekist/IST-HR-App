@@ -13,6 +13,12 @@ import {
 } from 'lucide-react';
 import { cn } from '@utils/cn';
 
+// Audiences, named so the intent survives the next role that gets added.
+// These mirror server/config/permissions.js — the menu only decides what is
+// worth showing; the API is what actually grants or refuses.
+const HR_ONLY = ['admin', 'hr_manager'];
+const HR_AND_FINANCE = ['admin', 'hr_manager', 'accountant'];
+
 // The single source of the navigation structure, built from `t` so there is no
 // second untranslated copy to drift out of sync.
 const buildMenuGroups = (t) => [
@@ -35,17 +41,21 @@ const buildMenuGroups = (t) => [
     },
     {
       label: t('nav.hr_management'),
-      roles: ['admin', 'hr_manager'],
+      // The accountant reaches this group for two entries only: payroll runs,
+      // and the employee records payroll is calculated from. Everything else
+      // here is HR's to run, so each item says who it is for rather than the
+      // group deciding for all nine.
+      roles: HR_AND_FINANCE,
       items: [
-        { path: '/employees', icon: Users, label: t('nav.employees', 'Employees') },
-        { path: '/onboarding', icon: UserCheck, label: t('nav.onboarding') },
-        { path: '/quick-offer', icon: Send, label: t('nav.quick_offer', 'Quick Offer') },
-        { path: '/leave', icon: CalendarDays, label: t('nav.leave', 'Leave') },
-        { path: '/attendance', icon: Clock, label: t('nav.attendance', 'Attendance') },
-        { path: '/payroll-runs', icon: Banknote, label: t('nav.payroll_runs', 'Payroll Runs') },
-        { path: '/salary-reviews', icon: TrendingUp, label: t('nav.salary_reviews', 'Salary Reviews') },
-        { path: '/performance', icon: TrendingUp, label: t('nav.performance', 'Performance') },
-        { path: '/offboarding', icon: DoorOpen, label: t('nav.offboarding') },
+        { path: '/employees', icon: Users, label: t('nav.employees', 'Employees'), roles: HR_AND_FINANCE },
+        { path: '/onboarding', icon: UserCheck, label: t('nav.onboarding'), roles: HR_ONLY },
+        { path: '/quick-offer', icon: Send, label: t('nav.quick_offer', 'Quick Offer'), roles: HR_ONLY },
+        { path: '/leave', icon: CalendarDays, label: t('nav.leave', 'Leave'), roles: HR_ONLY },
+        { path: '/attendance', icon: Clock, label: t('nav.attendance', 'Attendance'), roles: HR_ONLY },
+        { path: '/payroll-runs', icon: Banknote, label: t('nav.payroll_runs', 'Payroll Runs'), roles: HR_AND_FINANCE },
+        { path: '/salary-reviews', icon: TrendingUp, label: t('nav.salary_reviews', 'Salary Reviews'), roles: HR_ONLY },
+        { path: '/performance', icon: TrendingUp, label: t('nav.performance', 'Performance'), roles: HR_ONLY },
+        { path: '/offboarding', icon: DoorOpen, label: t('nav.offboarding'), roles: HR_ONLY },
       ],
     },
     {
@@ -57,7 +67,7 @@ const buildMenuGroups = (t) => [
       key: 'assets_access',
       collapsible: true,
       icon: Boxes,
-      roles: ['admin', 'hr_manager'],
+      roles: HR_AND_FINANCE,
       items: [
         { path: '/assets', icon: Laptop, label: t('nav.assets') },
         { path: '/inventory', icon: Package, label: t('nav.inventory', 'Inventory') },
@@ -69,7 +79,7 @@ const buildMenuGroups = (t) => [
     },
     {
       label: t('nav.compliance'),
-      roles: ['admin', 'hr_manager'],
+      roles: HR_AND_FINANCE,
       items: [
         { path: '/legal-letters', icon: Scale, label: t('nav.legal_letters') },
         { path: '/company-docs', icon: FileArchive, label: t('nav.company_docs') },
@@ -98,7 +108,7 @@ const buildMenuGroups = (t) => [
     },
     {
       label: t('nav.my_portal', 'MY PORTAL'),
-      roles: ['employee', 'admin', 'hr_manager'],
+      roles: ['employee', 'admin', 'hr_manager', 'accountant'],
       items: [
         { path: '/portal/my-assets', icon: Shield, label: t('nav.my_assets', 'My Assets & Accounts') },
       ],

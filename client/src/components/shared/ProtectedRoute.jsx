@@ -1,12 +1,14 @@
 import { useSelector, useDispatch } from 'react-redux';
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 import { verifyToken } from '@store/slices/authSlice';
+import { canAccessPath } from '@/config/permissions';
 import { Loader2 } from 'lucide-react';
 
 export default function ProtectedRoute() {
   const dispatch = useDispatch();
-  const { isAuthenticated, loading } = useSelector((state) => state.auth);
+  const location = useLocation();
+  const { isAuthenticated, loading, user } = useSelector((state) => state.auth);
 
   useEffect(() => {
     const token = localStorage.getItem('ist_token');
@@ -28,6 +30,12 @@ export default function ProtectedRoute() {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  // A role denied a module should land somewhere useful rather than on a page
+  // that renders and then fills with 403s. The API is still the real gate.
+  if (user?.role && !canAccessPath(user.role, location.pathname)) {
+    return <Navigate to="/dashboard" replace />;
   }
 
   return <Outlet />;

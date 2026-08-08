@@ -2,12 +2,16 @@ import { Router } from 'express';
 import pool from '../config/db.js';
 import { auth } from '../middleware/auth.js';
 import { authorize } from '../middleware/rbac.js';
+import { requireModule, MODULES } from '../config/permissions.js';
 import { addAudit } from '../services/auditService.js';
 import { tenantScope, companyClause, resolveWriteCompanyId } from '../middleware/tenant.js';
 import { validate } from '../middleware/validate.js';
 
 const router = Router();
-router.use(auth, tenantScope);
+// Recruitment is a module the accountant role has no access to at all, reads
+// included — see config/permissions.js. Mounted here rather than per-route so a
+// new endpoint in this file cannot forget it.
+router.use(auth, tenantScope, requireModule(MODULES.RECRUITMENT));
 
 // GET /api/vacancies?status=X&page=1&limit=20 (scoped to caller's company)
 router.get('/', async (req, res) => {

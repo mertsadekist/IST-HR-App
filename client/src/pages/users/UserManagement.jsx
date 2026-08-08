@@ -14,17 +14,31 @@ import { toast } from 'react-toastify';
 import { Plus, Edit3, Trash2, ShieldCheck, Key, UserCog, Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+// Must stay in step with ALLOWED_ROLES in server/routes/users.js, which is
+// itself derived from server/config/permissions.js — a role offered here with
+// no permission profile would be created and then be able to reach nothing.
 const roles = [
   { value: 'admin', label: 'Admin' },
   { value: 'hr_manager', label: 'HR Manager' },
   { value: 'recruiter', label: 'Recruiter' },
+  { value: 'accountant', label: 'Accountant' },
   { value: 'employee', label: 'Employee' },
 ];
+
+// One line each, so whoever assigns a role can see what it opens before saving.
+const roleHints = {
+  admin: 'user_management.role_hint_admin',
+  hr_manager: 'user_management.role_hint_hr_manager',
+  recruiter: 'user_management.role_hint_recruiter',
+  accountant: 'user_management.role_hint_accountant',
+  employee: 'user_management.role_hint_employee',
+};
 
 const roleColors = {
   admin: 'danger',
   hr_manager: 'brand',
   recruiter: 'info',
+  accountant: 'warning',
   employee: 'active',
 };
 
@@ -270,13 +284,18 @@ export default function UserManagement() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <Input label={t('user_management.email')} type="email" placeholder="user@company.com" value={form.email} onChange={(e) => update('email', e.target.value)} />
-            <Select
-              label={t('user_management.role')}
-              required
-              value={form.role}
-              onChange={(e) => update('role', e.target.value)}
-              options={roles}
-            />
+            <div>
+              <Select
+                label={t('user_management.role')}
+                required
+                value={form.role}
+                onChange={(e) => update('role', e.target.value)}
+                options={roles}
+              />
+              {roleHints[form.role] && (
+                <p className="text-[11px] text-surface-400 mt-1">{t(roleHints[form.role])}</p>
+              )}
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <Select

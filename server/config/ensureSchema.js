@@ -344,6 +344,14 @@ const TABLE_GUARDS = [
    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 ];
 
+// Enum values that must exist, widened in place. COLUMN_GUARDS only covers
+// ADD COLUMN; these need MODIFY, and a missing value is not a cosmetic gap —
+// a deploy whose users.role enum predates `accountant` would reject every
+// attempt to create that user with a silent truncation error.
+const ENUM_GUARDS = [
+  { table: 'users', column: 'role', values: ['accountant'], suffix: " DEFAULT 'employee'" },
+];
+
 export async function ensureSchema() {
   for (const ddl of TABLE_GUARDS) {
     try { await pool.query(ddl); } catch (e) { console.error('ensureSchema(table) failed:', e.message); }
@@ -360,6 +368,25 @@ export async function ensureSchema() {
       }
     } catch (e) {
       console.error(`ensureSchema(${g.table}.${g.column}) failed:`, e.message);
+    }
+  }
+  for (const g of ENUM_GUARDS) {
+    try {
+      const [[col]] = await pool.query(
+        'SELECT COLUMN_TYPE FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?',
+        [g.table, g.column]
+      );
+      if (!col) continue;
+      const missing = g.values.filter((v) => !col.COLUMN_TYPE.includes(`'${v}'`));
+      if (!missing.length) continue;
+      // Keep every value already in the column — an older deploy may carry one
+      // this build has never heard of, and dropping it would orphan those rows.
+      const existing = (col.COLUMN_TYPE.match(/'([^']+)'/g) || []).map((s) => s.slice(1, -1));
+      const list = [...new Set([...existing, ...missing])].map((v) => `'${v}'`).join(',');
+      await pool.query(`ALTER TABLE ${g.table} MODIFY COLUMN ${g.column} ENUM(${list})${g.suffix || ''}`);
+      console.log(`🔧 ensureSchema: widened ${g.table}.${g.column} with ${missing.join(', ')}`);
+    } catch (e) {
+      console.error(`ensureSchema(enum ${g.table}.${g.column}) failed:`, e.message);
     }
   }
 }

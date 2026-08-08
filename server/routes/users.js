@@ -6,12 +6,17 @@ import { authorize } from '../middleware/rbac.js';
 import { addAudit } from '../services/auditService.js';
 import { tenantScope } from '../middleware/tenant.js';
 import { validate } from '../middleware/validate.js';
+import { ROLE_MODULES } from '../config/permissions.js';
 
 const router = Router();
 router.use(auth, tenantScope);
 
 const BCRYPT_ROUNDS = 12;
-const ALLOWED_ROLES = ['admin', 'hr_manager', 'recruiter', 'hr_specialist', 'employee'];
+// The roles the system knows are exactly those with a permission profile —
+// one list, so a role can never be offered here without an access definition.
+// This previously also listed 'hr_specialist', which is not in the users.role
+// enum, so creating that user always failed at the INSERT.
+const ALLOWED_ROLES = Object.keys(ROLE_MODULES);
 
 // User management is scoped by the admin's AUTHORITY, not the UI entity selector:
 // a platform admin manages every user; a company-bound admin only their own
@@ -66,7 +71,7 @@ router.post('/', authorize('admin'), validate({
   password: { required: true, type: 'string', minLen: 8, maxLen: 200 },
   name: { required: true, type: 'string', minLen: 1, maxLen: 255 },
   email: { type: 'email' },
-  role: { type: 'string', enum: ['admin', 'hr_manager', 'recruiter', 'hr_specialist', 'employee'] },
+  role: { type: 'string', enum: ALLOWED_ROLES },
 }), async (req, res) => {
   try {
     const { username, password, name, email, role, company_id, department_id } = req.body;

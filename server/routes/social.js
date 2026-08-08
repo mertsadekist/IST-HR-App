@@ -91,7 +91,7 @@ router.get('/options', (req, res) => {
 
 // ─── Governance reports ──────────────────────────────────────────────────────
 // Declared before the /:id routes so the names are not read as ids.
-router.get('/governance', authorize('admin', 'hr_manager'), async (req, res) => {
+router.get('/governance', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
   try {
     const co = companyClause(req, 'sa.company_id');
     const coAcc = companyClause(req, 'sc.company_id');
@@ -242,7 +242,7 @@ router.get('/accounts/:id', async (req, res) => {
   } catch (err) { console.error('GET /social/accounts/:id error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
-router.post('/accounts', authorize('admin', 'hr_manager'), async (req, res) => {
+router.post('/accounts', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
   try {
     const data = pick(req.body, ACCOUNT_FIELDS, ACCOUNT_BOOLS);
     data.company_id = resolveWriteCompanyId(req, req.body.company_id);
@@ -267,7 +267,7 @@ router.post('/accounts', authorize('admin', 'hr_manager'), async (req, res) => {
   }
 });
 
-router.put('/accounts/:id', authorize('admin', 'hr_manager'), async (req, res) => {
+router.put('/accounts/:id', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
   try {
     const existing = await getAccount(req, req.params.id);
     if (!existing) return res.status(404).json({ error: 'Social account not found' });
@@ -308,7 +308,7 @@ router.put('/accounts/:id', authorize('admin', 'hr_manager'), async (req, res) =
   } catch (err) { console.error('PUT /social/accounts/:id error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
-router.put('/accounts/:id/review', authorize('admin', 'hr_manager'), async (req, res) => {
+router.put('/accounts/:id/review', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
   try {
     const existing = await getAccount(req, req.params.id);
     if (!existing) return res.status(404).json({ error: 'Social account not found' });
@@ -382,7 +382,7 @@ function validateAccess(data) {
   return null;
 }
 
-router.post('/access', authorize('admin', 'hr_manager'), async (req, res) => {
+router.post('/access', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
   try {
     const data = pick(req.body, ACCESS_FIELDS, ACCESS_BOOLS);
     if (!data.social_account_id) return res.status(422).json({ error: 'social_account_id is required' });
@@ -421,7 +421,7 @@ async function getAccess(req, id) {
   return row || null;
 }
 
-router.put('/access/:id', authorize('admin', 'hr_manager'), async (req, res) => {
+router.put('/access/:id', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
   try {
     const existing = await getAccess(req, req.params.id);
     if (!existing) return res.status(404).json({ error: 'Access record not found' });
@@ -446,7 +446,7 @@ router.put('/access/:id', authorize('admin', 'hr_manager'), async (req, res) => 
 });
 
 // Offboarding action: rule 1 of Social Offboarding — revoke every layer at once.
-router.put('/access/:id/remove', authorize('admin', 'hr_manager'), async (req, res) => {
+router.put('/access/:id/remove', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
   try {
     const existing = await getAccess(req, req.params.id);
     if (!existing) return res.status(404).json({ error: 'Access record not found' });
@@ -464,7 +464,7 @@ router.put('/access/:id/remove', authorize('admin', 'hr_manager'), async (req, r
 
 // Remove one person from EVERY layer of one account — what offboarding actually
 // needs, since doing it row by row is how a layer gets missed.
-router.post('/access/remove-person', authorize('admin', 'hr_manager'), async (req, res) => {
+router.post('/access/remove-person', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
   try {
     const { social_account_id, team_member_email, employee_id } = req.body || {};
     if (!social_account_id) return res.status(422).json({ error: 'social_account_id is required' });
@@ -487,7 +487,7 @@ router.post('/access/remove-person', authorize('admin', 'hr_manager'), async (re
   } catch (err) { console.error('POST /social/access/remove-person error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
-router.put('/access/:id/review', authorize('admin', 'hr_manager'), async (req, res) => {
+router.put('/access/:id/review', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
   try {
     const existing = await getAccess(req, req.params.id);
     if (!existing) return res.status(404).json({ error: 'Access record not found' });

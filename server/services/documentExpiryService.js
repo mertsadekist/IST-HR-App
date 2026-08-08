@@ -63,7 +63,7 @@ export async function checkDocumentExpiry(pool) {
       expired ? 'This document is no longer valid — renew it and upload the replacement.' : 'Start the renewal before it lapses.',
     ].filter(Boolean).join(' · ');
 
-    await notifyRole(pool, doc.company_id, ['admin', 'hr_manager'], {
+    await notifyRole(pool, doc.company_id, ['admin', 'hr_manager', 'accountant'], {
       type: expired ? 'error' : 'warning', title, body, link: '/company-docs',
     });
     await pool.query('UPDATE company_documents SET expiry_alert_sent = ? WHERE id = ?', [threshold, doc.id]);

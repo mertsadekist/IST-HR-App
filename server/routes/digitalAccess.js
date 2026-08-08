@@ -125,7 +125,7 @@ async function adjustSeats({ platformId, consumes, fromStatus, toStatus, rowId }
 // Declared before /:id so the report names are not read as record ids.
 
 // GET /api/digital-access/reports — the privileged-access views the PRD names
-router.get('/reports', authorize('admin', 'hr_manager'), async (req, res) => {
+router.get('/reports', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
   try {
     const co = companyClause(req, 'da.company_id');
     const base = `FROM digital_access da
@@ -220,7 +220,7 @@ router.get('/', async (req, res) => {
 });
 
 // POST /api/digital-access
-router.post('/', authorize('admin', 'hr_manager'), async (req, res) => {
+router.post('/', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
   try {
     const data = pick(req.body);
     data.company_id = resolveWriteCompanyId(req, req.body.company_id);
@@ -255,7 +255,7 @@ router.post('/', authorize('admin', 'hr_manager'), async (req, res) => {
 });
 
 // PUT /api/digital-access/:id (company-scoped; cannot re-tenant)
-router.put('/:id', authorize('admin', 'hr_manager'), async (req, res) => {
+router.put('/:id', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
   try {
     // Every field a cross-field rule reads has to be in here, or a partial
     // update can slip past the rule by simply omitting the other half of it.
@@ -296,7 +296,7 @@ router.put('/:id', authorize('admin', 'hr_manager'), async (req, res) => {
 });
 
 // PUT /api/digital-access/:id/revoke — the offboarding action, spelled out
-router.put('/:id/revoke', authorize('admin', 'hr_manager'), async (req, res) => {
+router.put('/:id/revoke', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
   try {
     const existing = await getScoped(req, req.params.id, 'id, platform_id, status, seat_consumes_inventory, platform_name, team_member_full_name');
     if (!existing) return res.status(404).json({ error: 'Access record not found' });
@@ -317,7 +317,7 @@ router.put('/:id/revoke', authorize('admin', 'hr_manager'), async (req, res) => 
 });
 
 // PUT /api/digital-access/:id/review — record that the grant was verified today
-router.put('/:id/review', authorize('admin', 'hr_manager'), async (req, res) => {
+router.put('/:id/review', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
   try {
     const existing = await getScoped(req, req.params.id, 'id, platform_name');
     if (!existing) return res.status(404).json({ error: 'Access record not found' });

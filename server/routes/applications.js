@@ -2,6 +2,7 @@ import { Router } from 'express';
 import pool from '../config/db.js';
 import { auth } from '../middleware/auth.js';
 import { authorize } from '../middleware/rbac.js';
+import { requireModule, MODULES } from '../config/permissions.js';
 import { addAudit } from '../services/auditService.js';
 import { tenantScope, companyClause } from '../middleware/tenant.js';
 import { validate } from '../middleware/validate.js';
@@ -12,7 +13,10 @@ import fs from 'fs';
 import { uploadPath } from '../config/storage.js';
 
 const router = Router();
-router.use(auth, tenantScope);
+// Recruitment is a module the accountant role has no access to at all, reads
+// included — see config/permissions.js. Mounted here rather than per-route so a
+// new endpoint in this file cannot forget it.
+router.use(auth, tenantScope, requireModule(MODULES.RECRUITMENT));
 
 export const PIPELINE_STAGES = [
   'New Application', 'CV Screening', 'Shortlisted', 'HR Review', 'Phone Screening',

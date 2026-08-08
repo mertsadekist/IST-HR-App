@@ -12,14 +12,13 @@ import { notifyRole } from '../services/notificationService.js';
 const router = Router();
 router.use(auth, tenantScope);
 
-const isHR = (req) => ['admin', 'hr_manager'].includes(req.user.role);
 async function myEmployeeId(userId) {
   const [[u]] = await pool.query('SELECT employee_id FROM users WHERE id = ?', [userId]);
   return u?.employee_id || null;
 }
 
 // ─── Runs ────────────────────────────────────────────────────────────────────
-router.get('/runs', authorize('admin', 'hr_manager'), async (req, res) => {
+router.get('/runs', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
   try {
     const co = companyClause(req, 'company_id');
     const [rows] = await pool.query(
@@ -28,7 +27,7 @@ router.get('/runs', authorize('admin', 'hr_manager'), async (req, res) => {
   } catch (err) { console.error('GET /payroll/runs error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
-router.get('/runs/:id', authorize('admin', 'hr_manager'), async (req, res) => {
+router.get('/runs/:id', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
   try {
     const co = companyClause(req, 'company_id');
     const [[run]] = await pool.query('SELECT * FROM payroll_runs WHERE id = ?' + co.clause, [req.params.id, ...co.params]);
@@ -41,7 +40,7 @@ router.get('/runs/:id', authorize('admin', 'hr_manager'), async (req, res) => {
 });
 
 // Generate a payroll run for a period, pulling unpaid-leave and absence deductions.
-router.post('/runs/generate', authorize('admin', 'hr_manager'), validate({
+router.post('/runs/generate', authorize('admin', 'hr_manager', 'accountant'), validate({
   period: { required: true, type: 'string', pattern: /^\d{4}-\d{2}$/ },
 }), async (req, res) => {
   const conn = await pool.getConnection();
@@ -121,7 +120,7 @@ router.post('/runs/generate', authorize('admin', 'hr_manager'), validate({
   } finally { conn.release(); }
 });
 
-router.put('/runs/:id/approve', authorize('admin', 'hr_manager'), async (req, res) => {
+router.put('/runs/:id/approve', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
   try {
     const co = companyClause(req, 'company_id');
     const [[run]] = await pool.query('SELECT status FROM payroll_runs WHERE id = ?' + co.clause, [req.params.id, ...co.params]);
@@ -198,7 +197,7 @@ async function loadWpsData(req, runId) {
 }
 
 // What is still missing before the file can legitimately be submitted.
-router.get('/runs/:id/wps-readiness', authorize('admin', 'hr_manager'), async (req, res) => {
+router.get('/runs/:id/wps-readiness', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
   try {
     const data = await loadWpsData(req, req.params.id);
     if (!data) return res.status(404).json({ error: 'Payroll run not found' });
@@ -225,7 +224,7 @@ router.get('/runs/:id/wps-readiness', authorize('admin', 'hr_manager'), async (r
 
 // The submittable .xlsx. Blocked while mandatory identifiers are missing unless
 // the caller explicitly asks for a draft (?force=1) to review the layout.
-router.get('/runs/:id/wps-export', authorize('admin', 'hr_manager'), async (req, res) => {
+router.get('/runs/:id/wps-export', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
   try {
     const data = await loadWpsData(req, req.params.id);
     if (!data) return res.status(404).json({ error: 'Payroll run not found' });
@@ -286,7 +285,7 @@ router.get('/payslips/my', async (req, res) => {
 });
 
 // HR: an employee's payslips
-router.get('/payslips/:employeeId', authorize('admin', 'hr_manager'), async (req, res) => {
+router.get('/payslips/:employeeId', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
   try {
     const co = companyClause(req, 'pi.company_id');
     const [rows] = await pool.query(

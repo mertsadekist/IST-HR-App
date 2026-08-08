@@ -60,7 +60,7 @@ router.get('/categories', async (req, res) => {
 });
 
 // POST /api/documents/categories
-router.post('/categories', authorize('admin', 'hr_manager'), async (req, res) => {
+router.post('/categories', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
   try {
     const { name, icon, color } = req.body;
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
@@ -119,7 +119,7 @@ router.get('/', async (req, res) => {
 });
 
 // POST /api/documents — Upload document (forced into caller's company)
-router.post('/', authorize('admin', 'hr_manager'), upload.single('file'), async (req, res) => {
+router.post('/', authorize('admin', 'hr_manager', 'accountant'), upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     const { category } = req.body;
@@ -187,7 +187,7 @@ router.post('/run-expiry-check', authorize('admin'), async (req, res) => {
 // PUT /api/documents/:id — edit the metadata without re-uploading the file.
 // Needed because expiry is the field most likely to change on a document that
 // is otherwise unchanged: a renewed licence keeps its name and category.
-router.put('/:id', authorize('admin', 'hr_manager'), async (req, res) => {
+router.put('/:id', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
   try {
     const co = companyClause(req, 'company_id');
     const [[doc]] = await pool.query(

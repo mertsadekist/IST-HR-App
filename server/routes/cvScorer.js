@@ -2,12 +2,16 @@ import { Router } from 'express';
 import pool from '../config/db.js';
 import { auth } from '../middleware/auth.js';
 import { authorize } from '../middleware/rbac.js';
+import { requireModule, MODULES } from '../config/permissions.js';
 import { addAudit } from '../services/auditService.js';
 import { analyzeCV, generateQuestions, generateJD } from '../services/deepseekService.js';
 import { tenantScope, companyClause, resolveWriteCompanyId } from '../middleware/tenant.js';
 
 const router = Router();
-router.use(auth, tenantScope);
+// Recruitment is a module the accountant role has no access to at all, reads
+// included — see config/permissions.js. Mounted here rather than per-route so a
+// new endpoint in this file cannot forget it.
+router.use(auth, tenantScope, requireModule(MODULES.RECRUITMENT));
 
 // GET /api/cv-scorer/profiles — own company profiles + global (NULL company) templates
 router.get('/profiles', async (req, res) => {

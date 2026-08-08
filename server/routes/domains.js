@@ -169,7 +169,7 @@ async function getScoped(req, id) {
   return row || null;
 }
 
-router.post('/', authorize('admin', 'hr_manager'), async (req, res) => {
+router.post('/', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
   try {
     const data = pick(req.body);
     data.company_id = resolveWriteCompanyId(req, req.body.company_id);
@@ -197,7 +197,7 @@ router.post('/', authorize('admin', 'hr_manager'), async (req, res) => {
   } catch (err) { console.error('POST /domains error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
-router.put('/:id', authorize('admin', 'hr_manager'), async (req, res) => {
+router.put('/:id', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
   try {
     const existing = await getScoped(req, req.params.id);
     if (!existing) return res.status(404).json({ error: 'Record not found' });
@@ -231,7 +231,7 @@ router.put('/:id', authorize('admin', 'hr_manager'), async (req, res) => {
 });
 
 // Record that the renewal was paid: roll the date forward and clear the alerts.
-router.put('/:id/renew', authorize('admin', 'hr_manager'), async (req, res) => {
+router.put('/:id/renew', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
   try {
     const existing = await getScoped(req, req.params.id);
     if (!existing) return res.status(404).json({ error: 'Record not found' });

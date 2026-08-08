@@ -20,7 +20,10 @@
  */
 
 // Roles that operate the HR system across every company in the organization.
-const CROSS_COMPANY_ROLES = ['admin', 'hr_manager', 'recruiter'];
+// The accountant is included because payroll, assets, domains and official
+// paperwork are handled for the group, not for one company at a time — the
+// modules they may reach are limited in config/permissions.js instead.
+const CROSS_COMPANY_ROLES = ['admin', 'hr_manager', 'recruiter', 'accountant'];
 
 /**
  * A request is "platform admin" (may create/archive companies) only when the

@@ -18,7 +18,7 @@ router.get('/templates', async (req, res) => {
 });
 
 // POST /api/legal/templates
-router.post('/templates', authorize('admin', 'hr_manager'), async (req, res) => {
+router.post('/templates', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
   try {
     const { name, type, icon, fields_config, body_template } = req.body;
     const [result] = await pool.query('INSERT INTO letter_templates SET ?', {
@@ -32,7 +32,7 @@ router.post('/templates', authorize('admin', 'hr_manager'), async (req, res) => 
 });
 
 // PUT /api/legal/templates/:id
-router.put('/templates/:id', authorize('admin', 'hr_manager'), async (req, res) => {
+router.put('/templates/:id', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
   try {
     const { name, type, icon, fields_config, body_template, status } = req.body;
     const updates = {};
@@ -74,7 +74,7 @@ router.get('/letters', async (req, res) => {
 });
 
 // POST /api/legal/letters — Generate a letter
-router.post('/letters', authorize('admin', 'hr_manager'), async (req, res) => {
+router.post('/letters', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
   try {
     const { template_id, employee_id, fields_data } = req.body;
 
