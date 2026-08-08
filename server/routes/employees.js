@@ -13,6 +13,7 @@ import fs from 'fs';
 import crypto from 'crypto';
 import { extractTextFromFile } from '../services/cvParserService.js';
 import { ensureUploadDir, uploadPath } from '../config/storage.js';
+import { getEmployeeHoldings, buildClearance } from '../services/holdingsService.js';
 
 const upload = multer({
   dest: ensureUploadDir('employee_docs'),
@@ -215,6 +216,38 @@ router.post('/:id/create-login', authorize('admin', 'hr_manager'), async (req, r
     await addAudit(pool, req.user, 'Employees', 'Login Created', `Login account created for employee ${emp.first_name} ${emp.last_name}`);
     res.status(201).json({ user_id: userId, username, password: tempPassword });
   } catch (err) { console.error('POST /employees/:id/create-login error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// GET /api/employees/:id/holdings — everything this person holds across the
+// four asset modules: issued equipment, digital access, social access per layer,
+// and any domain naming them as the responsible employee.
+//
+// The PRD's "By employee" report. Also what offboarding clearance is built from,
+// so both answer from the same query set rather than drifting apart.
+router.get('/:id/holdings', async (req, res) => {
+  try {
+    const emp = await getScopedEmployee(req, req.params.id);
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+
+    // Self-service users may look at their own holdings and nobody else's.
+    if (req.user.role === 'employee') {
+      const [[dbUser]] = await pool.query('SELECT employee_id FROM users WHERE id = ?', [req.user.id]);
+      if (!dbUser || dbUser.employee_id !== Number(req.params.id)) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+    }
+
+    const holdings = await getEmployeeHoldings(pool, emp.id);
+    const clearance = buildClearance(holdings);
+    res.json({
+      employee: { id: emp.id, name: `${emp.first_name} ${emp.last_name}`.trim(), status: emp.status },
+      ...holdings,
+      outstanding: clearance.counts,
+    });
+  } catch (err) {
+    console.error('GET /employees/:id/holdings error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 // GET /api/employees/:id/history — everything on record for one employee,

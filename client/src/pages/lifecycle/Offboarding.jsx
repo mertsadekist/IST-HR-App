@@ -48,6 +48,8 @@ export default function Offboarding() {
   // Per-step override of the default expansion. Undefined means "follow the
   // default", which is: the active step open, the rest folded.
   const [expandedSteps, setExpandedSteps] = useState({});
+  // The return-and-revoke checklist, assembled across all four asset modules.
+  const [clearance, setClearance] = useState(null);
   const [employeeDocs, setEmployeeDocs] = useState([]);
 
   // Initiate modal
@@ -93,11 +95,13 @@ export default function Offboarding() {
   };
 
   const openDetail = async (record) => {
-    setDetailModal(record); setDetailLoading(true); setExpandedSteps({});
+    setDetailModal(record); setDetailLoading(true); setExpandedSteps({}); setClearance(null);
     setEmployeeDocs([]);
     try {
       const { data } = await offboardingApi.getOffboarding(record.id);
       setDetail(data);
+      offboardingApi.getClearance(record.id, currentCompanyId ? { company_id: currentCompanyId } : {})
+        .then(({ data: cl }) => setClearance(cl)).catch(() => {});
       if (data.employee_id) {
         try {
           const { data: docs } = await employeesApi.getEmployeeDocuments(data.employee_id);
@@ -233,6 +237,52 @@ export default function Offboarding() {
                 </div>
               ))}
             </div>
+
+            {/* What this person still holds. Nothing here is auto-actioned:
+                collecting a laptop and revoking an admin seat are physical acts
+                somebody performs, and a checklist that ticks itself would be
+                claiming recoveries that never happened. */}
+            {clearance && (
+              <div className={`rounded-xl border p-3 ${clearance.cleared ? 'border-emerald-200 bg-emerald-50/40' : 'border-amber-200 bg-amber-50/40'}`}>
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className={`text-xs font-semibold ${clearance.cleared ? 'text-emerald-900' : 'text-amber-900'}`}>
+                    {clearance.cleared ? t('lifecycle.clearance_done') : t('lifecycle.clearance_title', { count: clearance.counts.total })}
+                  </span>
+                  {clearance.counts.privileged > 0 && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-800 font-semibold">
+                      {t('lifecycle.clearance_privileged', { count: clearance.counts.privileged })}
+                    </span>
+                  )}
+                  {clearance.counts.seats_to_reclaim > 0 && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-brand-100 text-brand-800">
+                      {t('lifecycle.clearance_seats', { count: clearance.counts.seats_to_reclaim })}
+                    </span>
+                  )}
+                </div>
+                {clearance.cleared ? (
+                  <p className="text-[11px] text-emerald-800">{t('lifecycle.clearance_done_hint')}</p>
+                ) : (
+                  <>
+                    <ul className="space-y-1">
+                      {clearance.items.map((it) => (
+                        <li key={`${it.kind}-${it.id}`} className="flex items-start gap-2 text-xs bg-white border border-surface-200 rounded-lg px-2.5 py-1.5">
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-surface-100 text-surface-600 font-semibold shrink-0 mt-0.5">
+                            {t(`lifecycle.clearance_kind_${it.kind}`)}
+                          </span>
+                          <span className="flex-1 min-w-0">
+                            <span className="font-medium text-surface-800">{it.label}</span>
+                            {it.detail && <span className="text-surface-400"> · {it.detail}</span>}
+                            {it.privileged && <span className="ms-1 text-[9px] text-red-600 font-semibold">{t('lifecycle.clearance_elevated')}</span>}
+                          </span>
+                          <span className="text-[10px] text-amber-700 shrink-0">{it.action}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="text-[10px] text-surface-500 mt-2">{t('lifecycle.clearance_hint')}</p>
+                  </>
+                )}
+              </div>
+            )}
 
             <div className="flex justify-between items-center bg-brand-50 border border-brand-200 p-3 rounded-xl">
               <div className="flex flex-col">

@@ -32,3 +32,6 @@ export const deleteEmployeeDocument = (id, docId) => api.delete(`/employees/${id
 export const downloadEmployeeDocument = (id, docId) => api.get(`/employees/${id}/documents/${docId}/download`, {
   responseType: 'blob'
 });
+
+// Everything one employee holds across the four asset modules.
+export const getEmployeeHoldings = (id, params) => api.get(`/employees/${id}/holdings`, { params });

@@ -225,11 +225,30 @@ verification against the dev DB.
 - `GET /domains/expiring` is the watch-list, and it counts the accountability gaps too: how many
   renewals have **no billing owner named** and how many have auto-renew off.
 
-### Phase 6 — Workflow wiring and reporting
+### Phase 6 — Workflow wiring and reporting ✅ *done (`services/holdingsService.js`)*
 
-- Onboarding stage 2/3/4 create pending assignment bundles; offboarding generates the return and
-  revoke checklist and only releases stock after inspection (**PRD workflow sheets**).
-- The remaining reports and the by-employee / by-department / by-owner views.
+- **`GET /employees/:id/holdings`** — the PRD's "By employee" view: issued equipment, digital access,
+  social access per layer, and any domain naming the person as responsible. Until this existed,
+  "what does this person still have?" meant opening four screens and trusting nobody forgot one.
+  Self-service users can read their own and nobody else's.
+- **`GET /offboarding/:id/clearance`** — the return-and-revoke checklist the PRD's offboarding
+  workflow asks for, built from the same query set so the two cannot drift apart. Each line carries
+  the action it needs, and a returned unit stays outstanding as *Awaiting inspection* until it
+  passes — the Phase 2 gate reaching into offboarding. A domain asks to be **reassigned**, not
+  returned, since leaving without handing it over is how a renewal ends up unwatched.
+- **Nothing is auto-actioned.** Collecting a laptop and revoking a Meta admin seat are physical acts
+  somebody performs and confirms; a checklist that ticks itself claims recoveries that never
+  happened. Each line is closed from its own module, and the panel re-reads the real state.
+- **`GET /assets/reports/allocation`** — by department (equipment and headcount), digital grants by
+  department with privileged and paid-seat counts, totals by owner scope across assignments,
+  inventory and access, and the people holding elevated rights anywhere. Where a grant is linked to
+  an employee the employee's own name wins over the free-text holder field.
+
+**Not done, and deliberately so:** onboarding does not auto-create pending assignment bundles. What
+a new hire should receive depends on role and department, and the system has no such policy to draw
+on — generating a speculative bundle would produce work items nobody asked for. The onboarding
+checklist templates already prompt for the same steps; wiring them to real assignments needs a
+role-to-kit mapping first, which is its own decision.
 
 ---
 

@@ -105,6 +105,84 @@ router.get('/', async (req, res) => {
   } catch (err) { console.error('GET /assets error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
+// GET /api/assets/reports/allocation — the PRD's by-department / by-owner views
+//
+// "Analyze concentration and ownership": where the equipment and the paid seats
+// actually sit. Counted across assignments, digital access and social access
+// together, because a department holding three laptops and eleven admin seats is
+// a different picture from one holding eleven laptops.
+router.get('/reports/allocation', authorize('admin', 'hr_manager'), async (req, res) => {
+  try {
+    const co = companyClause(req, 'a.company_id');
+    const coDa = companyClause(req, 'da.company_id');
+    const coSc = companyClause(req, 'sc.company_id');
+    const coInv = companyClause(req, 'i.company_id');
+
+    const [byDepartment] = await pool.query(
+      `SELECT COALESCE(d.name, 'Unassigned') AS department,
+              COUNT(DISTINCT a.id)   AS physical_assets,
+              COUNT(DISTINCT e.id)   AS employees
+         FROM asset_assignments a
+         JOIN employees e ON a.employee_id = e.id
+         LEFT JOIN departments d ON e.department_id = d.id
+        WHERE a.status = 'Active'${co.clause}
+        GROUP BY department ORDER BY physical_assets DESC`, co.params);
+
+    const [digitalByDepartment] = await pool.query(
+      `SELECT COALESCE(d.name, 'Unassigned') AS department,
+              COUNT(*) AS grants,
+              SUM(da.access_rank >= 7)              AS privileged,
+              SUM(da.seat_consumes_inventory = TRUE) AS paid_seats
+         FROM digital_access da
+         LEFT JOIN employees e ON da.employee_id = e.id
+         LEFT JOIN departments d ON e.department_id = d.id
+        WHERE da.status NOT IN ('Revoked','Archived')${coDa.clause}
+        GROUP BY department ORDER BY grants DESC`, coDa.params);
+
+    const [byOwnerScope] = await pool.query(
+      `SELECT owner_scope,
+              SUM(kind = 'assignment') AS assignments,
+              SUM(kind = 'inventory')  AS inventory_units,
+              SUM(kind = 'digital')    AS digital_grants
+         FROM (
+           SELECT a.owner_scope, 'assignment' AS kind FROM asset_assignments a
+            WHERE a.status = 'Active'${co.clause}
+           UNION ALL
+           SELECT i.owner_scope, 'inventory' FROM asset_inventory i WHERE 1=1${coInv.clause}
+           UNION ALL
+           SELECT da.owner_scope, 'digital' FROM digital_access da
+            WHERE da.status NOT IN ('Revoked','Archived')${coDa.clause}
+         ) x GROUP BY owner_scope`,
+      [...co.params, ...coInv.params, ...coDa.params]);
+
+    // People holding elevated rights anywhere — the concentration that matters.
+    // Grouped on the underlying expressions rather than the select aliases,
+    // which only_full_group_by rejects.
+    const [privilegedHolders] = await pool.query(
+      `SELECT name, email, SUM(n) AS privileged_grants FROM (
+          SELECT COALESCE(CONCAT_WS(' ', e.first_name, e.last_name), da.team_member_full_name) AS name,
+                 da.team_member_email AS email, COUNT(*) AS n
+            FROM digital_access da LEFT JOIN employees e ON da.employee_id = e.id
+           WHERE da.access_rank >= 7 AND da.status NOT IN ('Revoked','Archived')${coDa.clause}
+           GROUP BY COALESCE(CONCAT_WS(' ', e.first_name, e.last_name), da.team_member_full_name),
+                    da.team_member_email
+          UNION ALL
+          SELECT sc.team_member_name, sc.team_member_email, COUNT(*)
+            FROM social_access sc
+           WHERE sc.access_rank >= 7 AND sc.status <> 'Removed'${coSc.clause}
+           GROUP BY sc.team_member_name, sc.team_member_email
+        ) u
+        WHERE u.name IS NOT NULL
+        GROUP BY u.name, u.email ORDER BY privileged_grants DESC LIMIT 25`,
+      [...coDa.params, ...coSc.params]);
+
+    res.json({ by_department: byDepartment, digital_by_department: digitalByDepartment, by_owner_scope: byOwnerScope, privileged_holders: privilegedHolders });
+  } catch (err) {
+    console.error('GET /assets/reports/allocation error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // POST /api/assets — with inventory linking
 router.post('/', authorize('admin', 'hr_manager'), async (req, res) => {
   try {

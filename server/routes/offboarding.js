@@ -5,6 +5,7 @@ import { authorize } from '../middleware/rbac.js';
 import { addAudit } from '../services/auditService.js';
 import { tenantScope, companyClause } from '../middleware/tenant.js';
 import { calculateEOSB } from '../services/eosbService.js';
+import { getEmployeeHoldings, buildClearance } from '../services/holdingsService.js';
 
 const router = Router();
 router.use(auth, tenantScope);
@@ -67,6 +68,33 @@ router.get('/:id', async (req, res) => {
     }
     res.json({ ...records[0], steps });
   } catch (err) { console.error('GET /offboarding/:id error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// GET /api/offboarding/:id/clearance — the return-and-revoke checklist
+//
+// The PRD's offboarding workflow asks for one: physical items pending return,
+// digital access pending revoke, and the exceptions closed with an audit trail.
+// Assembled across all four asset modules, because "what does this person still
+// have?" used to mean opening four screens and trusting nobody forgot one — and
+// this is the question that has to be answered before a final settlement is paid.
+//
+// Nothing here is auto-actioned. Collecting a laptop and revoking a Meta admin
+// seat are physical acts someone performs and confirms; marking them done on a
+// date would be the system lying about what it has recovered.
+router.get('/:id/clearance', async (req, res) => {
+  try {
+    const co = companyClause(req, 'company_id');
+    const [[rec]] = await pool.query(
+      'SELECT id, employee_id, company_id FROM offboarding_records WHERE id = ?' + co.clause,
+      [req.params.id, ...co.params]);
+    if (!rec) return res.status(404).json({ error: 'Not found' });
+
+    const holdings = await getEmployeeHoldings(pool, rec.employee_id);
+    res.json({ offboarding_id: rec.id, employee_id: rec.employee_id, ...buildClearance(holdings) });
+  } catch (err) {
+    console.error('GET /offboarding/:id/clearance error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 // POST /api/offboarding — Initiate offboarding (employee must be in caller's company)
