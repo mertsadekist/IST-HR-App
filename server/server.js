@@ -5,6 +5,7 @@ import { verifySecrets } from './config/verifySecrets.js';
 import { getAppSetting } from './services/appSettings.js';
 import { applyDueSalaryChanges } from './services/salaryReviewService.js';
 import { checkDomainRenewals } from './services/domainRenewalService.js';
+import { checkDocumentExpiry } from './services/documentExpiryService.js';
 
 const PORT = process.env.PORT || 3001;
 
@@ -39,6 +40,18 @@ async function runDomainRenewalCheck() {
   }
 }
 
+// Warn before a trade licence, lease or insurance policy lapses. Same
+// once-per-threshold rule as domains, on wider notice: licences need paperwork
+// and approvals, not a card payment.
+async function runDocumentExpiryCheck() {
+  try {
+    const sent = await checkDocumentExpiry(pool);
+    if (sent) console.log(`📄 Document expiry check: ${sent} alert(s) sent`);
+  } catch (err) {
+    console.error('Document expiry check failed:', err.message);
+  }
+}
+
 app.listen(PORT, async () => {
   console.log(`\n🚀 IST HR API Server running on http://localhost:${PORT}`);
   console.log(`📋 Health check: http://localhost:${PORT}/api/health`);
@@ -53,4 +66,7 @@ app.listen(PORT, async () => {
 
   await runDomainRenewalCheck();
   setInterval(runDomainRenewalCheck, 6 * 60 * 60 * 1000); // every 6 hours
+
+  await runDocumentExpiryCheck();
+  setInterval(runDocumentExpiryCheck, 6 * 60 * 60 * 1000); // every 6 hours
 });

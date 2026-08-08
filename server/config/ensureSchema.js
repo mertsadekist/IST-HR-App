@@ -64,6 +64,16 @@ const COLUMN_GUARDS = [
   { table: 'asset_assignments', column: 'dek_wrap_tag', ddl: 'ALTER TABLE asset_assignments ADD COLUMN dek_wrap_tag VARCHAR(64) NULL' },
   { table: 'asset_assignments', column: 'key_version', ddl: 'ALTER TABLE asset_assignments ADD COLUMN key_version SMALLINT NULL' },
   { table: 'asset_assignments', column: 'aad_context', ddl: 'ALTER TABLE asset_assignments ADD COLUMN aad_context VARCHAR(200) NULL' },
+  // Company-document expiry — see server/apply_document_expiry.mjs. Expiry is a
+  // MODE, not just a date: not every document has an end date, and "No Expiry"
+  // is a positive statement rather than an empty field.
+  { table: 'company_documents', column: 'expiry_mode', ddl: "ALTER TABLE company_documents ADD COLUMN expiry_mode ENUM('Not Set','No Expiry','Has Expiry') NOT NULL DEFAULT 'Not Set'" },
+  { table: 'company_documents', column: 'expiry_date', ddl: 'ALTER TABLE company_documents ADD COLUMN expiry_date DATE NULL' },
+  { table: 'company_documents', column: 'issue_date', ddl: 'ALTER TABLE company_documents ADD COLUMN issue_date DATE NULL' },
+  { table: 'company_documents', column: 'reminder_days', ddl: 'ALTER TABLE company_documents ADD COLUMN reminder_days SMALLINT NULL' },
+  { table: 'company_documents', column: 'expiry_alert_sent', ddl: 'ALTER TABLE company_documents ADD COLUMN expiry_alert_sent VARCHAR(20) NULL' },
+  { table: 'company_documents', column: 'document_name', ddl: 'ALTER TABLE company_documents ADD COLUMN document_name VARCHAR(255) NULL' },
+  { table: 'company_documents', column: 'description', ddl: 'ALTER TABLE company_documents ADD COLUMN description VARCHAR(1000) NULL' },
   // Who added each candidate — see server/apply_candidate_created_by.mjs.
   // The name is snapshotted next to the FK so the record survives the account
   // being deleted, and the historical name is kept after a rename.

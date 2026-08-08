@@ -15,31 +15,14 @@
  * server.js. Assumes a single instance, as that deployment does.
  */
 import { notifyRole } from './notificationService.js';
+import { thresholdFor as bucketFor, alreadyAlerted } from './expiryAlerts.js';
 
-// Descending: the largest threshold a domain has crossed is the one recorded.
 export const RENEWAL_THRESHOLDS = [30, 14, 7, 1];
 
 /** Which threshold bucket a domain falls into, or null when it is not due yet. */
-export function thresholdFor(daysLeft) {
-  if (daysLeft == null) return null;
-  // Already expired is its own, loudest case.
-  if (daysLeft < 0) return 'expired';
-  for (const t of [...RENEWAL_THRESHOLDS].sort((a, b) => a - b)) {
-    if (daysLeft <= t) return String(t);
-  }
-  return null;
-}
+export const thresholdFor = (daysLeft) => bucketFor(daysLeft, RENEWAL_THRESHOLDS);
 
-/** Has this domain already been alerted at this level? */
-export function alreadyAlerted(sent, threshold) {
-  if (!sent) return false;
-  if (sent === threshold) return true;
-  // 'expired' is the terminal state; anything else is a numeric threshold and a
-  // smaller number is a newer, more urgent alert that must still go out.
-  if (sent === 'expired') return true;
-  if (threshold === 'expired') return false;
-  return Number(threshold) >= Number(sent);
-}
+export { alreadyAlerted };
 
 /**
  * @returns {Promise<number>} how many alerts were sent
