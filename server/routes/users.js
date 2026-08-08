@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 import pool from '../config/db.js';
-import { auth } from '../middleware/auth.js';
+import { auth, denyImpersonated } from '../middleware/auth.js';
+import { notifyRole } from '../services/notificationService.js';
 import { authorize } from '../middleware/rbac.js';
 import { addAudit } from '../services/auditService.js';
 import { tenantScope } from '../middleware/tenant.js';
@@ -202,6 +204,89 @@ router.delete('/:id', authorize('admin'), async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error('DELETE /users/:id error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /api/users/:id/impersonate — "Login as" this user.
+ *
+ * An admin gets a short-lived token that carries the target's identity plus an
+ * `imp` claim naming the admin who borrowed it. The claim is what makes this
+ * safe to have at all: `addAudit` reads it and files every action under the
+ * admin's user id with both names, and `denyImpersonated` refuses the handful
+ * of actions that must never happen under a borrowed identity.
+ *
+ * The guards below exist to stop this becoming a privilege-escalation path:
+ *
+ *  - Admins cannot be impersonated, by anyone. A company-bound admin borrowing
+ *    a platform admin's account would escalate itself out of its own company,
+ *    and one admin borrowing another gains nothing they did not already have
+ *    while making the trail harder to read.
+ *  - The target must be inside the caller's own user-management scope, so a
+ *    company-bound admin cannot reach into another company.
+ *  - Sessions cannot be chained: you cannot start a new impersonation from
+ *    inside one, which would otherwise launder the original identity away.
+ *  - 30 minutes, not the usual 24 hours. This is for looking at something
+ *    specific, not for working as somebody else all day.
+ */
+router.post('/:id/impersonate', authorize('admin'), denyImpersonated, async (req, res) => {
+  try {
+    const targetId = parseInt(req.params.id, 10);
+    if (!Number.isInteger(targetId)) return res.status(400).json({ error: 'Invalid user id' });
+    if (targetId === req.user.id) return res.status(400).json({ error: 'You are already signed in as yourself' });
+
+    const co = userMgmtScope(req, 'company_id');
+    const [[target]] = await pool.query(
+      'SELECT id, username, name, email, role, company_id, is_active FROM users WHERE id = ?' + co.clause,
+      [targetId, ...co.params]
+    );
+    if (!target) return res.status(404).json({ error: 'User not found' });
+    if (!target.is_active) return res.status(409).json({ error: 'This account is disabled' });
+    if (target.role === 'admin') {
+      return res.status(403).json({ error: 'Admin accounts cannot be impersonated' });
+    }
+
+    const [[me]] = await pool.query('SELECT id, name, username FROM users WHERE id = ?', [req.user.id]);
+    const impersonatorName = me?.name || req.user.name || 'admin';
+
+    const token = jwt.sign(
+      {
+        id: target.id, name: target.name, role: target.role, company_id: target.company_id,
+        imp: { by: req.user.id, by_name: impersonatorName },
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '30m' }
+    );
+
+    // Filed under the admin, and deliberately loud: this is the entry someone
+    // reviewing the trail later needs to find first.
+    await addAudit(pool, { id: req.user.id, name: impersonatorName, company_id: req.user.company_id },
+      'Auth', 'Impersonation Started',
+      `${impersonatorName} started a "login as" session for "${target.username}" (${target.role})`);
+
+    // Out-of-band notice to the other admins, same reasoning as revealing a
+    // stored password: the operator cannot quietly be the only one who knows.
+    try {
+      await notifyRole(pool, target.company_id, ['admin'], {
+        type: 'warning',
+        title: 'Someone signed in as another user',
+        body: `${impersonatorName} started a "login as" session for ${target.name} (${target.username}).`,
+        link: '/audit',
+      }, req.user.id);
+    } catch { /* notification failure must not block the session */ }
+
+    res.json({
+      token,
+      user: {
+        id: target.id, name: target.name, username: target.username,
+        email: target.email, role: target.role, company_id: target.company_id,
+      },
+      impersonated_by: { id: req.user.id, name: impersonatorName },
+      expires_in_minutes: 30,
+    });
+  } catch (err) {
+    console.error('POST /users/:id/impersonate error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

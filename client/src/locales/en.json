@@ -2360,5 +2360,20 @@
     "th_status": "Status",
     "title": "Domains, Hosting & Infrastructure",
     "unassigned": "Nobody named"
+  },
+  "impersonation": {
+    "login_as": "Login as",
+    "confirm": "You will be signed in as {{name}} ({{username}}) and will see the system exactly as they do.",
+    "continue": "Sign in as this user",
+    "warning": "Anything you do will be recorded against this account. Do not take actions on their behalf unless you mean to.",
+    "note_audit": "Every action is logged under your name and theirs.",
+    "note_expiry": "The session lasts 30 minutes, then expires.",
+    "note_secrets": "Revealing stored passwords stays blocked while signed in as someone else.",
+    "note_return": "You can return to your own account at any time.",
+    "started": "Signed in as {{name}}",
+    "banner": "You are signed in as {{name}} ({{role}})",
+    "as_admin": "started by {{admin}}",
+    "return": "Return to my account",
+    "returned": "Back in your own account"
   }
 }

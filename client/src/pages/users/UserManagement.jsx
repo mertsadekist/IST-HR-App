@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
+import { useSelector, useDispatch } from 'react-redux';
 import * as usersApi from '@api/usersApi';
 import * as departmentsApi from '@api/departmentsApi';
 import Card from '@components/ui/Card';
@@ -11,8 +12,9 @@ import Select from '@components/ui/Select';
 import EmptyState from '@components/ui/EmptyState';
 import { confirmDelete } from '@utils/confirm';
 import { toast } from 'react-toastify';
-import { Plus, Edit3, Trash2, ShieldCheck, Key, UserCog, Search } from 'lucide-react';
+import { Plus, Edit3, Trash2, ShieldCheck, Key, UserCog, Search, UserCheck, AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { impersonateUser } from '@store/slices/authSlice';
 
 // Must stay in step with ALLOWED_ROLES in server/routes/users.js, which is
 // itself derived from server/config/permissions.js — a role offered here with
@@ -44,6 +46,8 @@ const roleColors = {
 
 export default function UserManagement() {
   const { t } = useTranslation();
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { items: companies } = useSelector((s) => s.companies);
   const { user: currentUser } = useSelector((s) => s.auth);
   const isAdmin = currentUser?.role === 'admin'; // delete is admin-only
@@ -57,6 +61,28 @@ export default function UserManagement() {
   const [passModalOpen, setPassModalOpen] = useState(false);
   const [passUser, setPassUser] = useState(null);
   const [newPassword, setNewPassword] = useState('');
+  // "Login as" goes through a confirmation step rather than firing on click:
+  // it replaces the current session, so it should never happen by accident.
+  const [impUser, setImpUser] = useState(null);
+  const [impBusy, setImpBusy] = useState(false);
+
+  // Mirrors the server's rules so the button is not offered where it would be
+  // refused. Admin accounts are never impersonable — a company-bound admin
+  // borrowing a platform admin would escalate straight out of their company.
+  const canImpersonate = (u) => isAdmin && u.is_active && u.role !== 'admin' && u.id !== currentUser?.id;
+
+  const startImpersonation = async () => {
+    setImpBusy(true);
+    const res = await dispatch(impersonateUser(impUser.id));
+    setImpBusy(false);
+    if (impersonateUser.fulfilled.match(res)) {
+      setImpUser(null);
+      toast.success(t('impersonation.started', { name: impUser.name }));
+      navigate('/dashboard');
+    } else {
+      toast.error(res.payload || t('common.error'));
+    }
+  };
   const [form, setForm] = useState({
     username: '', name: '', email: '', role: 'employee', company_id: '', department_id: '', password: '', is_active: true,
   });
@@ -251,6 +277,12 @@ export default function UserManagement() {
                       </td>
                       <td className="px-5 py-3 text-right">
                         <div className="flex justify-end gap-1">
+                          {canImpersonate(user) && (
+                            <Button variant="ghost" size="icon" onClick={() => setImpUser(user)}
+                              className="text-amber-600 hover:!bg-amber-50" title={t('impersonation.login_as')}>
+                              <UserCheck size={14} />
+                            </Button>
+                          )}
                           <Button variant="ghost" size="icon" onClick={() => { setPassUser(user); setPassModalOpen(true); }} title={t('user_management.reset_password')}>
                             <Key size={14} />
                           </Button>
@@ -347,6 +379,32 @@ export default function UserManagement() {
           <Button type="button" variant="secondary" onClick={() => setPassModalOpen(false)}>{t('common.cancel')}</Button>
           <Button onClick={handleResetPassword}>{t('user_management.reset_password')}</Button>
         </div>
+      </Modal>
+
+      {/* "Login as" confirmation — states plainly what is about to happen */}
+      <Modal open={!!impUser} onClose={() => setImpUser(null)} title={t('impersonation.login_as')} size="sm">
+        {impUser && (
+          <div className="space-y-4">
+            <p className="text-sm text-surface-600">
+              {t('impersonation.confirm', { name: impUser.name, username: impUser.username })}
+            </p>
+            <ul className="text-xs text-surface-500 space-y-1.5 bg-surface-50 border border-surface-200 rounded-xl p-3">
+              <li>• {t('impersonation.note_audit')}</li>
+              <li>• {t('impersonation.note_expiry')}</li>
+              <li>• {t('impersonation.note_secrets')}</li>
+              <li>• {t('impersonation.note_return')}</li>
+            </ul>
+            <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2">
+              <AlertTriangle size={14} className="shrink-0 mt-0.5" /> {t('impersonation.warning')}
+            </p>
+            <div className="flex justify-end gap-3">
+              <Button type="button" variant="secondary" onClick={() => setImpUser(null)}>{t('common.cancel')}</Button>
+              <Button onClick={startImpersonation} loading={impBusy}>
+                <UserCheck size={14} /> {t('impersonation.continue')}
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

@@ -167,6 +167,48 @@ No role is `'*'` now except `admin` and `hr_manager`.
 
 ---
 
+## "Login as" (impersonation)
+
+An admin can operate another user's account from **User Management** — the amber
+person icon on the row. It exists so a report of "I cannot see X" can be
+answered by looking at what that person actually sees.
+
+The feature is only safe because of what surrounds it:
+
+| Guard | Why |
+|---|---|
+| `authorize('admin')` | nobody else can start a session |
+| **Admins cannot be impersonated at all** | a company-bound admin borrowing a platform admin would escalate out of their own company; one admin borrowing another gains nothing and muddies the trail |
+| Target must be in the caller's user-management scope | a company-bound admin cannot reach into another company |
+| No chaining (`denyImpersonated`) | you cannot start a session from inside one, which would launder the original identity away |
+| Disabled accounts refused | a disabled login should stay unusable |
+| 30-minute token | for looking at something specific, not for working as someone else all day |
+| Every action names both people | `addAudit` reads the token's `imp` claim and files the entry under the **admin's** user id as `Admin (as User)` |
+| Other admins notified | same out-of-band rule as revealing a stored password — the operator cannot be the only one who knows |
+| Non-dismissible banner | the worst outcome is an operator who forgot whose account they are in |
+
+**What a borrowed identity may do:** everything that role can do. The session
+carries the target's role, so the module gates apply normally — impersonating an
+employee gives you an employee's access, not an admin's.
+
+**What it may never do:** reveal a stored password (`portal.js` reveal and the
+admin reveal both carry `denyImpersonated`). That is the one action no audit
+entry can undo — the secret is out.
+
+Writes are deliberately allowed rather than blocked, so the operator can
+actually reproduce and fix a problem. The audit stamping is what makes that
+acceptable: no action taken in a borrowed session can be mistaken for something
+the account owner did.
+
+**Getting back:** `POST /api/auth/stop-impersonation` reads the admin's identity
+from the token's claim — never from the request — and re-checks it against the
+database (present, active, still an admin) before minting a normal token. So it
+can only ever return the exact account that started the session, which is what
+stops it being a token-minting oracle. If the admin was demoted meanwhile, it
+refuses and the session ends at the login screen.
+
+---
+
 ## Adding a role
 
 1. Add it to `ROLE_MODULES` in `server/config/permissions.js`. `ALLOWED_ROLES`

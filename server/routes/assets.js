@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import pool from '../config/db.js';
-import { auth } from '../middleware/auth.js';
+import { auth, denyImpersonated } from '../middleware/auth.js';
 import { requireModule, MODULES } from '../config/permissions.js';
 import { authorize } from '../middleware/rbac.js';
 import { addAudit } from '../services/auditService.js';
@@ -429,7 +429,7 @@ const revealLimiter = rateLimit({
   message: 'Too many password reveals in the last hour. This limit exists to make bulk credential access impossible; contact an administrator if you genuinely need more.',
 });
 
-router.post('/:id/reveal-password', authorize('admin'), revealLimiter, async (req, res) => {
+router.post('/:id/reveal-password', authorize('admin'), denyImpersonated, revealLimiter, async (req, res) => {
   try {
     const reason = String(req.body?.reason || '').trim();
     if (reason.length < 10) {

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import pool from '../config/db.js';
-import { auth } from '../middleware/auth.js';
+import { auth, denyImpersonated } from '../middleware/auth.js';
 import { decrypt } from '../services/cryptoService.js';
 import { decryptSecret } from '../services/envelopeCrypto.js';
 import { addAudit } from '../services/auditService.js';
@@ -46,7 +46,7 @@ router.get('/my-assets', auth, async (req, res) => {
 });
 
 // GET /api/portal/my-assets/:id/reveal — Reveal a specific credential password
-router.get('/my-assets/:id/reveal', auth, async (req, res) => {
+router.get('/my-assets/:id/reveal', auth, denyImpersonated, async (req, res) => {
   try {
     const employeeId = await getEmployeeId(req.user.id);
     if (!employeeId) return res.status(403).json({ error: 'No employee profile linked' });

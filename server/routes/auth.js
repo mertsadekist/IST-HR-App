@@ -71,9 +71,59 @@ router.get('/me', auth, async (req, res) => {
       return res.status(401).json({ error: 'User not found or disabled' });
     }
 
-    res.json(users[0]);
+    // A reload must not quietly drop the fact that this is a borrowed session —
+    // the banner is the only thing telling the operator whose account they are
+    // acting in, and it is rebuilt from here.
+    res.json({
+      ...users[0],
+      impersonated_by: req.user.imp ? { id: req.user.imp.by, name: req.user.imp.by_name } : null,
+    });
   } catch (err) {
     console.error('Auth/me error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /api/auth/stop-impersonation — hand the admin their own account back.
+ *
+ * The identity to return to comes from the token's `imp` claim, never from the
+ * request body, and is re-checked against the database: still present, still
+ * active, still an admin. So this can only ever give back the exact account
+ * that started the session, which is what stops it being a way to mint a token
+ * for somebody else.
+ */
+router.post('/stop-impersonation', auth, async (req, res) => {
+  try {
+    const imp = req.user?.imp;
+    if (!imp) return res.status(400).json({ error: 'This is not an impersonation session' });
+
+    const [[admin]] = await pool.query(
+      'SELECT id, name, username, email, role, company_id FROM users WHERE id = ? AND is_active = TRUE',
+      [imp.by]
+    );
+    if (!admin || admin.role !== 'admin') {
+      return res.status(403).json({ error: 'The original account is no longer an active admin. Sign in again.' });
+    }
+
+    const token = jwt.sign(
+      { id: admin.id, name: admin.name, role: admin.role, company_id: admin.company_id },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
+    );
+
+    await addAudit(pool, admin, 'Auth', 'Impersonation Ended',
+      `${admin.name} ended the "login as" session for "${req.user.name}"`);
+
+    res.json({
+      token,
+      user: {
+        id: admin.id, name: admin.name, username: admin.username,
+        email: admin.email, role: admin.role, company_id: admin.company_id,
+      },
+    });
+  } catch (err) {
+    console.error('POST /auth/stop-impersonation error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
