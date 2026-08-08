@@ -32,15 +32,20 @@ export const MODULES = Object.freeze({
 const ALL = Object.values(MODULES);
 
 /**
- * Which modules each role may reach. '*' means unrestricted, and is what the
- * roles that predate this module carry — tightening them is a separate change
- * with its own blast radius.
+ * Which modules each role may reach. '*' means unrestricted.
  */
 export const ROLE_MODULES = Object.freeze({
   admin: '*',
   hr_manager: '*',
   recruiter: '*',
-  employee: '*',
+
+  // Self-service only. An employee's own assets, accounts and payslips come
+  // from routes/portal.js and the `/payslips/my` endpoint, both of which
+  // resolve the employee from the token — nothing here needs the operational
+  // modules. Before this list existed the role was '*', which meant an employee
+  // account could read every colleague's salary straight from GET /api/employees
+  // even though the menu never offered it.
+  employee: [MODULES.PORTAL],
 
   // The accountant runs payroll and owns the company's assets, subscriptions,
   // domains and paperwork. Recruitment and analytics are absent on purpose:
@@ -67,10 +72,15 @@ export function modulesFor(role) {
 /**
  * Express guard. Mount alongside `auth` so req.user exists:
  *   router.use(auth, tenantScope, requireModule(MODULES.RECRUITMENT));
+ *
+ * Several modules may be passed, and any one of them grants access. A few
+ * routers genuinely serve more than one audience — `/settings` carries both the
+ * ATS stage editor and the asset catalogue — and splitting them apart is a
+ * bigger change than this guard is worth.
  */
-export const requireModule = (module) => (req, res, next) => {
+export const requireModule = (...modules) => (req, res, next) => {
   if (!req.user) return res.status(401).json({ error: 'Authentication required' });
-  if (!canAccessModule(req.user.role, module)) {
+  if (!modules.some((m) => canAccessModule(req.user.role, m))) {
     return res.status(403).json({ error: 'Insufficient permissions' });
   }
   next();

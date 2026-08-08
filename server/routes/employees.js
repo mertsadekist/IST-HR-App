@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import pool from '../config/db.js';
 import { auth } from '../middleware/auth.js';
+import { requireModule, MODULES } from '../config/permissions.js';
 import { authorize } from '../middleware/rbac.js';
 import { addAudit } from '../services/auditService.js';
 import { tenantScope, companyClause, resolveWriteCompanyId } from '../middleware/tenant.js';
@@ -41,7 +42,10 @@ const photoUpload = multer({
 });
 
 const router = Router();
-router.use(auth, tenantScope);
+// Module-gated so reads are refused too, not just writes.
+// Employee records carry salary, bank and passport data.
+// See config/permissions.js and docs/roles_and_permissions.md.
+router.use(auth, tenantScope, requireModule(MODULES.HR));
 
 // Verifies an employee exists within the caller's company scope; returns the row or null.
 async function getScopedEmployee(req, employeeId) {

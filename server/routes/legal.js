@@ -1,13 +1,16 @@
 import { Router } from 'express';
 import pool from '../config/db.js';
 import { auth } from '../middleware/auth.js';
+import { requireModule, MODULES } from '../config/permissions.js';
 import { authorize } from '../middleware/rbac.js';
 import { addAudit } from '../services/auditService.js';
 import { generateLetterContent } from '../services/deepseekService.js';
 import { tenantScope, companyClause, resolveWriteCompanyId } from '../middleware/tenant.js';
 
 const router = Router();
-router.use(auth, tenantScope);
+// Module-gated so reads are refused too, not just writes.
+// See config/permissions.js and docs/roles_and_permissions.md.
+router.use(auth, tenantScope, requireModule(MODULES.COMPLIANCE));
 
 // GET /api/legal/templates — List letter templates (global config; see audit TEN-010)
 router.get('/templates', async (req, res) => {

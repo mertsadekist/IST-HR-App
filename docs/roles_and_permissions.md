@@ -29,10 +29,28 @@ A role never widens company scope, and an entity never widens permissions.
    router, reads included. It exists because a role can be defined by what it
    must *not* see, and hiding a sidebar entry is not a permission.
 
-`ROLE_MODULES` maps a role to the modules it may reach. `'*'` means unrestricted
-and is what every role predating this layer carries — the module system is
-additive, and tightening those roles is a separate change with its own blast
-radius.
+`ROLE_MODULES` maps a role to the modules it may reach. `'*'` means unrestricted.
+`accountant` and `employee` carry real module lists; `admin`, `hr_manager` and
+`recruiter` are still `'*'`.
+
+Several modules may be passed — `requireModule(OPERATIONS, ASSETS)` — and any
+one of them grants access. A few routers serve more than one audience:
+`/settings` carries both the ATS stage editor and the asset catalogue.
+
+### Self-service routers are deliberately not gated
+
+`attendance.js` and `leave.js` carry no module gate. Every read in them already
+narrows to the caller's own record unless they are HR (`if (!isHR(req))`), and
+every write is `authorize()`-gated. Putting a module gate in front would stop
+employees checking in and requesting leave — the opposite of the intent. The
+same is true of `portal.js`, `notifications.js` and `GET /payroll/payslips/my`,
+all of which resolve the employee from the token, so no `company_id` in the
+query can widen them.
+
+`salaryReviews.js` is gated **per read route** rather than at the router, because
+`PUT /:id/decision` is authorized by identity — the company's designated
+approver, whoever they are — and a module gate in front of it would lock out an
+approver whose account happens to carry a self-service role.
 
 ---
 
@@ -40,22 +58,28 @@ radius.
 
 ✅ full · 👁 read only · ❌ denied (including reads)
 
-| Module | admin | hr_manager | recruiter | **accountant** | employee |
+| Module | admin | hr_manager | recruiter | **accountant** | **employee** |
 |---|---|---|---|---|---|
-| Recruitment (candidates, vacancies, applicants, CV scorer) | ✅ | ✅ | ✅ | **❌** | 👁 ⚠️ |
-| HR (employees, onboarding, leave, attendance, offboarding) | ✅ | ✅ | 👁 ⚠️ | **👁** | 👁 ⚠️ |
-| Payroll runs, WPS export, payslips | ✅ | ✅ | ❌ | **✅** | own only |
-| Salary reviews | ✅ | ✅ | ❌ | **👁** | ❌ |
-| Assets, inventory, digital access, social, domains | ✅ | ✅ | 👁 ⚠️ | **✅** | own only |
-| Company documents, legal letters | ✅ | ✅ | 👁 ⚠️ | **✅** | 👁 ⚠️ |
-| Reports, KPI, audit log, email log | ✅ | ✅ | 👁 ⚠️ | **❌** | 👁 ⚠️ |
-| Users, settings, companies | ✅ | settings only | ❌ | **❌** | ❌ |
-| Own portal (my assets, my payslips) | ✅ | ✅ | ✅ | **✅** | ✅ |
-| Deletes (anywhere) | ✅ | ❌ | ❌ | **❌** | ❌ |
+| Recruitment (candidates, vacancies, applicants, CV scorer) | ✅ | ✅ | ✅ | **❌** | **❌** |
+| Employees, onboarding, offboarding | ✅ | ✅ | 👁 ⚠️ | **👁** | **❌** |
+| Leave, attendance | ✅ | ✅ | own only | own only | **own only** |
+| Payroll runs, WPS export | ✅ | ✅ | ❌ | **✅** | **❌** |
+| Payslips | ✅ | ✅ | ❌ | **✅** | **own only** |
+| Salary reviews | ✅ | ✅ | ❌ | **👁** | **❌** |
+| Assets, inventory, digital access, social, domains | ✅ | ✅ | 👁 ⚠️ | **✅** | **own only** |
+| Company documents, legal letters | ✅ | ✅ | 👁 ⚠️ | **✅** | **❌** |
+| Reports, KPI, audit log, email log | ✅ | ✅ | 👁 ⚠️ | **❌** | **❌** |
+| Settings, departments, skills | ✅ | ✅ | 👁 ⚠️ | catalogue only | **❌** |
+| Users | ✅ | ❌ | ❌ | **❌** | **❌** |
+| Own portal, notifications, company list | ✅ | ✅ | ✅ | **✅** | **✅** |
+| Deletes (anywhere) | ✅ | ❌ | ❌ | **❌** | **❌** |
 | Reveal a stored password | ✅ | ❌ | ❌ | **❌** | own only |
-| Mark a payroll run Paid | ✅ | ❌ | ❌ | **❌** | ❌ |
+| Mark a payroll run Paid | ✅ | ❌ | ❌ | **❌** | **❌** |
 
-⚠️ marks the **known gap** described below, not an intended grant.
+"own only" means the route resolves the employee from the token, so the caller
+sees their own record and nobody else's.
+
+⚠️ marks the **remaining gap** described below, not an intended grant.
 
 ---
 
@@ -95,19 +119,40 @@ list — say so explicitly rather than assuming.
 
 ---
 
-## Known gap: reads are not gated for the older roles
+## The employee gap, and what closing it changed
 
-`authorize()` only ever guarded writes, so any authenticated user can **read**
-any module their company scope allows. An `employee` account can call
-`GET /api/candidates` directly and get data the sidebar never offers them.
+`authorize()` only ever guarded writes, so any authenticated user could **read**
+any module their company scope allowed. The sharpest case: `GET /api/employees`
+selects `e.*`, so an `employee` account — the lowest-privilege login in the
+system, held by every member of staff — could read every colleague's salary,
+IBAN and passport number straight from the API. The menu never offered it; the
+API answered anyway.
 
-This is why `requireModule` exists, and the accountant is gated with it. The
-older roles are still mapped to `'*'` — closing the gap for `employee` and
-`recruiter` is a worthwhile follow-up, but it changes behaviour for accounts
-already in use and belongs in its own change with its own testing.
+Closed 2026-08-08. `employee` now maps to `[PORTAL]` and the operational routers
+are module-gated, so those reads return 403.
 
-To close it later: replace `'*'` in `ROLE_MODULES` with real module lists and
-mount `requireModule` on the remaining routers.
+What deliberately still works, because it was never the gap:
+
+- **Their own portal** — assets, accounts, and revealing their own stored
+  password (`portal.js`).
+- **Their own payslips** — `GET /payroll/payslips/my`. Any other payslip is 403.
+- **Attendance and leave self-service** — checking in and out, submitting a
+  leave request, cancelling it, and seeing their own history. Every read there
+  narrows to the caller, which is why those routers are not gated.
+- **Notifications, the company list, and the dashboard**, all loaded on boot.
+
+Three tests in `tests/isolation.test.js` asserted the old behaviour — that an
+employee reads the employee directory, filtered to their company. They now
+assert 403, plus a new case proving the portal still serves that same employee
+their own assets and cannot be widened by a `company_id` in the query.
+
+### Remaining gap: recruiter
+
+`recruiter` is still `'*'`, so it can read HR, assets, compliance and analytics
+data that the sidebar never offers it. Lower severity than the employee case —
+recruiters are a small, trusted group rather than all staff — but it is the same
+hole. To close it, give the role a module list (`[RECRUITMENT, PORTAL]` plus
+whatever the hiring workflow genuinely needs) and re-run the suite.
 
 ---
 

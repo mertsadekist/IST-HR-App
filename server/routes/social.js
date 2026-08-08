@@ -15,6 +15,7 @@
 import { Router } from 'express';
 import pool from '../config/db.js';
 import { auth } from '../middleware/auth.js';
+import { requireModule, MODULES } from '../config/permissions.js';
 import { authorize } from '../middleware/rbac.js';
 import { addAudit } from '../services/auditService.js';
 import { tenantScope, companyClause, resolveWriteCompanyId } from '../middleware/tenant.js';
@@ -25,7 +26,9 @@ import {
 } from '../config/socialLayers.js';
 
 const router = Router();
-router.use(auth, tenantScope);
+// Module-gated so reads are refused too, not just writes.
+// See config/permissions.js and docs/roles_and_permissions.md.
+router.use(auth, tenantScope, requireModule(MODULES.ASSETS));
 
 // Only RE or MKT: rule 14 requires every social account to belong to exactly one
 // entity. "Shared" is not an option here, unlike the platform catalogue.

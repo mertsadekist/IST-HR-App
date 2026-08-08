@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import pool from '../config/db.js';
 import { auth } from '../middleware/auth.js';
+import { requireModule, MODULES } from '../config/permissions.js';
 import { authorize } from '../middleware/rbac.js';
 import { addAudit } from '../services/auditService.js';
 import { generateAssetCode, getCategoryPrefix, generateQRCodeDataURL, generateLabelHTML, generateBulkLabelsHTML } from '../services/barcodeService.js';
@@ -21,7 +22,9 @@ const upload = multer({
 });
 
 const router = Router();
-router.use(auth, tenantScope);
+// Module-gated so reads are refused too, not just writes.
+// See config/permissions.js and docs/roles_and_permissions.md.
+router.use(auth, tenantScope, requireModule(MODULES.ASSETS));
 
 // Verifies an inventory item is within the caller's company; returns row or null.
 async function getScopedInventory(req, id, columns = '*') {

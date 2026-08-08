@@ -13,6 +13,10 @@ import crypto from 'crypto';
 import { ensureUploadDir, uploadPath } from '../config/storage.js';
 
 const router = Router();
+// Deliberately NOT module-gated: this is a self-service router. Every read
+// below narrows to the caller's own record unless they are HR, and every
+// write is authorize()-gated, so an employee reaches their own attendance
+// and leave and nobody else's.
 router.use(auth, tenantScope);
 
 // Scanned proof for a leave request (the written request itself, and the

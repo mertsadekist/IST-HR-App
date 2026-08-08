@@ -179,25 +179,44 @@ describe('Cross-company roles see the whole organization', () => {
   });
 });
 
-describe('Employee self-service is pinned to its own company', () => {
-  it('employee only sees their own company employees', async () => {
+/**
+ * The employee directory used to be readable by an employee account, scoped to
+ * their own company. That was never a feature — GET /api/employees selects
+ * `e.*`, so it handed every colleague's salary, IBAN and passport number to
+ * anyone with a login. The module gate (config/permissions.js) now refuses the
+ * router outright for that role, which is why these assert 403 rather than a
+ * filtered 200.
+ */
+describe('Employee self-service cannot reach the operational modules', () => {
+  it('employee is refused the employee directory outright', async () => {
     const res = await request.get('/api/employees?limit=200').set(bearer(tokEmpA));
-    expect(res.status).toBe(200);
-    const ids = res.body.data.map((e) => e.id);
-    expect(ids).toContain(fixture.ids.empRecA);
-    expect(ids).not.toContain(fixture.ids.empRecB);
-    expect(res.body.data.every((e) => e.company_id === fixture.companyA)).toBe(true);
+    expect(res.status).toBe(403);
   });
 
-  it('client-supplied company_id cannot widen an employee beyond their company', async () => {
+  it('a client-supplied company_id does not get an employee past the gate', async () => {
     const res = await request.get(`/api/employees?company_id=${fixture.companyB}&limit=200`).set(bearer(tokEmpA));
-    expect(res.status).toBe(200);
-    expect(res.body.data.every((e) => e.company_id === fixture.companyA)).toBe(true);
+    expect(res.status).toBe(403);
   });
 
-  it('employee cannot read a record in another company by id → 404', async () => {
+  it('employee cannot read a record in another company by id', async () => {
     const res = await request.get(`/api/employees/${fixture.ids.empRecB}`).set(bearer(tokEmpA));
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(403);
+  });
+
+  it('nor the assets register, where the same records are reachable another way', async () => {
+    const res = await request.get('/api/assets').set(bearer(tokEmpA));
+    expect(res.status).toBe(403);
+  });
+
+  // The point of closing the hole is that self-service still works — an
+  // employee reaches their own things through routes that resolve the employee
+  // from the token, so no company_id in the query can widen them.
+  it('but the portal still serves that employee their own assets', async () => {
+    const res = await request.get(`/api/portal/my-assets?company_id=${fixture.companyB}`).set(bearer(tokEmpA));
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body.every((a) => a.company_id === fixture.companyA)).toBe(true);
+    expect(res.body.map((a) => a.name)).not.toContain(`${tag} AccountB`);
   });
 });
 

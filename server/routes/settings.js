@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import pool from '../config/db.js';
 import { auth } from '../middleware/auth.js';
+import { requireModule, MODULES } from '../config/permissions.js';
 import { authorize } from '../middleware/rbac.js';
 import { addAudit } from '../services/auditService.js';
 import { getAppSetting, setAppSetting } from '../services/appSettings.js';
@@ -8,6 +9,11 @@ import { tenantScope, companyClause, resolveWriteCompanyId } from '../middleware
 import { OWNER_SCOPES } from '../config/ownerScopes.js';
 
 const router = Router();
+
+// Carries the ATS stage editor and the asset catalogue both, so either
+// audience opens it. Every route here already required auth individually;
+// this adds the module check in front so reads are refused too.
+router.use(auth, requireModule(MODULES.OPERATIONS, MODULES.ASSETS));
 
 // ==============================================
 // GENERAL APP SETTINGS (timezone, …)

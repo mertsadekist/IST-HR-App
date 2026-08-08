@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import pool from '../config/db.js';
 import { auth } from '../middleware/auth.js';
+import { requireModule, MODULES } from '../config/permissions.js';
 import { authorize } from '../middleware/rbac.js';
 import { validate } from '../middleware/validate.js';
 import { upload } from '../middleware/upload.js';
@@ -18,7 +19,9 @@ const DOC_CATEGORIES = ['revision_letter', 'signed_contract', 'mohre_proof', 'wp
 
 // ─── List / create cycles ─────────────────────────────────────────────────────
 // GET /api/salary-reviews — list review cycles (scoped)
-router.get('/', async (req, res) => {
+// Proposed salaries for the whole company. Reads are module-gated;
+// see the note on PUT /:id/decision for why the router is not.
+router.get('/', requireModule(MODULES.PAYROLL), async (req, res) => {
   try {
     const co = companyClause(req, 'sr.company_id');
     const [rows] = await pool.query(`
@@ -80,7 +83,7 @@ router.post('/', authorize('admin', 'hr_manager'), validate({
 });
 
 // GET /api/salary-reviews/:id — full detail: cycle + items + each item's actions + documents
-router.get('/:id', async (req, res) => {
+router.get('/:id', requireModule(MODULES.PAYROLL), async (req, res) => {
   try {
     const co = companyClause(req, 'sr.company_id');
     const [[review]] = await pool.query(`
@@ -208,7 +211,7 @@ router.post('/items/:itemId/documents', authorize('admin', 'hr_manager'), upload
 });
 
 // GET /api/salary-reviews/items/:itemId/documents/:docId/download
-router.get('/items/:itemId/documents/:docId/download', async (req, res) => {
+router.get('/items/:itemId/documents/:docId/download', requireModule(MODULES.PAYROLL), async (req, res) => {
   try {
     const co = companyClause(req, 'sri.company_id');
     const [[doc]] = await pool.query(

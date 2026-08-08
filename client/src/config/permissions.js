@@ -23,12 +23,17 @@ export const ROLE_MODULES = {
   admin: '*',
   hr_manager: '*',
   recruiter: '*',
-  employee: '*',
+  employee: [MODULES.PORTAL],
   accountant: [MODULES.PAYROLL, MODULES.ASSETS, MODULES.COMPLIANCE, MODULES.HR, MODULES.PORTAL],
 };
 
-/** Route prefixes that belong to a restricted module. Longest match wins. */
+/**
+ * Route prefixes that belong to a restricted module. First match wins, so a
+ * more specific path must come before the prefix that would otherwise swallow
+ * it — /settings/catalog is the asset catalogue, not a system setting.
+ */
 const ROUTE_MODULES = [
+  ['/settings/catalog', MODULES.ASSETS],
   ['/ats', MODULES.RECRUITMENT],
   ['/candidates', MODULES.RECRUITMENT],
   ['/vacancies', MODULES.RECRUITMENT],
@@ -38,6 +43,26 @@ const ROUTE_MODULES = [
   ['/audit', MODULES.ANALYTICS],
   ['/kpi', MODULES.ANALYTICS],
   ['/email-log', MODULES.ANALYTICS],
+  ['/employees', MODULES.HR],
+  ['/onboarding', MODULES.HR],
+  ['/quick-offer', MODULES.HR],
+  ['/leave', MODULES.HR],
+  ['/attendance', MODULES.HR],
+  ['/performance', MODULES.HR],
+  ['/offboarding', MODULES.HR],
+  ['/org-chart', MODULES.HR],
+  ['/payroll', MODULES.PAYROLL],
+  ['/payroll-runs', MODULES.PAYROLL],
+  ['/salary-reviews', MODULES.PAYROLL],
+  ['/assets', MODULES.ASSETS],
+  ['/inventory', MODULES.ASSETS],
+  ['/digital-access', MODULES.ASSETS],
+  ['/social-governance', MODULES.ASSETS],
+  ['/domains', MODULES.ASSETS],
+  ['/legal-letters', MODULES.COMPLIANCE],
+  ['/company-docs', MODULES.COMPLIANCE],
+  ['/users', MODULES.OPERATIONS],
+  ['/settings', MODULES.OPERATIONS],
 ];
 
 export function canAccessModule(role, module) {

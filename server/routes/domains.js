@@ -19,6 +19,7 @@
 import { Router } from 'express';
 import pool from '../config/db.js';
 import { auth } from '../middleware/auth.js';
+import { requireModule, MODULES } from '../config/permissions.js';
 import { authorize } from '../middleware/rbac.js';
 import { addAudit } from '../services/auditService.js';
 import { tenantScope, resolveWriteCompanyId } from '../middleware/tenant.js';
@@ -26,7 +27,9 @@ import { OWNER_SCOPES } from '../config/ownerScopes.js';
 import { checkDomainRenewals, RENEWAL_THRESHOLDS } from '../services/domainRenewalService.js';
 
 const router = Router();
-router.use(auth, tenantScope);
+// Module-gated so reads are refused too, not just writes.
+// See config/permissions.js and docs/roles_and_permissions.md.
+router.use(auth, tenantScope, requireModule(MODULES.ASSETS));
 
 const ASSET_KINDS = ['Domain', 'Hosting', 'DNS', 'CDN', 'Infrastructure', 'Other'];
 const STATUSES = ['Active', 'Pending', 'Expired', 'Transferred', 'Cancelled'];

@@ -1,13 +1,17 @@
 import { Router } from 'express';
 import pool from '../config/db.js';
 import { auth } from '../middleware/auth.js';
+import { requireModule, MODULES } from '../config/permissions.js';
 import { authorize } from '../middleware/rbac.js';
 import { addAudit } from '../services/auditService.js';
 import { tenantScope, companyClause, resolveWriteCompanyId } from '../middleware/tenant.js';
 import { validate } from '../middleware/validate.js';
 
 const router = Router();
-router.use(auth, tenantScope);
+// Module-gated so reads are refused too, not just writes.
+// The employee directory reads departments.
+// See config/permissions.js and docs/roles_and_permissions.md.
+router.use(auth, tenantScope, requireModule(MODULES.OPERATIONS, MODULES.HR));
 
 // GET /api/departments (scoped to caller's company)
 router.get('/', async (req, res) => {

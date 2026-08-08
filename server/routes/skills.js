@@ -1,10 +1,15 @@
 import { Router } from 'express';
 import pool from '../config/db.js';
 import { auth } from '../middleware/auth.js';
+import { requireModule, MODULES } from '../config/permissions.js';
 import { authorize } from '../middleware/rbac.js';
 import { addAudit } from '../services/auditService.js';
 
 const router = Router();
+
+// Module-gated so reads are refused too, not just writes.
+// See config/permissions.js and docs/roles_and_permissions.md.
+router.use(auth, requireModule(MODULES.OPERATIONS));
 
 // GET /api/skills — Returns categories with nested skills
 router.get('/', auth, async (req, res) => {
