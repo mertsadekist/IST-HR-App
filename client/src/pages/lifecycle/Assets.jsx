@@ -11,7 +11,7 @@ import Modal from '@components/ui/Modal';
 import Input from '@components/ui/Input';
 import Select from '@components/ui/Select';
 import EmptyState from '@components/ui/EmptyState';
-import { confirmDelete, promptReason } from '@utils/confirm';
+import { confirmDelete, promptRevealStepUp } from '@utils/confirm';
 import { toast } from 'react-toastify';
 import { Plus, Edit3, Trash2, Laptop, RotateCcw, Search, Monitor, Globe, Wrench, Printer, Upload, CheckCircle2, FileCheck, Package, Eye, EyeOff, Link2, Key, Copy, Send } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -240,14 +240,20 @@ export default function Assets() {
       setRevealedPasswords(prev => { const n = { ...prev }; delete n[assetId]; return n; });
       return;
     }
-    const res = await promptReason(t('lifecycle.reveal_reason_title'), t('lifecycle.reveal_reason_desc'));
-    if (!res?.isConfirmed) return;
-    const reason = String(res.value || '').trim();
-    if (reason.length < 10) { toast.error(t('lifecycle.reveal_reason_too_short')); return; }
+    const res = await promptRevealStepUp({
+      title: t('lifecycle.reveal_reason_title'),
+      text: t('lifecycle.reveal_step_up_desc'),
+      reasonPlaceholder: t('lifecycle.reveal_reason_ph'),
+      passwordPlaceholder: t('lifecycle.reveal_password_ph'),
+      reasonTooShort: t('lifecycle.reveal_reason_too_short'),
+      passwordRequired: t('lifecycle.reveal_password_required'),
+    });
+    if (!res?.isConfirmed || !res.value) return;
+    const { reason, password } = res.value;
 
     setRevealingId(assetId);
     try {
-      const { data } = await assetsApi.revealPassword(assetId, reason);
+      const { data } = await assetsApi.revealPassword(assetId, reason, password);
       setRevealedPasswords(prev => ({ ...prev, [assetId]: data.password }));
       // Auto-hide after 15 seconds
       setTimeout(() => {

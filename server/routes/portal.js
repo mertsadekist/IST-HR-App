@@ -2,6 +2,7 @@ import { Router } from 'express';
 import pool from '../config/db.js';
 import { auth } from '../middleware/auth.js';
 import { decrypt } from '../services/cryptoService.js';
+import { decryptSecret } from '../services/envelopeCrypto.js';
 import { addAudit } from '../services/auditService.js';
 
 const router = Router();
@@ -52,19 +53,33 @@ router.get('/my-assets/:id/reveal', auth, async (req, res) => {
 
     // Ensure the asset belongs to this employee
     const [[asset]] = await pool.query(
-      'SELECT encrypted_password, password_iv, password_tag, name FROM asset_assignments WHERE id = ? AND employee_id = ?',
+      `SELECT id, company_id, encrypted_password, password_iv, password_tag,
+              dek_wrapped, dek_wrap_iv, dek_wrap_tag, key_version, aad_context, name
+         FROM asset_assignments WHERE id = ? AND employee_id = ?`,
       [req.params.id, employeeId]
     );
 
     if (!asset) return res.status(404).json({ error: 'Asset not found or access denied' });
     if (!asset.encrypted_password) return res.status(400).json({ error: 'No password stored for this asset' });
 
-    const password = decrypt(asset.encrypted_password, asset.password_iv, asset.password_tag);
+    // Reads its own credential, whichever scheme the record is on. A legacy row
+    // is left for the admin path to migrate: this route must not rewrite a
+    // record on behalf of a self-service user.
+    const password = asset.dek_wrapped
+      ? decryptSecret({
+        ciphertext: asset.encrypted_password, iv: asset.password_iv, tag: asset.password_tag,
+        dek_wrapped: asset.dek_wrapped, dek_wrap_iv: asset.dek_wrap_iv, dek_wrap_tag: asset.dek_wrap_tag,
+        key_version: asset.key_version, aad_context: asset.aad_context,
+      }, asset.aad_context)
+      : decrypt(asset.encrypted_password, asset.password_iv, asset.password_tag);
+
+    if (password == null) return res.status(500).json({ error: 'Stored credential could not be decrypted' });
 
     // Audit log the reveal action
     await addAudit(pool, req.user, 'Portal', 'Password Revealed',
       `Employee viewed password for "${asset.name}"`);
 
+    res.setHeader('Cache-Control', 'no-store, max-age=0');
     res.json({ password });
   } catch (err) {
     console.error('Reveal password error:', err);

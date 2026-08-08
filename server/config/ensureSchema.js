@@ -56,6 +56,14 @@ const COLUMN_GUARDS = [
   { table: 'asset_assignments', column: 'vault_secret_reference', ddl: 'ALTER TABLE asset_assignments ADD COLUMN vault_secret_reference VARCHAR(200) NULL' },
   { table: 'asset_assignments', column: 'secret_justification', ddl: 'ALTER TABLE asset_assignments ADD COLUMN secret_justification VARCHAR(500) NULL' },
   { table: 'asset_assignments', column: 'secret_approved_by', ddl: 'ALTER TABLE asset_assignments ADD COLUMN secret_approved_by INT NULL' },
+  // Envelope encryption for stored credentials — see apply_envelope_encryption.mjs
+  // and docs/secrets_protection_design.md. The legacy encrypted_password columns
+  // stay; a record migrates to the per-record data key on next read or write.
+  { table: 'asset_assignments', column: 'dek_wrapped', ddl: 'ALTER TABLE asset_assignments ADD COLUMN dek_wrapped TEXT NULL' },
+  { table: 'asset_assignments', column: 'dek_wrap_iv', ddl: 'ALTER TABLE asset_assignments ADD COLUMN dek_wrap_iv VARCHAR(64) NULL' },
+  { table: 'asset_assignments', column: 'dek_wrap_tag', ddl: 'ALTER TABLE asset_assignments ADD COLUMN dek_wrap_tag VARCHAR(64) NULL' },
+  { table: 'asset_assignments', column: 'key_version', ddl: 'ALTER TABLE asset_assignments ADD COLUMN key_version SMALLINT NULL' },
+  { table: 'asset_assignments', column: 'aad_context', ddl: 'ALTER TABLE asset_assignments ADD COLUMN aad_context VARCHAR(200) NULL' },
   // Who added each candidate — see server/apply_candidate_created_by.mjs.
   // The name is snapshotted next to the FK so the record survives the account
   // being deleted, and the historical name is kept after a rename.

@@ -24,7 +24,14 @@ import supertest from 'supertest';
 import jwt from 'jsonwebtoken';
 import app from '../app.js';
 import pool from '../config/db.js';
+import bcrypt from 'bcryptjs';
 import { encrypt } from '../services/cryptoService.js';
+
+// Revealing a stored credential requires the caller to re-enter their own
+// password (docs/secrets_protection_design.md §4), so fixture users need a real
+// hash rather than a placeholder.
+const FIXTURE_PASSWORD = 'FixtureP@ssw0rd';
+const FIXTURE_PASSWORD_HASH = bcrypt.hashSync(FIXTURE_PASSWORD, 4);
 
 const request = supertest(app);
 const tag = `IS${Date.now().toString().slice(-5)}`; // 7-char ASCII marker; short codes stay <= 10 and unique per company
@@ -52,7 +59,7 @@ beforeAll(async () => {
   // --- Users (real rows so created_by / FK constraints hold) ---
   const mkUser = async (role, companyId, suffix) => {
     const [u] = await pool.query('INSERT INTO users SET ?', {
-      username: `${tag}_${suffix}`, password_hash: 'x', name: `${tag} ${suffix}`,
+      username: `${tag}_${suffix}`, password_hash: FIXTURE_PASSWORD_HASH, name: `${tag} ${suffix}`,
       role, company_id: companyId, is_active: 1,
     });
     return u.insertId;
@@ -140,21 +147,35 @@ describe('Cross-company roles see the whole organization', () => {
   // POST, and only with a reason that lands in the audit log.
   it('hr_manager can no longer reveal a stored password', async () => {
     const res = await request.post(`/api/assets/${fixture.ids.asgB}/reveal-password`)
-      .set(bearer(tokHrA)).send({ reason: 'checking the credential works' });
+      .set(bearer(tokHrA)).send({ reason: 'checking the credential works', password: FIXTURE_PASSWORD });
     expect(res.status).toBe(403);
   });
 
   it('admin can reveal a company-B asset password cross-company, with a reason', async () => {
     const res = await request.post(`/api/assets/${fixture.ids.asgB}/reveal-password`)
-      .set(bearer(tokAdminB)).send({ reason: 'rotating this shared credential' });
+      .set(bearer(tokAdminB)).send({ reason: 'rotating this shared credential', password: FIXTURE_PASSWORD });
     expect(res.status).toBe(200);
     expect(res.body.password).toBe('superSecretB');
   });
 
   it('refuses a reveal with no stated reason', async () => {
     const res = await request.post(`/api/assets/${fixture.ids.asgB}/reveal-password`)
-      .set(bearer(tokAdminB)).send({});
+      .set(bearer(tokAdminB)).send({ password: FIXTURE_PASSWORD });
     expect(res.status).toBe(422);
+  });
+
+  // Step-up authentication: a valid session is not enough to read a credential.
+  it('refuses a reveal without the callers own password', async () => {
+    const res = await request.post(`/api/assets/${fixture.ids.asgB}/reveal-password`)
+      .set(bearer(tokAdminB)).send({ reason: 'rotating this shared credential' });
+    expect(res.status).toBe(422);
+    expect(res.body.step_up_required).toBe(true);
+  });
+
+  it('refuses a reveal when that password is wrong', async () => {
+    const res = await request.post(`/api/assets/${fixture.ids.asgB}/reveal-password`)
+      .set(bearer(tokAdminB)).send({ reason: 'rotating this shared credential', password: 'not-my-password' });
+    expect(res.status).toBe(401);
   });
 });
 

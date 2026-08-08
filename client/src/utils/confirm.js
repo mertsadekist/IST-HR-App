@@ -57,6 +57,36 @@ export const promptReason = (title, text) =>
     },
   });
 
+/**
+ * Step-up confirmation for revealing a stored credential: a reason for the audit
+ * log AND the user's own password. A valid session is not enough for this action
+ * — a stolen session is the likeliest route to a credential, and re-entering the
+ * password is what closes it.
+ */
+export const promptRevealStepUp = (opts) =>
+  Swal.fire({
+    title: opts.title,
+    icon: 'warning',
+    html:
+      `<p style="font-size:13px;text-align:start;margin-bottom:12px">${opts.text}</p>`
+      + `<textarea id="reveal-reason" class="swal2-textarea" style="margin:0 0 10px" maxlength="400" placeholder="${opts.reasonPlaceholder}"></textarea>`
+      + `<input id="reveal-password" type="password" autocomplete="current-password" class="swal2-input" style="margin:0" placeholder="${opts.passwordPlaceholder}">`,
+    focusConfirm: false,
+    preConfirm: () => {
+      const reason = (document.getElementById('reveal-reason')?.value || '').trim();
+      const password = document.getElementById('reveal-password')?.value || '';
+      if (reason.length < 10) { Swal.showValidationMessage(opts.reasonTooShort); return false; }
+      if (!password) { Swal.showValidationMessage(opts.passwordRequired); return false; }
+      return { reason, password };
+    },
+    showCancelButton: true,
+    confirmButtonColor: '#DC2626',
+    cancelButtonColor: '#737373',
+    heightAuto: false,
+    didOpen: escapeModalLock,
+    customClass: { popup: 'rounded-2xl', confirmButton: 'rounded-xl', cancelButton: 'rounded-xl' },
+  });
+
 export const confirmAction = (title, text) =>
   Swal.fire({
     title,

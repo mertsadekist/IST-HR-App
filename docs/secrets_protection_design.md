@@ -3,8 +3,9 @@
 Answer to: *if we store platform passwords in the system, how do we protect them from
 breach, leakage and theft?*
 
-Written against the system as it stands at commit `e84fd22`. Nothing here is implemented yet —
-this is the design to approve before any of it is built.
+Written against the system as it stood at commit `e84fd22`. **All six steps are now implemented**
+except the KMS provider itself, which needs a cloud account rather than code — see §7 for status and
+§3 for what "partial" means there.
 
 ---
 
@@ -180,17 +181,53 @@ thought about:
 
 ## 7. Recommended implementation order
 
-| Step | Change | Cost | Why first |
-|---|---|---|---|
-| 1 | `vault_secret_reference` on all new digital/social records; make reference-only the default | Small | Removes the exposure instead of managing it — the PRD's own answer |
-| 2 | Reveal hardening: admin-only, `POST`, mandatory reason, audit row written first, per-user rate limit, no-store | Small | Biggest risk reduction per hour of work; the likely breach is account misuse, not broken AES |
-| 3 | Startup assertions on key strength and key/JWT separation | Tiny | Catches a misconfigured deployment before it stores anything |
-| 4 | Envelope encryption with `key_version` + AAD, migrating existing rows lazily | Medium | Makes rotation possible and neutralises database backups |
-| 5 | Out-of-band notification + step-up auth on reveal | Medium | Defeats the stolen-session attack |
-| 6 | KMS-held master key | Larger | The strongest form of step 4; do it when the platform choice is made |
+| Step | Change | Status |
+|---|---|---|
+| 1 | `vault_secret_reference`, reference-only by default | ✅ `apply_secret_tiers.mjs` |
+| 2 | Reveal hardening: admin-only, `POST`, mandatory reason, audit written first, per-user rate limit, no-store | ✅ `routes/assets.js` |
+| 3 | Startup assertions on key strength and key/JWT separation | ✅ `config/verifySecrets.js` |
+| 4 | Envelope encryption with `key_version` + AAD, migrating existing rows lazily | ✅ `services/envelopeCrypto.js` |
+| 5 | Out-of-band notification + step-up auth on reveal | ✅ `routes/assets.js` |
+| 6 | KMS-held master key | ◐ seam built (`services/keyProvider.js`); the provider needs an account |
 
-Steps 1–3 are worth doing regardless of every other decision, and none of them requires touching the
-existing ciphertext.
+### What steps 4–6 actually do
+
+**Envelope encryption.** A random 32-byte data key per record encrypts the secret; the master key
+only wraps that data key. One compromised DEK exposes one record. Rotation re-wraps small DEKs
+instead of re-encrypting every secret, and `key_version` lets the old and new master keys coexist —
+set `ENCRYPTION_KEY` to the new key and keep the old one as `ENCRYPTION_KEY_V1`. **A database backup
+now holds only wrapped DEKs and ciphertext**, inert without the master key that lives outside it.
+That is the main thing this buys.
+
+**AAD binds each ciphertext to its own row** (`asset_assignments:<id>:password:<company>`). Copying
+a ciphertext into another record fails authentication instead of decrypting.
+
+**Migration is lazy, on access.** A record written under the old single-key scheme still opens: it is
+decrypted with the direct key and immediately re-stored under a per-record key. There is deliberately
+no bulk pass, because that would mean decrypting every secret in the table at once — the exposure
+this design exists to remove. A record wrapped by a superseded key is re-wrapped on next read, so
+rotation completes as records are touched rather than never.
+
+**Step-up authentication.** A valid session is not enough to read a credential: the caller re-enters
+their own password, and a failed attempt is itself audited. This is what breaks the stolen-session
+path, which is the likeliest route to a stored secret.
+
+**Out-of-band notification.** Every reveal notifies the *other* administrators. Someone holding the
+compromised session cannot suppress a message that has already left the account they control.
+
+### Step 6: what is and is not done
+
+`services/keyProvider.js` is the seam. `wrapDek`/`unwrapDek` are the only two operations that touch
+the master key, so pointing them at AWS KMS, GCP KMS or Azure Key Vault replaces the key custody
+model **without re-encrypting anything** — the DEKs are simply re-wrapped.
+
+The `kms` provider deliberately throws rather than falling back to `local`, so a deployment that
+believes it is using a KMS finds out at boot instead of after writing records under a
+process-resident key.
+
+**What remains is not code**: a cloud account, an IAM role and credentials for this deployment. That
+is a decision and an expense for the operator, not something that can be committed here — and it is
+the reason this step is marked partial rather than done.
 
 ---
 

@@ -3,7 +3,10 @@ import pool from '../config/db.js';
 import { auth } from '../middleware/auth.js';
 import { authorize } from '../middleware/rbac.js';
 import { addAudit } from '../services/auditService.js';
-import { encrypt, decrypt } from '../services/cryptoService.js';
+import { decrypt } from '../services/cryptoService.js';
+import { encryptSecret, decryptSecret, aadFor, isLegacyRecord, needsRewrap } from '../services/envelopeCrypto.js';
+import { notifyRole } from '../services/notificationService.js';
+import bcrypt from 'bcryptjs';
 import { tenantScope, companyClause, resolveWriteCompanyId } from '../middleware/tenant.js';
 import { OWNER_SCOPES } from '../config/ownerScopes.js';
 import { rateLimit } from '../middleware/rateLimit.js';
@@ -25,11 +28,21 @@ const router = Router();
 router.use(auth, tenantScope);
 
 // The stored credential must never reach the browser: revealing one goes through
-// GET /:id/reveal-password, which is role-gated and audited. The list endpoints
-// expose only whether a password exists.
-const stripSecrets = (rows) => rows.map(({ encrypted_password, password_iv, password_tag, ...r }) => ({
-  ...r, has_password: !!encrypted_password,
-}));
+// POST /:id/reveal-password, which is role-gated, step-up authenticated and
+// audited. The list endpoints expose only whether a password exists.
+//
+// The wrapped data key and its AAD are stripped too. Neither is usable without
+// the master key, but shipping crypto material to every browser that lists
+// assets is exactly the needless exposure this design exists to remove.
+const SECRET_COLUMNS = [
+  'encrypted_password', 'password_iv', 'password_tag',
+  'dek_wrapped', 'dek_wrap_iv', 'dek_wrap_tag', 'key_version', 'aad_context',
+];
+const stripSecrets = (rows) => rows.map((row) => {
+  const out = { ...row, has_password: !!row.encrypted_password };
+  for (const c of SECRET_COLUMNS) delete out[c];
+  return out;
+});
 
 const SECRET_TIERS = ['Reference', 'Delegated', 'Stored'];
 
@@ -59,12 +72,10 @@ function applySecretPolicy(data) {
     if (!String(data.secret_justification || '').trim()) {
       return 'secret_justification is required when storing a password';
     }
-    const { encrypted, iv, tag } = encrypt(data.account_password);
-    data.encrypted_password = encrypted;
-    data.password_iv = iv;
-    data.password_tag = tag;
+    // Deliberately NOT encrypted here. The ciphertext is bound to its row via
+    // AAD, and on create the row id does not exist yet — so the caller hands the
+    // plaintext to storeSecret() once the id is known.
   }
-  delete data.account_password;
 
   // Moving off the Stored tier must actually drop the ciphertext, or the promise
   // that nothing is stored would be untrue.
@@ -72,9 +83,62 @@ function applySecretPolicy(data) {
     data.encrypted_password = null;
     data.password_iv = null;
     data.password_tag = null;
+    data.dek_wrapped = null;
+    data.dek_wrap_iv = null;
+    data.dek_wrap_tag = null;
+    data.key_version = null;
+    data.aad_context = null;
     data.secret_justification = null;
   }
   return null;
+}
+
+/**
+ * Encrypts a credential onto a row that already exists, so the AAD can bind the
+ * ciphertext to that row's identity. Moving the ciphertext to another record
+ * then fails authentication rather than decrypting.
+ */
+async function storeSecret(assignmentId, companyId, plaintext) {
+  const enc = encryptSecret(plaintext, aadFor({ table: 'asset_assignments', id: assignmentId, field: 'password', companyId }));
+  await pool.query(
+    `UPDATE asset_assignments SET encrypted_password = ?, password_iv = ?, password_tag = ?,
+            dek_wrapped = ?, dek_wrap_iv = ?, dek_wrap_tag = ?, key_version = ?, aad_context = ?
+      WHERE id = ?`,
+    [enc.ciphertext, enc.iv, enc.tag, enc.dek_wrapped, enc.dek_wrap_iv, enc.dek_wrap_tag, enc.key_version, enc.aad_context, assignmentId]);
+}
+
+/**
+ * Reads a stored credential, migrating it to envelope encryption on the way out.
+ *
+ * A row written under the old single-key scheme still opens — it is decrypted
+ * with the direct key and immediately re-stored under a per-record data key.
+ * Migration happens one record at a time, on access, because a bulk pass would
+ * mean decrypting every secret in the table at once, which is the exposure this
+ * design exists to remove.
+ */
+async function readSecret(row, companyId) {
+  const aad = aadFor({ table: 'asset_assignments', id: row.id, field: 'password', companyId });
+
+  if (isLegacyRecord(row)) {
+    const plain = decrypt(row.encrypted_password, row.password_iv, row.password_tag);
+    if (plain == null) return { value: null, migrated: false };
+    await storeSecret(row.id, companyId, plain);
+    return { value: plain, migrated: true };
+  }
+
+  const value = decryptSecret({
+    ciphertext: row.encrypted_password, iv: row.password_iv, tag: row.password_tag,
+    dek_wrapped: row.dek_wrapped, dek_wrap_iv: row.dek_wrap_iv, dek_wrap_tag: row.dek_wrap_tag,
+    key_version: row.key_version, aad_context: row.aad_context,
+  }, row.aad_context || aad);
+
+  // A record wrapped by a superseded master key is re-wrapped under the current
+  // one, so rotation completes as records are touched instead of never.
+  if (value != null && needsRewrap(row)) {
+    await storeSecret(row.id, companyId, value);
+    return { value, migrated: true };
+  }
+  return { value, migrated: false };
 }
 
 
@@ -203,7 +267,12 @@ router.post('/', authorize('admin', 'hr_manager'), async (req, res) => {
     if (policyError) return res.status(422).json({ error: policyError });
     if (data.secret_tier === 'Stored') data.secret_approved_by = req.user.id;
 
+    // Held aside: the row must exist before the ciphertext can be bound to its id.
+    const plaintextSecret = data.account_password;
+    delete data.account_password;
+
     const [result] = await pool.query('INSERT INTO asset_assignments SET ?', data);
+    if (plaintextSecret) await storeSecret(result.insertId, data.company_id, plaintextSecret);
     
     // Decrement inventory if platform_id provided
     if (data.platform_id) {
@@ -242,7 +311,14 @@ router.put('/:id', authorize('admin', 'hr_manager'), async (req, res) => {
     if (policyError) return res.status(422).json({ error: policyError });
     if (data.secret_tier === 'Stored') data.secret_approved_by = req.user.id;
 
-    await pool.query('UPDATE asset_assignments SET ? WHERE id = ?', [data, req.params.id]);
+    const plaintextSecret = data.account_password;
+    delete data.account_password;
+
+    if (Object.keys(data).length) await pool.query('UPDATE asset_assignments SET ? WHERE id = ?', [data, req.params.id]);
+    if (plaintextSecret) {
+      const [[owner]] = await pool.query('SELECT company_id FROM asset_assignments WHERE id = ?', [req.params.id]);
+      await storeSecret(Number(req.params.id), owner?.company_id, plaintextSecret);
+    }
     await addAudit(pool, req.user, 'Assets', 'Updated', `Asset #${req.params.id} updated`);
     res.json({ success: true });
   } catch (err) { console.error('PUT /assets/:id error:', err); res.status(500).json({ error: 'Internal server error' }); }
@@ -356,9 +432,27 @@ router.post('/:id/reveal-password', authorize('admin'), revealLimiter, async (re
       return res.status(422).json({ error: 'A reason of at least 10 characters is required and will be recorded in the audit log' });
     }
 
+    // Step-up authentication (docs/secrets_protection_design.md §4). A valid
+    // session is not enough for this action: a stolen session is the likeliest
+    // way an attacker reaches a credential, and re-entering the password is what
+    // breaks that path.
+    const confirmPassword = String(req.body?.password || '');
+    if (!confirmPassword) {
+      return res.status(422).json({ error: 'Confirm your own password to reveal a stored credential', step_up_required: true });
+    }
+    const [[actor]] = await pool.query('SELECT password_hash FROM users WHERE id = ? AND is_active = TRUE', [req.user.id]);
+    if (!actor || !(await bcrypt.compare(confirmPassword, actor.password_hash))) {
+      await addAudit(pool, req.user, 'Assets', 'Reveal Denied',
+        `Failed step-up authentication on a reveal attempt for asset #${req.params.id}`).catch(() => {});
+      return res.status(401).json({ error: 'That password is not correct' });
+    }
+
     const co = companyClause(req, 'company_id');
     const [[asset]] = await pool.query(
-      'SELECT encrypted_password, password_iv, password_tag, name, account_username, secret_tier, vault_secret_reference FROM asset_assignments WHERE id = ?' + co.clause,
+      `SELECT id, company_id, encrypted_password, password_iv, password_tag,
+              dek_wrapped, dek_wrap_iv, dek_wrap_tag, key_version, aad_context,
+              name, account_username, secret_tier, vault_secret_reference
+         FROM asset_assignments WHERE id = ?` + co.clause,
       [req.params.id, ...co.params]
     );
     if (!asset) return res.status(404).json({ error: 'Asset not found' });
@@ -379,12 +473,23 @@ router.post('/:id/reveal-password', authorize('admin'), revealLimiter, async (re
       return res.status(503).json({ error: 'Cannot record this access right now, so the password was not revealed. Try again shortly.' });
     }
 
-    const password = decrypt(asset.encrypted_password, asset.password_iv, asset.password_tag);
+    const { value: password, migrated } = await readSecret(asset, asset.company_id);
     if (password == null) return res.status(500).json({ error: 'Stored credential could not be decrypted' });
+
+    // Out-of-band alert to the OTHER administrators. An attacker holding this
+    // session cannot suppress a notification that has already left the account
+    // they control, which is the point of telling somebody else.
+    notifyRole(pool, asset.company_id, ['admin'], {
+      type: 'warning',
+      title: `Credential revealed: ${asset.name}`,
+      body: `${req.user.name} revealed the stored password for "${asset.name}"`
+        + `${asset.account_username ? ` (${asset.account_username})` : ''} — reason: ${reason}`,
+      link: '/assets',
+    }, req.user.id).catch((e) => console.error('Reveal notification failed:', e.message));
 
     res.setHeader('Cache-Control', 'no-store, max-age=0');
     res.setHeader('Pragma', 'no-cache');
-    res.json({ password, username: asset.account_username });
+    res.json({ password, username: asset.account_username, ...(migrated ? { rewrapped: true } : {}) });
   } catch (err) {
     console.error('Reveal password error:', err);
     res.status(500).json({ error: 'Failed to reveal password' });

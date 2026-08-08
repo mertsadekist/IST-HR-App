@@ -32,6 +32,7 @@ node apply_digital_access.mjs
 node apply_social_governance.mjs
 node apply_domain_assets.mjs
 node apply_candidate_created_by.mjs
+node apply_envelope_encryption.mjs
 node seed_asset_catalog.mjs
 node seed_social_accounts.mjs
 echo "✅ All migrations applied."
