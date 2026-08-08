@@ -19,3 +19,7 @@ IST_HR_System*.html
 # client/public/kb (which IS tracked & shipped); this raw folder stays local.
 /Knowledge Base Images/
 _t.mjs
+
+# Source business documents dropped in for reference (offer letters, exports).
+# Kept out of the repo deliberately — they are inputs to work, not part of it.
+docs/New Documents/
