@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
+import { Link } from 'react-router-dom';
 import * as dashboardApi from '@api/dashboardApi';
+import * as documentsApi from '@api/documentsApi';
 import Card from '@components/ui/Card';
 import Badge from '@components/ui/Badge';
 import { PageTransition, AnimatedCard, StaggerContainer, StaggerItem } from '@components/ui/Motion';
 import { useTranslation } from 'react-i18next';
-import { LayoutDashboard, Users, FileText, UserCheck, TrendingUp, Sparkles, Clock, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, UserCheck, TrendingUp, Sparkles, Clock, BarChart3, AlertTriangle, CalendarClock, ArrowRight } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -21,9 +23,13 @@ export default function Dashboard() {
   const [pipeline, setPipeline] = useState([]);
   const [activity, setActivity] = useState([]);
   const [hiresData, setHiresData] = useState([]);
+  const [docExpiry, setDocExpiry] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const currentCompany = companies.find(c => c.id === currentCompanyId);
+  // Same audience the expiry notifications go to. A lapsed trade licence is an
+  // operational alarm for whoever renews it, not something to nag every employee.
+  const seesDocAlerts = ['admin', 'hr_manager'].includes(user?.role);
 
   useEffect(() => {
     loadDashboard();
@@ -46,6 +52,13 @@ export default function Dashboard() {
         ...r,
         label: dayjs(r.month + '-01').format('MMM'),
       })));
+      // Kept out of the Promise.all above: an expiry-summary failure must not
+      // blank the whole dashboard.
+      if (seesDocAlerts) {
+        documentsApi.getExpirySummary(params)
+          .then(({ data }) => setDocExpiry(data))
+          .catch(() => setDocExpiry(null));
+      }
     } catch (err) {
       console.error('Dashboard load error:', err);
     } finally {
@@ -61,6 +74,18 @@ export default function Dashboard() {
   ];
 
   const totalInPipeline = pipeline.reduce((sum, s) => sum + s.candidate_count, 0);
+
+  // Already lapsed outranks "due soon" — one banner, showing whichever is worse.
+  const docAlert = (() => {
+    if (!docExpiry) return null;
+    const expired = Number(docExpiry.counts?.expired || 0);
+    const soon = Number(docExpiry.counts?.within_30 || 0);
+    if (!expired && !soon) return null;
+    const soonest = docExpiry.soonest || [];
+    return expired
+      ? { expired: true, count: expired, items: soonest.filter(d => d.days_to_expiry < 0).slice(0, 3) }
+      : { expired: false, count: soon, items: soonest.filter(d => d.days_to_expiry >= 0 && d.days_to_expiry <= 30).slice(0, 3) };
+  })();
 
   return (
     <PageTransition className="space-y-6">
@@ -79,6 +104,50 @@ export default function Dashboard() {
           <Badge variant="success" dot>{t('common.system_online')}</Badge>
         </div>
       </div>
+
+      {/* Expired / expiring company documents. Red when something has already
+          lapsed, amber when a renewal is due within 30 days, hidden otherwise —
+          a banner that is always on screen stops being read. */}
+      {docAlert && (
+        <Link to={`/company-docs?${docAlert.expired ? 'expired=1' : 'expiring=1'}`}
+          className={`block rounded-2xl border p-4 transition-shadow hover:shadow-md ${
+            docAlert.expired ? 'border-red-200 bg-red-50' : 'border-amber-200 bg-amber-50'}`}>
+          <div className="flex items-start gap-3">
+            <div className={`p-2 rounded-xl shrink-0 ${docAlert.expired ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'}`}>
+              {docAlert.expired ? <AlertTriangle size={20} /> : <CalendarClock size={20} />}
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className={`text-sm font-semibold ${docAlert.expired ? 'text-red-800' : 'text-amber-800'}`}>
+                {docAlert.expired
+                  ? t('dashboard.docs_expired_title', { count: docAlert.count })
+                  : t('dashboard.docs_expiring_title', { count: docAlert.count })}
+              </h3>
+              <p className={`text-xs mt-0.5 ${docAlert.expired ? 'text-red-700' : 'text-amber-700'}`}>
+                {docAlert.expired ? t('dashboard.docs_expired_desc') : t('dashboard.docs_expiring_desc')}
+              </p>
+              {docAlert.items.length > 0 && (
+                <ul className="mt-2 space-y-1">
+                  {docAlert.items.map(d => (
+                    <li key={d.id} className="flex items-center gap-2 text-xs">
+                      <span className="font-medium text-surface-800 truncate">{d.label}</span>
+                      <span className="text-surface-400 whitespace-nowrap">{d.expiry_date}</span>
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium whitespace-nowrap ${
+                        d.days_to_expiry < 0 ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {d.days_to_expiry < 0
+                          ? t('docs.exp_expired_ago', { days: Math.abs(d.days_to_expiry) })
+                          : d.days_to_expiry === 0 ? t('docs.exp_today') : t('docs.exp_days_left', { days: d.days_to_expiry })}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <span className={`text-xs font-medium flex items-center gap-1 shrink-0 ${docAlert.expired ? 'text-red-700' : 'text-amber-700'}`}>
+              {t('dashboard.docs_review')} <ArrowRight size={12} className="rtl:rotate-180" />
+            </span>
+          </div>
+        </Link>
+      )}
 
       {/* Stat cards */}
       <StaggerContainer className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

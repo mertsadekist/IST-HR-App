@@ -117,7 +117,12 @@
     "view_all": "View All",
     "no_activity": "No activity recorded",
     "hires_trend": "Hires Trend (6 Months)",
-    "hires": "Hires"
+    "hires": "Hires",
+    "docs_expired_title": "{{count}} company document(s) have expired",
+    "docs_expired_desc": "These documents are no longer valid. Renew them and upload the replacement.",
+    "docs_expiring_title": "{{count}} company document(s) expire within 30 days",
+    "docs_expiring_desc": "Start the renewal before they lapse.",
+    "docs_review": "Review"
   },
   "legal": {
     "title": "Legal Letters",

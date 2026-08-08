@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
+import { useSearchParams } from 'react-router-dom';
 import * as documentsApi from '@api/documentsApi';
 import Card from '@components/ui/Card';
 import Button from '@components/ui/Button';
@@ -158,7 +159,11 @@ export default function CompanyDocs() {
   });
   // The headline the page is actually read for: what has lapsed and what is next.
   const [summary, setSummary] = useState(null);
-  const [expiryFilter, setExpiryFilter] = useState('');
+  // ?expired=1 / ?expiring=1 lets the dashboard banner land on the exact set it
+  // is warning about, instead of dropping the reader on the full list.
+  const [searchParams] = useSearchParams();
+  const [expiryFilter, setExpiryFilter] = useState(
+    searchParams.get('expired') === '1' ? 'expired' : searchParams.get('expiring') === '1' ? 'expiring' : '');
   // Editing metadata without re-uploading: a renewed licence keeps its name.
   const [editDoc, setEditDoc] = useState(null);
   const [editForm, setEditForm] = useState({ expiry_mode: 'Not Set', expiry_date: '', issue_date: '', reminder_days: '', category: '' });
