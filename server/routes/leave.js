@@ -42,9 +42,13 @@ const acceptLeaveFile = (req, res, next) => leaveUpload.single('file')(req, res,
 
 const isHR = (req) => ['admin', 'hr_manager'].includes(req.user.role);
 
-// Loads a leave request within the caller's company scope.
+// Loads a leave request. HR is held to the company they are working in; a
+// self-service caller is not, because every caller of this then checks
+// `employee_id` against their own — that ownership test is the real gate, and a
+// company filter in front of it only refuses someone their own request when
+// their user account sits in a different entity to their employee record.
 async function getScopedRequest(req, id) {
-  const co = companyClause(req, 'company_id');
+  const co = isHR(req) ? companyClause(req, 'company_id') : ownRecordsClause();
   const [[lr]] = await pool.query('SELECT * FROM leave_requests WHERE id = ?' + co.clause, [id, ...co.params]);
   return lr || null;
 }
@@ -68,7 +72,19 @@ router.get('/types', async (req, res) => {
   try {
     let sql = "SELECT * FROM leave_types WHERE status = 'Active'";
     const params = [];
-    if (req.companyId != null) { sql += ' AND (company_id = ? OR company_id IS NULL)'; params.push(req.companyId); }
+    // Self-service picks the types of the company the employee record belongs
+    // to — the request is filed under that company, so offering the other
+    // entity's types would let someone request a type their own company has
+    // never defined.
+    let scopeCompany = req.companyId;
+    if (!isHR(req)) {
+      const empId = await myEmployeeId(req.user.id);
+      if (empId) {
+        const [[emp]] = await pool.query('SELECT company_id FROM employees WHERE id = ?', [empId]);
+        if (emp) scopeCompany = emp.company_id;
+      }
+    }
+    if (scopeCompany != null) { sql += ' AND (company_id = ? OR company_id IS NULL)'; params.push(scopeCompany); }
     sql += ' ORDER BY company_id IS NULL DESC, name';
     const [rows] = await pool.query(sql, params);
     res.json(rows);
@@ -261,8 +277,11 @@ router.post('/requests', validate({
       if (!employeeId) return res.status(400).json({ error: 'No employee profile linked to your account' });
     }
 
-    // Employee must belong to caller's company
-    const eco = companyClause(req, 'company_id');
+    // HR may only file for an employee in the company they are working in. A
+    // self-service request needs no such check — employeeId came from the
+    // caller's own account — and applying one would refuse the request outright
+    // for anyone whose user sits in a different entity to their record.
+    const eco = isHR(req) ? companyClause(req, 'company_id') : ownRecordsClause();
     const [[emp]] = await pool.query('SELECT company_id FROM employees WHERE id = ?' + eco.clause, [employeeId, ...eco.params]);
     if (!emp) return res.status(404).json({ error: 'Employee not found' });
 
@@ -431,7 +450,9 @@ router.put('/requests/:id/reject', authorize('admin', 'hr_manager'), async (req,
 router.put('/requests/:id/cancel', async (req, res) => {
   const conn = await pool.getConnection();
   try {
-    const co = companyClause(req, 'company_id');
+    // Same reasoning as getScopedRequest: the ownership check below is the gate,
+    // so a self-service caller is not held to their user account's company.
+    const co = isHR(req) ? companyClause(req, 'company_id') : ownRecordsClause();
     const [[lr]] = await conn.query('SELECT * FROM leave_requests WHERE id = ?' + co.clause, [req.params.id, ...co.params]);
     if (!lr) { conn.release(); return res.status(404).json({ error: 'Request not found' }); }
 

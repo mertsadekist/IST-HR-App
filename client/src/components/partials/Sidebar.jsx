@@ -116,6 +116,9 @@ const buildMenuGroups = (t) => [
       roles: ['employee', 'admin', 'hr_manager', 'accountant'],
       items: [
         { path: '/portal/my-assets', icon: Shield, label: t('nav.my_assets', 'My Assets & Accounts') },
+        { path: '/portal/attendance', icon: Clock, label: t('nav.my_attendance') },
+        { path: '/portal/salary', icon: Banknote, label: t('nav.my_salary') },
+        { path: '/portal/leave', icon: CalendarDays, label: t('nav.my_leave') },
       ],
     },
     {

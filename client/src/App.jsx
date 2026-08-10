@@ -69,6 +69,9 @@ const DomainsPage = lazy(() => import('@pages/lifecycle/Domains'));
 
 // Portal
 const MyAssets = lazy(() => import('@pages/portal/MyAssets'));
+const MyAttendance = lazy(() => import('@pages/portal/MyAttendance'));
+const MySalary = lazy(() => import('@pages/portal/MySalary'));
+const MyLeave = lazy(() => import('@pages/portal/MyLeave'));
 
 // Legal
 const LegalLetters = lazy(() => import('@pages/legal/LegalLetters'));
@@ -130,6 +133,9 @@ export default function App() {
 
                 {/* Portal */}
                 <Route path="/portal/my-assets" element={<MyAssets />} />
+                <Route path="/portal/attendance" element={<MyAttendance />} />
+                <Route path="/portal/salary" element={<MySalary />} />
+                <Route path="/portal/leave" element={<MyLeave />} />
 
                 {/* Legal */}
                 <Route path="/legal-letters" element={<LegalLetters />} />

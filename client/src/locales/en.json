@@ -46,7 +46,10 @@
     "system_config": "System Config",
     "templates": "Templates",
     "users": "Users",
-    "vacancies": "Vacancies"
+    "vacancies": "Vacancies",
+    "my_attendance": "My Attendance",
+    "my_salary": "My Salary",
+    "my_leave": "My Leave"
   },
   "topbar": {
     "search_placeholder": "Search across HR system...",
@@ -1336,7 +1339,27 @@
     "at_remote": "Remote",
     "download_pdf": "Download PDF",
     "pdf_downloaded": "Attendance report downloaded",
-    "pdf_failed": "Could not generate the report"
+    "pdf_failed": "Could not generate the report",
+    "attendance_subtitle": "Your daily record, month by month",
+    "salary_subtitle": "Every payment you have received",
+    "leave_subtitle": "Your balance, your history, and a new request",
+    "last_payment": "Last payment",
+    "days_taken": "Days taken",
+    "pending_requests": "Awaiting HR",
+    "request_leave": "Request leave",
+    "req_intro": "Your request goes to HR as pending. They will approve or reject it, and you will be notified.",
+    "req_submit": "Send to HR",
+    "req_days": "This request covers {{days}} day(s).",
+    "req_balance": "{{remaining}} day(s) remaining on this type.",
+    "req_over_balance": "That is more than your remaining balance — HR may reject it or treat the excess as unpaid.",
+    "req_missing": "Choose a leave type and both dates",
+    "req_bad_range": "The end date must be on or after the start date",
+    "req_sent": "Request sent to HR",
+    "req_failed": "Could not send the request",
+    "req_cancelled": "Request withdrawn",
+    "withdraw": "Withdraw this request",
+    "reason": "Reason",
+    "reason_ph": "Optional — anything HR should know..."
   },
   "send_doc": {
     "attach_note": "The document will be attached as a PDF file.",
