@@ -3,7 +3,7 @@ import pool from '../config/db.js';
 import { auth } from '../middleware/auth.js';
 import { authorize } from '../middleware/rbac.js';
 import { addAudit } from '../services/auditService.js';
-import { tenantScope, companyClause } from '../middleware/tenant.js';
+import { tenantScope, companyClause, ownRecordsClause } from '../middleware/tenant.js';
 import { validate } from '../middleware/validate.js';
 import { computePayrollItem } from '../services/payrollService.js';
 import { buildWpsWorkbook, wpsReadiness } from '../services/wpsService.js';
@@ -361,7 +361,9 @@ router.get('/payslips/my', async (req, res) => {
   try {
     const empId = await myEmployeeId(req.user.id);
     if (!empId) return res.json([]);
-    const co = companyClause(req, 'pi.company_id');
+    // No company filter: this is always the caller's own payslips, and a run
+    // processed under another entity is still their pay. See ownRecordsClause().
+    const co = ownRecordsClause();
     let sql = `SELECT pi.*, pr.period, pr.status as run_status
                FROM payroll_items pi JOIN payroll_runs pr ON pi.run_id = pr.id
                WHERE pi.employee_id = ? AND pr.status IN ('Approved','Paid')` + co.clause;

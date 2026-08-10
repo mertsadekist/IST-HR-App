@@ -68,6 +68,27 @@ export const companyClause = (req, column = 'company_id') => {
 };
 
 /**
+ * The empty clause, for a read that is already narrowed to one employee's own
+ * records.
+ *
+ * Self-service reads filter on `employee_id`, which is both necessary and
+ * sufficient: the row belongs to that person. Adding the company filter on top
+ * does not tighten anything — it can only *hide* the employee's own data when
+ * the row's company_id differs from the company on their user account, which
+ * happens whenever a record is filed under a different entity (an attendance
+ * import run with another company selected, a transfer between companies, a
+ * user account left pointing at the old one).
+ *
+ * That is exactly the bug this replaced: an employee whose user sat in company
+ * 2 could see their June and July attendance but not August, because the August
+ * rows had been recorded under company 1.
+ *
+ * Use ONLY where an `employee_id = <the caller's own>` predicate is guaranteed
+ * to be applied alongside it.
+ */
+export const ownRecordsClause = () => ({ clause: '', params: [] });
+
+/**
  * Resolves the company_id to persist when creating a row.
  * Internal staff write under the company they targeted (the selected entity, or
  * an explicit body value). Self-service users always write under their own company.

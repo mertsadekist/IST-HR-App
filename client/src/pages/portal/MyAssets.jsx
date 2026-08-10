@@ -6,6 +6,8 @@ import * as attendanceApi from '@api/attendanceApi';
 import { useSelector } from 'react-redux';
 import Button from '@components/ui/Button';
 import AttendanceReport from './components/AttendanceReport';
+import SalaryReport from './components/SalaryReport';
+import LeaveReport from './components/LeaveReport';
 import { printElementWithLetterhead, waitForPaint } from '@utils/printDoc';
 import Card from '@components/ui/Card';
 import Badge from '@components/ui/Badge';
@@ -77,7 +79,9 @@ export default function MyAssets() {
   const [revealingId, setRevealingId] = useState(null);
   const timersRef = useRef({});
   const reportRef = useRef(null);
-  const [exporting, setExporting] = useState(false);
+  const salaryRef = useRef(null);
+  const leaveRef = useRef(null);
+  const [exporting, setExporting] = useState(null); // which report is being generated
   const { user } = useSelector((st) => st.auth);
   const { items: companies } = useSelector((st) => st.companies);
   // An employee is pinned to one company, so the list holds exactly theirs.
@@ -168,20 +172,19 @@ export default function MyAssets() {
 
   // The off-screen report is rendered on every pass, so React has committed it
   // by the time this runs; waitForPaint covers the frame html2canvas needs.
-  const downloadAttendancePdf = async () => {
-    setExporting(true);
+  // One exporter for all three reports: which node is captured is the only
+  // difference, and `exporting` names the section so two buttons cannot spin.
+  const downloadPdf = async (key, ref, suffix) => {
+    setExporting(key);
     try {
       await waitForPaint();
-      await printElementWithLetterhead(
-        reportRef.current,
-        myCompany?.id,
-        `Attendance-${(user?.name || 'employee').replace(/[^\w-]+/g, '_')}-${month}.pdf`,
-      );
+      const who = (user?.name || 'employee').replace(/[^\w-]+/g, '_');
+      await printElementWithLetterhead(ref.current, myCompany?.id, `${suffix}-${who}.pdf`);
       toast.success(t('portal.pdf_downloaded'));
     } catch {
       toast.error(t('portal.pdf_failed'));
     } finally {
-      setExporting(false);
+      setExporting(null);
     }
   };
 
@@ -444,8 +447,9 @@ export default function MyAssets() {
           <div className="p-1.5 bg-sky-100 rounded-lg"><Clock size={16} className="text-sky-600" /></div>
           <h2 className="text-lg font-semibold text-surface-800">{t('portal.attendance_section')}</h2>
           <div className="ms-auto flex items-center gap-1 flex-wrap">
-            <Button size="sm" variant="secondary" onClick={downloadAttendancePdf}
-              loading={exporting} disabled={attLoading || attendance.length === 0}>
+            <Button size="sm" variant="secondary" disabled={attLoading || attendance.length === 0}
+              loading={exporting === 'attendance'}
+              onClick={() => downloadPdf('attendance', reportRef, `Attendance-${month}`)}>
               <Download size={14} /> {t('portal.download_pdf')}
             </Button>
             <button type="button" onClick={() => setMonth(dayjs(`${month}-01`).subtract(1, 'month').format('YYYY-MM'))}
@@ -536,6 +540,11 @@ export default function MyAssets() {
           <div className="p-1.5 bg-emerald-100 rounded-lg"><Banknote size={16} className="text-emerald-600" /></div>
           <h2 className="text-lg font-semibold text-surface-800">{t('portal.salary_section')}</h2>
           <Badge variant="active">{payslips.length}</Badge>
+          <Button size="sm" variant="secondary" className="ms-auto" disabled={payslips.length === 0}
+            loading={exporting === 'salary'}
+            onClick={() => downloadPdf('salary', salaryRef, 'Salary-Statement')}>
+            <Download size={14} /> {t('portal.download_pdf')}
+          </Button>
         </div>
 
         {payslips.length === 0 ? (
@@ -596,6 +605,12 @@ export default function MyAssets() {
           <div className="p-1.5 bg-amber-100 rounded-lg"><CalendarDays size={16} className="text-amber-600" /></div>
           <h2 className="text-lg font-semibold text-surface-800">{t('portal.leave_section')}</h2>
           <Badge variant="warning">{t('portal.days_left', { days: totalRemaining })}</Badge>
+          <Button size="sm" variant="secondary" className="ms-auto"
+            disabled={shownBalances.length === 0 && leaveRequests.length === 0}
+            loading={exporting === 'leave'}
+            onClick={() => downloadPdf('leave', leaveRef, 'Leave-Statement')}>
+            <Download size={14} /> {t('portal.download_pdf')}
+          </Button>
         </div>
 
         {shownBalances.length === 0 && leaveRequests.length === 0 ? (
@@ -703,6 +718,22 @@ export default function MyAssets() {
           month={month}
           rows={attendance}
           summary={attSummary}
+          onLetterhead={!!myCompany?.letterhead_path}
+        />
+        <SalaryReport
+          ref={salaryRef}
+          employeeName={user?.name}
+          company={myCompany}
+          payslips={payslips}
+          onLetterhead={!!myCompany?.letterhead_path}
+        />
+        <LeaveReport
+          ref={leaveRef}
+          employeeName={user?.name}
+          company={myCompany}
+          balances={shownBalances}
+          requests={leaveRequests}
+          year={currentYear}
           onLetterhead={!!myCompany?.letterhead_path}
         />
       </div>

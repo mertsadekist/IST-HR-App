@@ -3,7 +3,7 @@ import pool from '../config/db.js';
 import { auth } from '../middleware/auth.js';
 import { authorize } from '../middleware/rbac.js';
 import { addAudit } from '../services/auditService.js';
-import { tenantScope, companyClause, resolveWriteCompanyId } from '../middleware/tenant.js';
+import { tenantScope, companyClause, resolveWriteCompanyId, ownRecordsClause } from '../middleware/tenant.js';
 import { validate } from '../middleware/validate.js';
 import { upload } from '../middleware/upload.js';
 import * as XLSX from 'xlsx';
@@ -45,7 +45,12 @@ function lateFromCheckIn(dt) {
 // GET /api/attendance?employee_id=&from=&to=&status=  (employees see only their own)
 router.get('/', async (req, res) => {
   try {
-    const co = companyClause(req, 'a.company_id');
+    // Self-service reads narrow on employee_id, which is sufficient — the row
+    // belongs to that person. The company filter is dropped for them because it
+    // can only hide their own records when the row was filed under a different
+    // entity than their user account sits in. See ownRecordsClause().
+    const self = !isHR(req);
+    const co = self ? ownRecordsClause() : companyClause(req, 'a.company_id');
     // Return check_in/out as wall-clock strings (DATE_FORMAT) so the stored local
     // time is shown verbatim — never shifted by the server/browser timezone.
     let sql = `SELECT a.id, a.employee_id, a.company_id, a.work_hours, a.status, a.notes,
@@ -57,7 +62,7 @@ router.get('/', async (req, res) => {
                WHERE 1=1` + co.clause;
     const params = [...co.params];
 
-    if (!isHR(req)) {
+    if (self) {
       const empId = await myEmployeeId(req.user.id);
       if (!empId) return res.json([]);
       sql += ' AND a.employee_id = ?'; params.push(empId);
@@ -152,12 +157,17 @@ router.post('/check-out', async (req, res) => {
 router.get('/summary', async (req, res) => {
   try {
     const month = /^\d{4}-\d{2}$/.test(req.query.month || '') ? req.query.month : todayISO().slice(0, 7);
-    const co = companyClause(req, 'company_id');
+    // Self-service reads narrow on employee_id, which is sufficient — the row
+    // belongs to that person. The company filter is dropped for them because it
+    // can only hide their own records when the row was filed under a different
+    // entity than their user account sits in. See ownRecordsClause().
+    const self = !isHR(req);
+    const co = self ? ownRecordsClause() : companyClause(req, 'company_id');
     let sql = `SELECT status, COUNT(*) as count, SUM(COALESCE(work_hours,0)) as hours
                FROM attendance WHERE DATE_FORMAT(work_date, '%Y-%m') = ?` + co.clause;
     const params = [month, ...co.params];
 
-    if (!isHR(req)) {
+    if (self) {
       const empId = await myEmployeeId(req.user.id);
       if (!empId) return res.json({ month, by_status: [], total_hours: 0 });
       sql += ' AND employee_id = ?'; params.push(empId);

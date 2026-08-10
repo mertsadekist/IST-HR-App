@@ -3,7 +3,7 @@ import pool from '../config/db.js';
 import { auth } from '../middleware/auth.js';
 import { authorize } from '../middleware/rbac.js';
 import { addAudit } from '../services/auditService.js';
-import { tenantScope, companyClause, resolveWriteCompanyId } from '../middleware/tenant.js';
+import { tenantScope, companyClause, resolveWriteCompanyId, ownRecordsClause } from '../middleware/tenant.js';
 import { validate } from '../middleware/validate.js';
 import { notify, notifyRole, userIdForEmployee } from '../services/notificationService.js';
 import multer from 'multer';
@@ -98,7 +98,12 @@ router.post('/types', authorize('admin', 'hr_manager'), validate({
 // ─── Balances ────────────────────────────────────────────────────────────────
 router.get('/balances', async (req, res) => {
   try {
-    const co = companyClause(req, 'lb.company_id');
+    // Self-service reads narrow on employee_id, which is sufficient — the row
+    // belongs to that person. The company filter is dropped for them because it
+    // can only hide their own records when the row was filed under a different
+    // entity than their user account sits in. See ownRecordsClause().
+    const self = !isHR(req);
+    const co = self ? ownRecordsClause() : companyClause(req, 'lb.company_id');
     let sql = `SELECT lb.*, lt.name as leave_type_name, lt.color,
                (lb.entitled - lb.used) as remaining,
                e.first_name, e.last_name
@@ -109,7 +114,7 @@ router.get('/balances', async (req, res) => {
     const params = [...co.params];
 
     // Employees may only see their own balances
-    if (!isHR(req)) {
+    if (self) {
       const empId = await myEmployeeId(req.user.id);
       if (!empId) return res.json([]);
       sql += ' AND lb.employee_id = ?'; params.push(empId);
@@ -151,7 +156,12 @@ router.post('/balances', authorize('admin', 'hr_manager'), validate({
 // ─── Requests ────────────────────────────────────────────────────────────────
 router.get('/requests', async (req, res) => {
   try {
-    const co = companyClause(req, 'lr.company_id');
+    // Self-service reads narrow on employee_id, which is sufficient — the row
+    // belongs to that person. The company filter is dropped for them because it
+    // can only hide their own records when the row was filed under a different
+    // entity than their user account sits in. See ownRecordsClause().
+    const self = !isHR(req);
+    const co = self ? ownRecordsClause() : companyClause(req, 'lr.company_id');
     // The DATE_FORMAT aliases come after lr.* deliberately, so they override
     // the raw columns: a MySQL DATE read as a JS Date at local midnight loses a
     // day when serialised, and a leave request that starts on the 5th must not
@@ -192,7 +202,10 @@ router.get('/report', async (req, res) => {
     if (!employeeId) return res.status(400).json({ error: 'employee_id is required' });
     const year = Number(req.query.year) || new Date().getFullYear();
 
-    const co = companyClause(req, 'company_id');
+    // employeeId was resolved from the caller's own user above when they are not
+    // HR, so the company filter would only serve to 404 them out of their own
+    // report when their user sits in a different entity to their record.
+    const co = isHR(req) ? companyClause(req, 'company_id') : ownRecordsClause();
     const [[emp]] = await pool.query(
       'SELECT id, first_name, last_name, company_id FROM employees WHERE id = ?' + co.clause,
       [employeeId, ...co.params]
