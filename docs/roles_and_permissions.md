@@ -72,6 +72,7 @@ approver whose account happens to carry a self-service role.
 | Departments, ATS stages | ✅ | ✅ | **✅** | departments only | ❌ |
 | Settings, skills | ✅ | ✅ | **❌** | catalogue only | ❌ |
 | Users | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Dashboard, help centre | ✅ | ✅ | ✅ | ✅ | **❌** |
 | Own portal, notifications, company list | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Deletes (anywhere) | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Reveal a stored password | ✅ | ❌ | ❌ | **❌** | own only |
@@ -147,12 +148,29 @@ What deliberately still works, because it was never the gap:
 - **Attendance and leave self-service** — checking in and out, submitting a
   leave request, cancelling it, and seeing their own history. Every read there
   narrows to the caller, which is why those routers are not gated.
-- **Notifications, the company list, and the dashboard**, all loaded on boot.
+- **Notifications and the company list**, loaded by the layout on every boot.
 
 Three tests in `tests/isolation.test.js` asserted the old behaviour — that an
 employee reads the employee directory, filtered to their company. They now
 assert 403, plus a new case proving the portal still serves that same employee
 their own assets and cannot be widened by a `company_id` in the query.
+
+### The employee opens straight into their own portal
+
+The dashboard was the last page an employee could still open, and it is a
+company overview: headcount, hiring trend, everyone's recent activity. None of
+it is theirs to read, so `/api/dashboard/*` is gated on a `DASHBOARD` module the
+role does not have, and the page, the sidebar entry, the help centre, the
+topbar's cross-system search and the entity switcher are all gone with it. Their
+menu is one item — My Assets & Accounts — and that is where login lands them.
+
+The entity switcher is hidden rather than disabled: `tenantScope` pins an
+employee to their own company from the token, so it was offering a choice that
+changed nothing.
+
+Redirects go through `landingPathFor(role)` rather than a fixed `/dashboard`.
+A role that cannot open the dashboard would otherwise be redirected onto a page
+that redirects it straight back.
 
 ### The recruiter, closed the same way
 

@@ -18,12 +18,17 @@ import { cn } from '@utils/cn';
 // worth showing; the API is what actually grants or refuses.
 const HR_ONLY = ['admin', 'hr_manager'];
 const HR_AND_FINANCE = ['admin', 'hr_manager', 'accountant'];
+// Everyone except the employee, whose whole menu is their own portal.
+const WITH_DASHBOARD = ['admin', 'hr_manager', 'recruiter', 'accountant'];
 
 // The single source of the navigation structure, built from `t` so there is no
 // second untranslated copy to drift out of sync.
 const buildMenuGroups = (t) => [
   {
       label: '',
+      // Not for the employee: the dashboard is a company overview — headcount,
+      // hiring trend, everyone's activity — and none of it is theirs to read.
+      roles: WITH_DASHBOARD,
       items: [
         { path: '/dashboard', icon: LayoutDashboard, label: t('nav.dashboard') },
       ],
@@ -115,6 +120,9 @@ const buildMenuGroups = (t) => [
     },
     {
       label: t('nav.help', 'HELP'),
+      // The help centre is a tour of pages an employee has none of, so for them
+      // it is one more thing to ignore. My Portal is the entire menu.
+      roles: WITH_DASHBOARD,
       items: [
         { path: '/help', icon: HelpCircle, label: t('nav.help_center', 'Help Center') },
       ],
@@ -130,6 +138,7 @@ export default function Sidebar({ isOpen, onClose }) {
   const { user } = useSelector((state) => state.auth);
   const { items: companies } = useSelector((state) => state.companies);
   const { currentCompanyId } = useSelector((state) => state.entity);
+  const canSwitchEntity = user?.role !== 'employee';
 
   // Which collapsible groups the user has closed. Persisted, because a sidebar
   // that reopens every group on reload is not actually collapsible.
@@ -201,8 +210,11 @@ export default function Sidebar({ isOpen, onClose }) {
           </div>
         </div>
 
-        {/* Entity selector (a company must always be selected — no ALL) */}
-        {companies.length > 0 && (
+        {/* Entity selector (a company must always be selected — no ALL).
+            Hidden for the employee: tenantScope pins them to their own company
+            from the token, so a switcher would offer a choice that changes
+            nothing. */}
+        {companies.length > 0 && canSwitchEntity && (
           <div className="px-4 py-3 border-b border-surface-100">
             <label htmlFor="entity-select" className="block text-[10px] font-semibold text-surface-400 uppercase tracking-wider mb-1.5">Entity</label>
             <div className="relative">

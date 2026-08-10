@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { articleIdForRoute } from '@/data/kb';
 import dayjs from 'dayjs';
 import * as notificationsApi from '@api/notificationsApi';
+import { cn } from '@utils/cn';
 
 function NotificationBell() {
   const navigate = useNavigate();
@@ -97,6 +98,9 @@ export default function Topbar({ onMenuClick }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useSelector((state) => state.auth);
+  // The employee's whole app is one page: no cross-system search to run and
+  // no help centre to tour.
+  const showChrome = user?.role !== 'employee';
   const { t, i18n } = useTranslation();
 
   const openHelp = () => {
@@ -125,7 +129,8 @@ export default function Topbar({ onMenuClick }) {
         >
           <Menu size={20} />
         </button>
-        <div className="hidden md:flex items-center gap-2 bg-surface-50 rounded-xl px-3 py-2 w-64 border border-surface-100">
+        {/* The employee has one page; there is nothing to search across. */}
+        <div className={cn('hidden items-center gap-2 bg-surface-50 rounded-xl px-3 py-2 w-64 border border-surface-100', showChrome && 'md:flex')}>
           <Search size={16} className="text-surface-400" />
           <input
             type="text"
@@ -142,9 +147,11 @@ export default function Topbar({ onMenuClick }) {
           <span className="hidden sm:inline">{t('topbar.language')}</span>
         </button>
 
-        <button onClick={openHelp} title={t('nav.help_center', 'Help Center')} className="p-2 text-surface-400 hover:text-brand-600 hover:bg-brand-50 rounded-xl transition-colors">
-          <HelpCircle size={20} />
-        </button>
+        {showChrome && (
+          <button onClick={openHelp} title={t('nav.help_center', 'Help Center')} className="p-2 text-surface-400 hover:text-brand-600 hover:bg-brand-50 rounded-xl transition-colors">
+            <HelpCircle size={20} />
+          </button>
+        )}
 
         <NotificationBell />
 

@@ -2,10 +2,13 @@ import { Router } from 'express';
 import pool from '../config/db.js';
 import { auth } from '../middleware/auth.js';
 import { tenantScope, companyClause } from '../middleware/tenant.js';
-import { canAccessModule, MODULES } from '../config/permissions.js';
+import { canAccessModule, requireModule, MODULES } from '../config/permissions.js';
 
 const router = Router();
-router.use(auth, tenantScope);
+// Headcount, hiring trend and everyone's recent activity: a company overview,
+// not a personal one. The employee role opens straight into its own portal
+// instead, so nothing here is theirs to read.
+router.use(auth, tenantScope, requireModule(MODULES.DASHBOARD));
 
 // The dashboard is the one place recruitment figures reach a role that is
 // otherwise blocked from the module. Blanking them here keeps the denial whole

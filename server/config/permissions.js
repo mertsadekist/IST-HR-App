@@ -26,6 +26,7 @@ export const MODULES = Object.freeze({
   COMPLIANCE: 'compliance',   // company documents, legal letters
   ANALYTICS: 'analytics',     // reports, KPI, audit log, email log
   OPERATIONS: 'operations',   // users, settings, companies
+  DASHBOARD: 'dashboard',     // the company overview and the help centre
   PORTAL: 'portal',           // the signed-in user's own assets and payslips
 });
 
@@ -43,7 +44,7 @@ export const ROLE_MODULES = Object.freeze({
   // configuration — so `departments` and `settings` accept RECRUITMENT as well.
   // Leave and attendance stay reachable because those routers are self-service:
   // a recruiter is a member of staff too and books their own leave.
-  recruiter: [MODULES.RECRUITMENT, MODULES.PORTAL],
+  recruiter: [MODULES.RECRUITMENT, MODULES.DASHBOARD, MODULES.PORTAL],
 
   // Self-service only. An employee's own assets, accounts and payslips come
   // from routes/portal.js and the `/payslips/my` endpoint, both of which
@@ -57,7 +58,7 @@ export const ROLE_MODULES = Object.freeze({
   // domains and paperwork. Recruitment and analytics are absent on purpose:
   // candidate records and the reporting suite are not part of that job, and
   // the reports module reaches into the hiring pipeline.
-  accountant: [MODULES.PAYROLL, MODULES.ASSETS, MODULES.COMPLIANCE, MODULES.HR, MODULES.PORTAL],
+  accountant: [MODULES.PAYROLL, MODULES.ASSETS, MODULES.COMPLIANCE, MODULES.HR, MODULES.DASHBOARD, MODULES.PORTAL],
 });
 
 /** @returns {boolean} */

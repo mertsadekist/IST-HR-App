@@ -16,16 +16,29 @@ export const MODULES = {
   COMPLIANCE: 'compliance',
   ANALYTICS: 'analytics',
   OPERATIONS: 'operations',
+  DASHBOARD: 'dashboard',
   PORTAL: 'portal',
 };
 
 export const ROLE_MODULES = {
   admin: '*',
   hr_manager: '*',
-  recruiter: [MODULES.RECRUITMENT, MODULES.PORTAL],
+  recruiter: [MODULES.RECRUITMENT, MODULES.DASHBOARD, MODULES.PORTAL],
+  // Self-service only, and that is the whole of it: an employee opens straight
+  // into their own assets and accounts. The dashboard is a company overview —
+  // headcount, hiring trend, everyone's activity — which is not theirs to read,
+  // and with one page left there is nothing for a help centre to navigate.
   employee: [MODULES.PORTAL],
-  accountant: [MODULES.PAYROLL, MODULES.ASSETS, MODULES.COMPLIANCE, MODULES.HR, MODULES.PORTAL],
+  accountant: [MODULES.PAYROLL, MODULES.ASSETS, MODULES.COMPLIANCE, MODULES.HR, MODULES.DASHBOARD, MODULES.PORTAL],
 };
+
+/**
+ * Where a role starts, and where it is sent when it lands somewhere it cannot
+ * open. Must never return a path the role is denied, or the redirect loops.
+ */
+export function landingPathFor(role) {
+  return canAccessModule(role, MODULES.DASHBOARD) ? '/dashboard' : '/portal/my-assets';
+}
 
 /**
  * Route prefixes that belong to a restricted module. First match wins, so a
@@ -34,6 +47,8 @@ export const ROLE_MODULES = {
  */
 const ROUTE_MODULES = [
   ['/settings/catalog', MODULES.ASSETS],
+  ['/dashboard', MODULES.DASHBOARD],
+  ['/help', MODULES.DASHBOARD], // the help centre navigates pages an employee has none of
   ['/ats', MODULES.RECRUITMENT],
   ['/candidates', MODULES.RECRUITMENT],
   ['/vacancies', MODULES.RECRUITMENT],

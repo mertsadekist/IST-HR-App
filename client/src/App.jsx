@@ -8,6 +8,7 @@ import { Suspense, lazy } from 'react';
 // Layout
 import MainLayout from '@layout/MainLayout';
 import ProtectedRoute from '@components/shared/ProtectedRoute';
+import RoleHome from '@components/shared/RoleHome';
 
 // Loading fallback
 function PageLoader() {
@@ -99,7 +100,7 @@ export default function App() {
             {/* Protected routes */}
             <Route element={<ProtectedRoute />}>
               <Route element={<MainLayout />}>
-                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                <Route path="/" element={<RoleHome />} />
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/help" element={<KnowledgeBase />} />
 

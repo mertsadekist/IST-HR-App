@@ -20,7 +20,7 @@ export default function Login() {
     dispatch(clearError());
     const result = await dispatch(loginUser({ username, password }));
     if (loginUser.fulfilled.match(result)) {
-      navigate('/dashboard');
+      navigate('/');
     }
   };
 

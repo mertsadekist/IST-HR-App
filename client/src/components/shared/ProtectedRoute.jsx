@@ -2,7 +2,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 import { verifyToken } from '@store/slices/authSlice';
-import { canAccessPath } from '@/config/permissions';
+import { canAccessPath, landingPathFor } from '@/config/permissions';
 import { Loader2 } from 'lucide-react';
 
 export default function ProtectedRoute() {
@@ -34,8 +34,10 @@ export default function ProtectedRoute() {
 
   // A role denied a module should land somewhere useful rather than on a page
   // that renders and then fills with 403s. The API is still the real gate.
+  // The target comes from landingPathFor, not a hardcoded /dashboard: a role
+  // that cannot open the dashboard either would redirect to itself forever.
   if (user?.role && !canAccessPath(user.role, location.pathname)) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={landingPathFor(user.role)} replace />;
   }
 
   return <Outlet />;
