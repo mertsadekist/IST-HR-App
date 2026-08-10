@@ -152,7 +152,13 @@ router.post('/balances', authorize('admin', 'hr_manager'), validate({
 router.get('/requests', async (req, res) => {
   try {
     const co = companyClause(req, 'lr.company_id');
+    // The DATE_FORMAT aliases come after lr.* deliberately, so they override
+    // the raw columns: a MySQL DATE read as a JS Date at local midnight loses a
+    // day when serialised, and a leave request that starts on the 5th must not
+    // be shown as starting on the 4th. /report already did this; this did not.
     let sql = `SELECT lr.*, lt.name as leave_type_name, lt.color,
+               DATE_FORMAT(lr.start_date, '%Y-%m-%d') AS start_date,
+               DATE_FORMAT(lr.end_date, '%Y-%m-%d')   AS end_date,
                e.first_name, e.last_name, u.name as decided_by_name
                FROM leave_requests lr
                JOIN leave_types lt ON lr.leave_type_id = lt.id

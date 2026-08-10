@@ -26,13 +26,23 @@ router.get('/my-assets', auth, async (req, res) => {
       return res.json([]);
     }
 
+    // Everything that was filled in on the handover form, so the person holding
+    // the asset can see exactly what they were given and on what terms. Dates
+    // are formatted in SQL: a MySQL DATE read as a JS Date at local midnight
+    // loses a day when serialised.
     const [rows] = await pool.query(`
       SELECT a.id, a.name, a.asset_type, a.identifier, a.workspace, a.access_level,
-             a.issued_date, a.status, a.account_username, a.account_url,
-             pc.name as platform_name, c.name as company_name, c.short_code,
+             DATE_FORMAT(a.issued_date, '%Y-%m-%d')     AS issued_date,
+             DATE_FORMAT(a.expected_return, '%Y-%m-%d') AS expected_return,
+             a.status, a.account_username, a.account_url, a.notes, a.condition_note,
+             CASE WHEN a.handover_receipt_file IS NOT NULL THEN TRUE ELSE FALSE END AS has_receipt,
+             inv.asset_code, inv.serial_number, inv.brand, inv.model,
+             pc.name as platform_name, pc.category_id,
+             c.name as company_name, c.short_code,
              CASE WHEN a.encrypted_password IS NOT NULL THEN TRUE ELSE FALSE END as has_password
       FROM asset_assignments a
       LEFT JOIN platform_catalog pc ON a.platform_id = pc.id
+      LEFT JOIN asset_inventory inv ON a.inventory_id = inv.id
       LEFT JOIN companies c ON a.company_id = c.id
       WHERE a.employee_id = ? AND a.status = 'Active'
       ORDER BY a.asset_type, a.name
