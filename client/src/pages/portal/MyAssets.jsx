@@ -2,13 +2,14 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import * as portalApi from '@api/portalApi';
 import * as payrollApi from '@api/payrollApi';
 import * as leaveApi from '@api/leaveApi';
+import * as attendanceApi from '@api/attendanceApi';
 import Card from '@components/ui/Card';
 import Badge from '@components/ui/Badge';
 import EmptyState from '@components/ui/EmptyState';
 import { toast } from 'react-toastify';
 import {
   Shield, Monitor, Laptop, Copy, Eye, EyeOff, ExternalLink, Package,
-  Lock, Banknote, CalendarDays, FileCheck,
+  Lock, Banknote, CalendarDays, FileCheck, Clock, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
@@ -32,6 +33,18 @@ const getPlatformIcon = (type) => {
 
 const money = (n) => Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// The attendance statuses worth a colour of their own. Anything the enum grows
+// later falls through to neutral rather than breaking the row.
+const attendanceTone = {
+  Present: 'active',
+  Remote: 'info',
+  Late: 'warning',
+  'Half Day': 'warning',
+  Absent: 'danger',
+  'On Leave': 'brand',
+  Holiday: 'inactive',
+};
+
 /** One labelled value in a card. Renders nothing when there is nothing to show. */
 const Field = ({ label, value, mono }) => {
   if (value === null || value === undefined || value === '') return null;
@@ -49,6 +62,12 @@ export default function MyAssets() {
   const [payslips, setPayslips] = useState([]);
   const [balances, setBalances] = useState([]);
   const [leaveRequests, setLeaveRequests] = useState([]);
+  // Attendance is browsed a month at a time — a year of daily rows is a wall of
+  // numbers, and the question being asked is nearly always about this month.
+  const [month, setMonth] = useState(dayjs().format('YYYY-MM'));
+  const [attendance, setAttendance] = useState([]);
+  const [attSummary, setAttSummary] = useState(null);
+  const [attLoading, setAttLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [revealedPasswords, setRevealedPasswords] = useState({});
   const [revealingId, setRevealingId] = useState(null);
@@ -59,6 +78,26 @@ export default function MyAssets() {
     const timers = timersRef.current;
     return () => { Object.values(timers).forEach(clearTimeout); };
   }, []);
+
+  // Declared before the effect that calls it, so the month can change without
+  // reaching back up at a value that is not defined yet.
+  const loadAttendance = useCallback(async (m) => {
+    setAttLoading(true);
+    try {
+      const from = dayjs(`${m}-01`).startOf('month').format('YYYY-MM-DD');
+      const to = dayjs(`${m}-01`).endOf('month').format('YYYY-MM-DD');
+      const [rows, sum] = await Promise.all([
+        attendanceApi.list({ from, to }).catch(() => ({ data: [] })),
+        attendanceApi.summary({ month: m }).catch(() => ({ data: null })),
+      ]);
+      setAttendance(rows.data || []);
+      setAttSummary(sum.data || null);
+    } finally {
+      setAttLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadAttendance(month); }, [month, loadAttendance]);
 
   const loadData = async () => {
     setLoading(true);
@@ -139,6 +178,8 @@ export default function MyAssets() {
     .filter(r => r.status === 'Approved' && dayjs(r.start_date).year() === currentYear)
     .reduce((s, r) => s + Number(r.days || 0), 0);
   const totalPaid = payslips.reduce((s, p) => s + Number(p.net || 0), 0);
+  const absentThisMonth = Number(
+    attSummary?.by_status?.find((s) => s.status === 'Absent')?.count || 0);
 
   if (loading) {
     return (
@@ -187,6 +228,7 @@ export default function MyAssets() {
               { n: accountItems.length, l: t('portal.accounts', 'Accounts') },
               { n: payslips.length, l: t('portal.payslips_count') },
               { n: totalRemaining, l: t('portal.leave_days_left') },
+              { n: absentThisMonth, l: t('portal.absences_this_month') },
             ].map((s, i) => (
               <div key={i} className="text-center bg-white/10 rounded-xl px-4 py-2 backdrop-blur-sm">
                 <span className="block text-2xl font-bold text-white">{s.n}</span>
@@ -366,6 +408,94 @@ export default function MyAssets() {
           </div>
         </div>
       )}
+
+      {/* ── Attendance ───────────────────────────────────────────────────── */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="p-1.5 bg-sky-100 rounded-lg"><Clock size={16} className="text-sky-600" /></div>
+          <h2 className="text-lg font-semibold text-surface-800">{t('portal.attendance_section')}</h2>
+          <div className="ms-auto flex items-center gap-1">
+            <button type="button" onClick={() => setMonth(dayjs(`${month}-01`).subtract(1, 'month').format('YYYY-MM'))}
+              className="p-1.5 text-surface-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
+              title={t('portal.prev_month')}>
+              <ChevronLeft size={16} className="rtl:rotate-180" />
+            </button>
+            <input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)}
+              max={dayjs().format('YYYY-MM')}
+              className="text-sm border border-surface-200 rounded-lg px-3 py-1.5 bg-white" />
+            <button type="button" onClick={() => setMonth(dayjs(`${month}-01`).add(1, 'month').format('YYYY-MM'))}
+              disabled={month >= dayjs().format('YYYY-MM')}
+              className="p-1.5 text-surface-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
+              title={t('portal.next_month')}>
+              <ChevronRight size={16} className="rtl:rotate-180" />
+            </button>
+          </div>
+        </div>
+
+        {/* Counts per status for the month, plus the hours behind them */}
+        {attSummary && (attSummary.by_status?.length > 0) && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            {attSummary.by_status.map((s) => (
+              <Card key={s.status} className="!p-4">
+                <p className="text-2xl font-bold text-surface-900">{s.count}</p>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <span className={`w-2 h-2 rounded-full ${
+                    s.status === 'Absent' ? 'bg-red-500' : s.status === 'Late' || s.status === 'Half Day' ? 'bg-amber-500'
+                      : s.status === 'On Leave' ? 'bg-brand-500' : s.status === 'Holiday' ? 'bg-surface-300' : 'bg-emerald-500'}`} />
+                  <span className="text-xs text-surface-500">{t(`portal.at_${s.status.toLowerCase().replace(' ', '_')}`, s.status)}</span>
+                </div>
+              </Card>
+            ))}
+            <Card className="!p-4 bg-surface-50">
+              <p className="text-2xl font-bold text-surface-900">{attSummary.total_hours}</p>
+              <p className="text-xs text-surface-500 mt-1">{t('portal.total_hours')}</p>
+            </Card>
+          </div>
+        )}
+
+        {attLoading ? (
+          <Card className="!p-6 animate-pulse"><div className="h-4 bg-surface-100 rounded w-1/3" /></Card>
+        ) : attendance.length === 0 ? (
+          <Card><EmptyState icon={<Clock className="w-6 h-6 text-surface-400" />}
+            title={t('portal.no_attendance')}
+            description={t('portal.no_attendance_desc', { month: dayjs(`${month}-01`).format('MMMM YYYY') })} /></Card>
+        ) : (
+          <Card className="!p-0 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-surface-50 border-b border-surface-100">
+                  <tr className="text-[11px] uppercase tracking-wider text-surface-400">
+                    <th className="px-5 py-3 text-start font-semibold">{t('portal.date')}</th>
+                    <th className="px-5 py-3 text-start font-semibold">{t('portal.day')}</th>
+                    <th className="px-5 py-3 text-start font-semibold">{t('portal.check_in')}</th>
+                    <th className="px-5 py-3 text-start font-semibold">{t('portal.check_out')}</th>
+                    <th className="px-5 py-3 text-end font-semibold">{t('portal.hours')}</th>
+                    <th className="px-5 py-3 text-start font-semibold">{t('portal.status')}</th>
+                    <th className="px-5 py-3 text-start font-semibold">{t('portal.notes')}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-surface-100">
+                  {attendance.map((a) => (
+                    <tr key={a.id} className={`hover:bg-surface-50/60 ${a.status === 'Absent' ? 'bg-red-50/40' : ''}`}>
+                      <td className="px-5 py-2.5 font-medium text-surface-800">{a.work_date}</td>
+                      <td className="px-5 py-2.5 text-surface-500">{dayjs(a.work_date).format('ddd')}</td>
+                      <td className="px-5 py-2.5 font-mono text-surface-600">{a.check_in || '—'}</td>
+                      <td className="px-5 py-2.5 font-mono text-surface-600">{a.check_out || '—'}</td>
+                      <td className="px-5 py-2.5 text-end text-surface-700">{a.work_hours != null ? Number(a.work_hours).toFixed(2) : '—'}</td>
+                      <td className="px-5 py-2.5">
+                        <Badge className="text-[10px]" variant={attendanceTone[a.status] || 'info'}>
+                          {t(`portal.at_${String(a.status || '').toLowerCase().replace(' ', '_')}`, a.status)}
+                        </Badge>
+                      </td>
+                      <td className="px-5 py-2.5 text-xs text-surface-500 max-w-[16rem] truncate">{a.notes || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )}
+      </div>
 
       {/* ── Salary history ───────────────────────────────────────────────── */}
       <div className="space-y-4">
