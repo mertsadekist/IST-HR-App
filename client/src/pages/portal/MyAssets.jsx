@@ -3,13 +3,17 @@ import * as portalApi from '@api/portalApi';
 import * as payrollApi from '@api/payrollApi';
 import * as leaveApi from '@api/leaveApi';
 import * as attendanceApi from '@api/attendanceApi';
+import { useSelector } from 'react-redux';
+import Button from '@components/ui/Button';
+import AttendanceReport from './components/AttendanceReport';
+import { printElementWithLetterhead, waitForPaint } from '@utils/printDoc';
 import Card from '@components/ui/Card';
 import Badge from '@components/ui/Badge';
 import EmptyState from '@components/ui/EmptyState';
 import { toast } from 'react-toastify';
 import {
   Shield, Monitor, Laptop, Copy, Eye, EyeOff, ExternalLink, Package,
-  Lock, Banknote, CalendarDays, FileCheck, Clock, ChevronLeft, ChevronRight,
+  Lock, Banknote, CalendarDays, FileCheck, Clock, ChevronLeft, ChevronRight, Download,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
@@ -72,6 +76,12 @@ export default function MyAssets() {
   const [revealedPasswords, setRevealedPasswords] = useState({});
   const [revealingId, setRevealingId] = useState(null);
   const timersRef = useRef({});
+  const reportRef = useRef(null);
+  const [exporting, setExporting] = useState(false);
+  const { user } = useSelector((st) => st.auth);
+  const { items: companies } = useSelector((st) => st.companies);
+  // An employee is pinned to one company, so the list holds exactly theirs.
+  const myCompany = companies.find((c) => c.id === user?.company_id) || companies[0] || null;
 
   useEffect(() => {
     loadData();
@@ -155,6 +165,25 @@ export default function MyAssets() {
       setRevealingId(null);
     }
   }, [revealedPasswords, t]);
+
+  // The off-screen report is rendered on every pass, so React has committed it
+  // by the time this runs; waitForPaint covers the frame html2canvas needs.
+  const downloadAttendancePdf = async () => {
+    setExporting(true);
+    try {
+      await waitForPaint();
+      await printElementWithLetterhead(
+        reportRef.current,
+        myCompany?.id,
+        `Attendance-${(user?.name || 'employee').replace(/[^\w-]+/g, '_')}-${month}.pdf`,
+      );
+      toast.success(t('portal.pdf_downloaded'));
+    } catch {
+      toast.error(t('portal.pdf_failed'));
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const handleCopy = (text, label) => {
     navigator.clipboard.writeText(text).then(() => {
@@ -414,7 +443,11 @@ export default function MyAssets() {
         <div className="flex items-center gap-2 flex-wrap">
           <div className="p-1.5 bg-sky-100 rounded-lg"><Clock size={16} className="text-sky-600" /></div>
           <h2 className="text-lg font-semibold text-surface-800">{t('portal.attendance_section')}</h2>
-          <div className="ms-auto flex items-center gap-1">
+          <div className="ms-auto flex items-center gap-1 flex-wrap">
+            <Button size="sm" variant="secondary" onClick={downloadAttendancePdf}
+              loading={exporting} disabled={attLoading || attendance.length === 0}>
+              <Download size={14} /> {t('portal.download_pdf')}
+            </Button>
             <button type="button" onClick={() => setMonth(dayjs(`${month}-01`).subtract(1, 'month').format('YYYY-MM'))}
               className="p-1.5 text-surface-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
               title={t('portal.prev_month')}>
@@ -659,6 +692,20 @@ export default function MyAssets() {
           />
         </Card>
       )}
+
+      {/* Off-screen source for the PDF. Rendered rather than mounted on demand
+          so html2canvas always has a committed, laid-out node to read. */}
+      <div style={{ position: 'fixed', left: '-9999px', top: 0, width: '800px' }} aria-hidden="true">
+        <AttendanceReport
+          ref={reportRef}
+          employeeName={user?.name}
+          company={myCompany}
+          month={month}
+          rows={attendance}
+          summary={attSummary}
+          onLetterhead={!!myCompany?.letterhead_path}
+        />
+      </div>
     </div>
   );
 }

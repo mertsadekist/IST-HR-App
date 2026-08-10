@@ -1333,7 +1333,10 @@
     "at_half_day": "نصف يوم",
     "at_on_leave": "في إجازة",
     "at_holiday": "عطلة",
-    "at_remote": "عن بُعد"
+    "at_remote": "عن بُعد",
+    "download_pdf": "تحميل PDF",
+    "pdf_downloaded": "تم تحميل تقرير الحضور",
+    "pdf_failed": "تعذّر إنشاء التقرير"
   },
   "send_doc": {
     "attach_note": "سيُرفق المستند كملف PDF.",

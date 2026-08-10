@@ -1333,7 +1333,10 @@
     "at_half_day": "Half day",
     "at_on_leave": "On leave",
     "at_holiday": "Holiday",
-    "at_remote": "Remote"
+    "at_remote": "Remote",
+    "download_pdf": "Download PDF",
+    "pdf_downloaded": "Attendance report downloaded",
+    "pdf_failed": "Could not generate the report"
   },
   "send_doc": {
     "attach_note": "The document will be attached as a PDF file.",
