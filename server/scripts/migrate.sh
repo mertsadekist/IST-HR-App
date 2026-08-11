@@ -36,6 +36,7 @@ node apply_envelope_encryption.mjs
 node apply_document_expiry.mjs
 node apply_accountant_role.mjs
 node apply_fix_user_company_mismatch.mjs
+node apply_attendance_drive_sync.mjs
 node seed_asset_catalog.mjs
 node seed_social_accounts.mjs
 echo "✅ All migrations applied."

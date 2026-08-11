@@ -268,22 +268,47 @@ answers "what happened over the last month, and why is this person missing".
 
 ---
 
-## 9. Decisions needed before building
+## 9. Decisions — answered 2026-08-11
 
-1. **Company authority** — the file says six `2xxx` employees are IST Markets;
-   their records say IST Real Estate (§5). Which is right? The plan trusts the
-   employee record and only reports the difference, but if the file is right,
-   six employee records need correcting and that moves them between payrolls.
-2. **Code 3 / code 5 (left early)** — record as `Present`/`Late` plus
-   `early_leave_minutes` (recommended), or mark `Half Day` past some threshold?
-3. **Absent on an approved-leave day** — write `On Leave` instead of `Absent`
-   (recommended), so payroll does not deduct a granted day.
-4. **`4001 Majd Barshiny` and `4033 Mohammed Saif`** — not employees in the
-   system. Add, map, or ignore?
-5. **Start date** — which day should the sync begin from? Anything earlier is
-   marked Skipped and never touched.
-6. **Overwriting manual corrections** — the plan protects them (§7). Confirm.
-7. **Who gets the email** — admins and HR managers, or a fixed address list?
+| # | Question | Decision |
+|---|---|---|
+| 1 | Company authority | **The employee record.** Nobody is moved based on the file; every disagreement is reported in the daily email. |
+| 2 | Left early (codes 3 / 5) | **Keep the status, record the minutes.** 3 → `Present`, 5 → `Late`, both with `early_leave_minutes` stored and shown. No `Half Day` threshold. |
+| 3 | Absent on an approved-leave day | **Write `On Leave`, and name it in the email.** Every reclassified day is listed with the employee and the date, so nothing changes silently. |
+| 4 | Start date | **The go-live day only.** Everything earlier is recorded `Skipped` and never read. |
+| 5 | Drive access | **Service account, read-only, one shared folder.** |
+| 6 | Manual corrections | **Protected.** A day whose row has `source = 'Manual'` is skipped and reported as "skipped: manual correction". An explicit *Overwrite manual corrections* action exists for when that is genuinely wanted. |
+| 7 | Unmatched device IDs | **Report, never invent.** `4001 Majd Barshiny` and `4033 Mohammed Saif` stay on the unmatched list until they are added or ignored by hand. |
+| 8 | Report recipients | **Admins and HR managers**, resolved from roles so the list cannot go stale. |
+
+---
+
+## 9a. What the operator needs to do (once)
+
+This is the only part that cannot be done from inside the repo. It can happen in
+parallel with steps 1–2 of the build.
+
+1. Go to **console.cloud.google.com** and create a project (or reuse one).
+2. **APIs & Services → Library → Google Drive API → Enable.**
+3. **APIs & Services → Credentials → Create credentials → Service account.**
+   Give it a name like `ist-hr-attendance-reader`. No roles are needed — access
+   comes from sharing the folder, not from IAM.
+4. Open the service account → **Keys → Add key → Create new key → JSON.** A file
+   downloads. It contains `client_email` and `private_key`.
+5. In **Google Drive**, open the folder the attendance software writes to.
+   **Share** it with the `client_email` from that file, as **Viewer**. Nothing
+   else in the Drive is reachable.
+6. Copy the folder id from its URL:
+   `drive.google.com/drive/folders/`**`<this part>`**
+7. In **Coolify**, add three runtime environment variables — never in the repo,
+   per the project's security rules:
+
+   - `GOOGLE_DRIVE_SA_EMAIL` — the `client_email`
+   - `GOOGLE_DRIVE_SA_PRIVATE_KEY` — the `private_key`, newlines included
+   - `ATTENDANCE_DRIVE_FOLDER_ID` — the folder id from step 6
+
+The JSON key file itself should not be committed, emailed, or pasted into chat —
+only the two values, straight into Coolify.
 
 ---
 
