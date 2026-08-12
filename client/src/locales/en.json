@@ -2505,6 +2505,11 @@
     "overwrite_run": "Sync and overwrite corrections",
     "overwrite_title": "Overwrite hand-corrected days?",
     "overwrite_warning": "Days that were corrected by hand are normally left alone. This run will replace them with whatever the file says. That cannot be undone.",
-    "overwrite_confirm": "Yes, overwrite"
+    "overwrite_confirm": "Yes, overwrite",
+    "diag_account": "Service account",
+    "diag_key_id": "Key ID",
+    "diag_key_length": "Key length",
+    "diag_folder": "Folder ID",
+    "diag_server_time": "Server time (UTC)"
   }
 }

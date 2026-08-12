@@ -35,7 +35,7 @@ const API = 'https://www.googleapis.com/drive/v3';
  */
 function readCredential(raw) {
   let v = String(raw || '').trim();
-  if (!v) return { key: '', email: null };
+  if (!v) return { key: '', email: null, keyId: null };
 
   // Some editors wrap the whole value in quotes.
   if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
@@ -56,12 +56,19 @@ function readCredential(raw) {
     try {
       const j = JSON.parse(v);
       if (j.private_key) {
-        return { key: String(j.private_key).replace(/\\n/g, '\n'), email: j.client_email || null };
+        return {
+          key: String(j.private_key).replace(/\\n/g, '\n'),
+          email: j.client_email || null,
+          // Not a secret — it is the identifier shown in the Keys list in Google
+          // Cloud. Being able to compare the two is what tells a revoked key
+          // apart from a truncated one.
+          keyId: j.private_key_id || null,
+        };
       }
     } catch { /* malformed JSON — reported by configProblems */ }
   }
 
-  return { key: v.replace(/\\n/g, '\n'), email: null };
+  return { key: v.replace(/\\n/g, '\n'), email: null, keyId: null };
 }
 
 /** @returns {{email: string, key: string, folderId: string}} */
@@ -73,6 +80,7 @@ export function driveConfig() {
   return {
     email: (process.env.GOOGLE_DRIVE_SA_EMAIL || cred.email || '').trim(),
     key: cred.key,
+    keyId: cred.keyId || null,
     folderId: (process.env.ATTENDANCE_DRIVE_FOLDER_ID || '').trim(),
   };
 }
@@ -122,7 +130,10 @@ function explain(err, context) {
     return new Error('Drive returned "not found". Either the folder id is wrong, or the folder has not been shared with the service account.');
   }
   if (/invalid_grant/i.test(message)) {
-    return new Error('Google rejected the service account key (invalid_grant). The key may be wrong, revoked, or the server clock may be badly out of sync.');
+    return new Error('Google rejected the service account key (invalid_grant). Three things cause this: '
+      + 'the key was deleted or disabled in Google Cloud, the pasted value is truncated or altered, '
+      + "or this server's clock is more than a few minutes from real time. "
+      + 'Compare the key id shown below against the Keys list on the service account, and check the server time.');
   }
   return new Error(`${context}: ${message}`);
 }
@@ -188,17 +199,31 @@ export async function downloadFileText(fileId) {
  * anything. Used by the readiness check and the settings page.
  */
 export async function testConnection() {
+  const { email, keyId, folderId, key } = driveConfig();
+  // Reported whether the test passes or fails. invalid_grant has three quite
+  // different causes — a revoked key, a mangled one, and a server clock out of
+  // step with Google's — and these three facts tell them apart without anyone
+  // having to guess or paste a key anywhere.
+  const diagnostics = {
+    service_account: email || null,
+    key_id: keyId,                       // compare against the Keys list in GCP
+    key_length: key ? key.length : 0,    // a truncated paste shows up here
+    folder_id: folderId || null,
+    server_time_utc: new Date().toISOString(),
+  };
+
   const problems = configProblems();
-  if (problems.length) return { ok: false, problems };
+  if (problems.length) return { ok: false, problems, diagnostics };
   try {
     const files = await listFolderFiles();
     return {
       ok: true,
       problems: [],
+      diagnostics,
       file_count: files.length,
       newest: files[0] ? { name: files[0].name, modifiedTime: files[0].modifiedTime } : null,
     };
   } catch (err) {
-    return { ok: false, problems: [err.message] };
+    return { ok: false, problems: [err.message], diagnostics };
   }
 }

@@ -154,6 +154,26 @@ export default function AttendanceSync() {
               ? t('sync.test_result_ok', { count: test.file_count, newest: test.newest?.name || '—' })
               : test.problems?.join(' · ')}
           </p>
+          {/* None of this is secret — the key id is the identifier shown in the
+              Keys list in Google Cloud, and the server time is what tells a
+              clock-skew rejection apart from a revoked key. Shown on success
+              too, so the working values can be compared against later. */}
+          {test.diagnostics && (
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 mt-3 pt-3 border-t border-surface-200/60 text-[11px]">
+              {[
+                ['sync.diag_account', test.diagnostics.service_account],
+                ['sync.diag_key_id', test.diagnostics.key_id],
+                ['sync.diag_key_length', test.diagnostics.key_length],
+                ['sync.diag_folder', test.diagnostics.folder_id],
+                ['sync.diag_server_time', test.diagnostics.server_time_utc],
+              ].map(([k, v]) => (
+                <div key={k} className="flex justify-between gap-3">
+                  <dt className="text-surface-500 shrink-0">{t(k)}</dt>
+                  <dd className="font-mono text-surface-700 text-end break-all">{v ?? '—'}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
         </Card>
       )}
 
