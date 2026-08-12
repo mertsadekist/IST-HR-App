@@ -19,6 +19,7 @@
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^4.22.2",
+    "google-auth-library": "^11.0.1",
     "helmet": "^8.1.0",
     "jsbarcode": "^3.12.3",
     "jsonwebtoken": "^9.0.3",
