@@ -9,7 +9,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import pool from '../config/db.js';
 import { msUntilNext } from '../services/dailySchedule.js';
-import { claimRun } from '../services/attendanceSyncService.js';
+import { claimRun, resolveStartDate } from '../services/attendanceSyncService.js';
 import { buildSyncReport } from '../services/attendanceSyncReport.js';
 
 describe('msUntilNext', () => {
@@ -133,5 +133,45 @@ describe('the morning email', () => {
     const r = buildSyncReport({ status: 'Completed', summary, runDate: '2026-08-11' });
     expect(r.text).toContain('4001');
     expect(r.text).not.toContain('<');
+  });
+});
+
+describe('the start-date floor must not move', () => {
+  const KEY = 'attendance_sync_start_date';
+  let saved;
+
+  beforeAll(async () => {
+    saved = process.env.ATTENDANCE_SYNC_START_DATE;
+    delete process.env.ATTENDANCE_SYNC_START_DATE;
+    await pool.query('DELETE FROM app_settings WHERE setting_key = ?', [KEY]).catch(() => {});
+  });
+  afterAll(async () => {
+    if (saved === undefined) delete process.env.ATTENDANCE_SYNC_START_DATE;
+    else process.env.ATTENDANCE_SYNC_START_DATE = saved;
+    await pool.query('DELETE FROM app_settings WHERE setting_key = ?', [KEY]).catch(() => {});
+  });
+
+  it('pins itself to the day of the first run', async () => {
+    expect(await resolveStartDate(pool, { today: '2026-08-12' })).toBe('2026-08-12');
+  });
+
+  it('stays put as the calendar moves on', async () => {
+    // The bug this replaced: the floor was recomputed as "today" while nothing
+    // had imported, so it advanced every night and each morning's file was
+    // always dated the day before it. Nothing would ever have imported.
+    expect(await resolveStartDate(pool, { today: '2026-08-13' })).toBe('2026-08-12');
+    expect(await resolveStartDate(pool, { today: '2026-09-01' })).toBe('2026-08-12');
+  });
+
+  it('lets an explicit setting override the stored one', async () => {
+    process.env.ATTENDANCE_SYNC_START_DATE = '2026-08-01';
+    expect(await resolveStartDate(pool, { today: '2026-08-13' })).toBe('2026-08-01');
+    delete process.env.ATTENDANCE_SYNC_START_DATE;
+  });
+
+  it('ignores a malformed override rather than trusting it', async () => {
+    process.env.ATTENDANCE_SYNC_START_DATE = 'yesterday';
+    expect(await resolveStartDate(pool, { today: '2026-08-13' })).toBe('2026-08-12');
+    delete process.env.ATTENDANCE_SYNC_START_DATE;
   });
 });

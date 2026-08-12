@@ -11,6 +11,7 @@
 import { parseAttendanceCsv, summarise, businessDateFromName } from './attendanceFileParser.js';
 import { listFolderFiles, downloadFileText, isConfigured } from './googleDriveClient.js';
 import { addAudit } from './auditService.js';
+import { getAppSetting, setAppSetting } from './appSettings.js';
 
 /** Company path in the file -> our company id. Reporting only; never acted on. */
 const COMPANY_HINTS = Object.freeze({ 'IST Markets': 2, 'IST Real Estate': 1 });
@@ -262,14 +263,30 @@ export async function claimRun(pool, { trigger = 'Scheduled', runDate, actorId =
   }
 }
 
-/** The start-date floor, defaulting to today the first time the sync ever runs. */
-export async function resolveStartDate(pool) {
+/**
+ * The start-date floor: files dated before it are never imported.
+ *
+ * It is **persisted the first time it is resolved**, and that is the whole
+ * point. The first version recomputed "today" on every run while nothing had
+ * imported yet — so the floor advanced with the calendar, each morning's file
+ * was always dated the day before it, and nothing would ever have imported.
+ * A floor that moves is not a floor.
+ *
+ * An explicit ATTENDANCE_SYNC_START_DATE always wins, so it can be widened or
+ * narrowed later without touching the stored value.
+ *
+ * @returns {Promise<string|null>} YYYY-MM-DD, or null for no floor
+ */
+export async function resolveStartDate(pool, { today = new Date().toISOString().slice(0, 10) } = {}) {
   const configured = (process.env.ATTENDANCE_SYNC_START_DATE || '').trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(configured)) return configured;
-  const [[first]] = await pool.query(
-    "SELECT MIN(business_date) AS d FROM attendance_sync_files WHERE status = 'Imported'");
-  if (first?.d) return null;                       // already running; no floor needed
-  return new Date().toISOString().slice(0, 10);    // first ever run: today onwards
+
+  const stored = await getAppSetting('attendance_sync_start_date', null);
+  if (stored && /^\d{4}-\d{2}-\d{2}$/.test(stored)) return stored;
+
+  // First time only: pin it and remember it.
+  await setAppSetting('attendance_sync_start_date', today);
+  return today;
 }
 
 /**
