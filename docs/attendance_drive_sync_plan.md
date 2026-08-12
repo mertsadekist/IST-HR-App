@@ -285,30 +285,53 @@ answers "what happened over the last month, and why is this person missing".
 
 ## 9a. What the operator needs to do (once)
 
-This is the only part that cannot be done from inside the repo. It can happen in
-parallel with steps 1–2 of the build.
+This is the only part that cannot be done from inside the repo.
 
-1. Go to **console.cloud.google.com** and create a project (or reuse one).
+1. **console.cloud.google.com** → create or pick a project.
 2. **APIs & Services → Library → Google Drive API → Enable.**
-3. **APIs & Services → Credentials → Create credentials → Service account.**
-   Give it a name like `ist-hr-attendance-reader`. No roles are needed — access
-   comes from sharing the folder, not from IAM.
-4. Open the service account → **Keys → Add key → Create new key → JSON.** A file
-   downloads. It contains `client_email` and `private_key`.
-5. In **Google Drive**, open the folder the attendance software writes to.
-   **Share** it with the `client_email` from that file, as **Viewer**. Nothing
-   else in the Drive is reachable.
-6. Copy the folder id from its URL:
+3. **Credentials → Create credentials → Service account.** No IAM roles are
+   needed — access comes from sharing the folder, not from the project.
+4. Open it → **Keys → Add key → Create new key → JSON.** A file downloads.
+5. In **Drive**, share the attendance folder with the service account's
+   `client_email`, as **Viewer**. Nothing else in the Drive is reachable.
+6. Copy the folder id from the URL:
    `drive.google.com/drive/folders/`**`<this part>`**
-7. In **Coolify**, add three runtime environment variables — never in the repo,
-   per the project's security rules:
 
-   - `GOOGLE_DRIVE_SA_EMAIL` — the `client_email`
-   - `GOOGLE_DRIVE_SA_PRIVATE_KEY` — the `private_key`, newlines included
-   - `ATTENDANCE_DRIVE_FOLDER_ID` — the folder id from step 6
+### Putting the credential in, without leaking it
 
-The JSON key file itself should not be committed, emailed, or pasted into chat —
-only the two values, straight into Coolify.
+**Base64-encode the whole JSON file and set it as `GOOGLE_DRIVE_SA_JSON`.**
+
+```
+base64 -w0 key.json                                              # Linux/macOS
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("key.json"))   # PowerShell
+```
+
+The app accepts the raw JSON, a bare PEM, or base64 of either — but base64 is
+the one to use, because it contains no quotes, braces or newlines for a shell,
+a YAML file or a Dockerfile to trip over.
+
+**It must be a RUNTIME variable, not a build-time one.** This is not a style
+preference:
+
+> The first attempt pasted the raw JSON into a build-time variable. Coolify
+> wrote it into the generated Dockerfile as an `ARG`, which put the key in the
+> build log and would have baked it into the image layers, where `docker
+> history` reveals it. Docker itself warned — `SecretsUsedInArgOrEnv` — and then
+> the build failed anyway, because the braces and quotes broke `ARG` parsing.
+>
+> That key had to be revoked and replaced. In Coolify, leave **Build Variable**
+> unchecked for all three of these.
+
+Three variables in total:
+
+| Variable | Value |
+|---|---|
+| `GOOGLE_DRIVE_SA_JSON` | base64 of the whole JSON key file |
+| `ATTENDANCE_DRIVE_FOLDER_ID` | the folder id from step 6 |
+| `ATTENDANCE_SYNC_START_DATE` | optional; defaults to the first run's date |
+
+Then: **Attendance → Attendance Sync → Test connection**, or
+`node check_drive_sync.mjs` on the server, which reads and writes nothing.
 
 ---
 

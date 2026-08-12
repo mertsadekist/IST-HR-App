@@ -17,25 +17,62 @@ const SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
 const API = 'https://www.googleapis.com/drive/v3';
 
 /**
- * The private key survives copy-paste in two shapes: with real newlines, or
- * with the literal two characters backslash-n as it appears inside the JSON key
- * file. Coolify's env editor produces either depending on how it was pasted, so
- * both are accepted rather than making the operator get it exactly right.
+ * Reads the credential out of whatever the operator pasted.
+ *
+ * Four shapes are accepted, because getting this wrong is easy and the failure
+ * is opaque:
+ *
+ *  1. the whole service-account JSON file (the commonest paste — it is what
+ *     Google hands you, and picking one field out of it is a step people skip);
+ *  2. base64 of that JSON, or of the PEM. **This is the one to prefer**: it has
+ *     no quotes, newlines or braces, so no shell, YAML or Dockerfile can mangle
+ *     it or trip over it;
+ *  3. the bare PEM with real newlines;
+ *  4. the bare PEM with literal backslash-n, as it appears inside the JSON.
+ *
+ * @returns {{key: string, email: string|null}} email is set only when the value
+ *   carried one, so a single variable can supply both.
  */
-function normaliseKey(raw) {
-  let k = String(raw || '').trim();
-  // Some UIs wrap the whole value in quotes; strip a matched pair.
-  if ((k.startsWith('"') && k.endsWith('"')) || (k.startsWith("'") && k.endsWith("'"))) {
-    k = k.slice(1, -1);
+function readCredential(raw) {
+  let v = String(raw || '').trim();
+  if (!v) return { key: '', email: null };
+
+  // Some editors wrap the whole value in quotes.
+  if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+    v = v.slice(1, -1).trim();
   }
-  return k.replace(/\\n/g, '\n');
+
+  // base64 of either shape — no special characters to survive, which is why it
+  // is the safest thing to paste into an environment editor.
+  if (/^[A-Za-z0-9+/=\s]+$/.test(v) && v.length > 100 && !v.includes('BEGIN')) {
+    try {
+      const decoded = Buffer.from(v.replace(/\s/g, ''), 'base64').toString('utf8');
+      if (decoded.includes('BEGIN PRIVATE KEY') || decoded.trimStart().startsWith('{')) v = decoded.trim();
+    } catch { /* not base64 after all; fall through */ }
+  }
+
+  // The whole JSON key file.
+  if (v.startsWith('{')) {
+    try {
+      const j = JSON.parse(v);
+      if (j.private_key) {
+        return { key: String(j.private_key).replace(/\\n/g, '\n'), email: j.client_email || null };
+      }
+    } catch { /* malformed JSON — reported by configProblems */ }
+  }
+
+  return { key: v.replace(/\\n/g, '\n'), email: null };
 }
 
 /** @returns {{email: string, key: string, folderId: string}} */
 export function driveConfig() {
+  // A single variable holding the whole JSON is enough: it carries the email
+  // too. GOOGLE_DRIVE_SA_JSON is the tidier name for that; the older
+  // GOOGLE_DRIVE_SA_PRIVATE_KEY still works and accepts the same shapes.
+  const cred = readCredential(process.env.GOOGLE_DRIVE_SA_JSON || process.env.GOOGLE_DRIVE_SA_PRIVATE_KEY);
   return {
-    email: (process.env.GOOGLE_DRIVE_SA_EMAIL || '').trim(),
-    key: normaliseKey(process.env.GOOGLE_DRIVE_SA_PRIVATE_KEY),
+    email: (process.env.GOOGLE_DRIVE_SA_EMAIL || cred.email || '').trim(),
+    key: cred.key,
     folderId: (process.env.ATTENDANCE_DRIVE_FOLDER_ID || '').trim(),
   };
 }
@@ -44,11 +81,11 @@ export function driveConfig() {
 export function configProblems() {
   const { email, key, folderId } = driveConfig();
   const out = [];
-  if (!email) out.push('GOOGLE_DRIVE_SA_EMAIL is not set');
-  else if (!email.includes('@')) out.push('GOOGLE_DRIVE_SA_EMAIL does not look like an email address');
-  if (!key) out.push('GOOGLE_DRIVE_SA_PRIVATE_KEY is not set');
+  if (!email) out.push('No service account email — set GOOGLE_DRIVE_SA_EMAIL, or paste the whole JSON key into GOOGLE_DRIVE_SA_JSON and it will be read from there');
+  else if (!email.includes('@')) out.push('The service account email does not look like an email address');
+  if (!key) out.push('No private key — set GOOGLE_DRIVE_SA_JSON (the whole JSON key file, ideally base64-encoded)');
   else if (!key.includes('BEGIN PRIVATE KEY')) {
-    out.push('GOOGLE_DRIVE_SA_PRIVATE_KEY does not contain a PEM key — copy the whole `private_key` value from the JSON');
+    out.push('The credential does not contain a PEM key. Paste the whole JSON key file, or base64 of it, into GOOGLE_DRIVE_SA_JSON');
   }
   if (!folderId) out.push('ATTENDANCE_DRIVE_FOLDER_ID is not set');
   return out;

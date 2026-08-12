@@ -14,7 +14,7 @@ const KEY_BODY = 'MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQ';
 const REAL_PEM = `-----BEGIN PRIVATE KEY-----\n${KEY_BODY}\n-----END PRIVATE KEY-----\n`;
 const ESCAPED_PEM = `-----BEGIN PRIVATE KEY-----\\n${KEY_BODY}\\n-----END PRIVATE KEY-----\\n`;
 
-const VARS = ['GOOGLE_DRIVE_SA_EMAIL', 'GOOGLE_DRIVE_SA_PRIVATE_KEY', 'ATTENDANCE_DRIVE_FOLDER_ID'];
+const VARS = ['GOOGLE_DRIVE_SA_EMAIL', 'GOOGLE_DRIVE_SA_PRIVATE_KEY', 'GOOGLE_DRIVE_SA_JSON', 'ATTENDANCE_DRIVE_FOLDER_ID'];
 let saved;
 
 beforeEach(() => {
@@ -70,10 +70,10 @@ describe('saying what is wrong, in words the operator can act on', () => {
     expect(configProblems()).toHaveLength(3);
   });
 
-  it('names each missing variable', () => {
+  it('names the variable to set for each thing that is missing', () => {
     const p = configProblems().join(' | ');
     expect(p).toContain('GOOGLE_DRIVE_SA_EMAIL');
-    expect(p).toContain('GOOGLE_DRIVE_SA_PRIVATE_KEY');
+    expect(p).toContain('GOOGLE_DRIVE_SA_JSON');
     expect(p).toContain('ATTENDANCE_DRIVE_FOLDER_ID');
   });
 
@@ -92,5 +92,62 @@ describe('saying what is wrong, in words the operator can act on', () => {
     setAll();
     expect(configProblems()).toEqual([]);
     expect(isConfigured()).toBe(true);
+  });
+});
+
+describe('the whole JSON key file, which is what people actually paste', () => {
+  const SA_JSON = JSON.stringify({
+    type: 'service_account',
+    project_id: 'gen-lang-client-000',
+    private_key_id: 'abc123',
+    private_key: ESCAPED_PEM,
+    client_email: 'attendance@gen-lang-client-000.iam.gserviceaccount.com',
+    client_id: '104237398674311432134',
+  });
+
+  it('reads the key and the email out of the JSON, so one variable is enough', () => {
+    process.env.GOOGLE_DRIVE_SA_JSON = SA_JSON;
+    process.env.ATTENDANCE_DRIVE_FOLDER_ID = '1MeYGbZ';
+    const c = driveConfig();
+    expect(c.key.split('\n')[0]).toBe('-----BEGIN PRIVATE KEY-----');
+    expect(c.email).toBe('attendance@gen-lang-client-000.iam.gserviceaccount.com');
+    expect(configProblems()).toEqual([]);
+  });
+
+  it('accepts the JSON through the older variable name too', () => {
+    process.env.GOOGLE_DRIVE_SA_PRIVATE_KEY = SA_JSON;
+    process.env.ATTENDANCE_DRIVE_FOLDER_ID = '1MeYGbZ';
+    expect(configProblems()).toEqual([]);
+    expect(driveConfig().key).toContain('BEGIN PRIVATE KEY');
+  });
+
+  it('an explicit email still wins over the one inside the JSON', () => {
+    process.env.GOOGLE_DRIVE_SA_JSON = SA_JSON;
+    process.env.GOOGLE_DRIVE_SA_EMAIL = 'override@proj.iam.gserviceaccount.com';
+    process.env.ATTENDANCE_DRIVE_FOLDER_ID = '1MeYGbZ';
+    expect(driveConfig().email).toBe('override@proj.iam.gserviceaccount.com');
+  });
+
+  it('accepts base64 of the JSON — the shape no editor or Dockerfile can mangle', () => {
+    process.env.GOOGLE_DRIVE_SA_JSON = Buffer.from(SA_JSON, 'utf8').toString('base64');
+    process.env.ATTENDANCE_DRIVE_FOLDER_ID = '1MeYGbZ';
+    const c = driveConfig();
+    expect(c.key).toContain('BEGIN PRIVATE KEY');
+    expect(c.email).toContain('@');
+    expect(configProblems()).toEqual([]);
+  });
+
+  it('accepts base64 of a bare PEM as well', () => {
+    process.env.GOOGLE_DRIVE_SA_JSON = Buffer.from(REAL_PEM, 'utf8').toString('base64');
+    process.env.GOOGLE_DRIVE_SA_EMAIL = 'sa@proj.iam.gserviceaccount.com';
+    process.env.ATTENDANCE_DRIVE_FOLDER_ID = '1MeYGbZ';
+    expect(configProblems()).toEqual([]);
+  });
+
+  it('says something useful when the JSON is malformed rather than failing later', () => {
+    process.env.GOOGLE_DRIVE_SA_JSON = '{"type":"service_account", oops';
+    process.env.GOOGLE_DRIVE_SA_EMAIL = 'sa@proj.iam.gserviceaccount.com';
+    process.env.ATTENDANCE_DRIVE_FOLDER_ID = '1MeYGbZ';
+    expect(configProblems()[0]).toMatch(/does not contain a PEM key/);
   });
 });
