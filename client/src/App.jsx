@@ -56,6 +56,7 @@ const OnboardingV2Page = lazy(() => import('@pages/lifecycle/OnboardingV2'));
 const QuickOfferPage = lazy(() => import('@pages/lifecycle/QuickOffer'));
 const LeavePage = lazy(() => import('@pages/lifecycle/Leave'));
 const AttendancePage = lazy(() => import('@pages/lifecycle/Attendance'));
+const AttendanceSync = lazy(() => import('@pages/lifecycle/AttendanceSync'));
 const PayrollRunsPage = lazy(() => import('@pages/lifecycle/PayrollRuns'));
 const SalaryReviewsPage = lazy(() => import('@pages/lifecycle/SalaryReviews'));
 const AssetsPage = lazy(() => import('@pages/lifecycle/Assets'));
@@ -121,6 +122,7 @@ export default function App() {
                 <Route path="/quick-offer" element={<QuickOfferPage />} />
                 <Route path="/leave" element={<LeavePage />} />
                 <Route path="/attendance" element={<AttendancePage />} />
+                <Route path="/attendance/sync" element={<AttendanceSync />} />
                 <Route path="/payroll-runs" element={<PayrollRunsPage />} />
                 <Route path="/salary-reviews" element={<SalaryReviewsPage />} />
                 <Route path="/assets" element={<AssetsPage />} />

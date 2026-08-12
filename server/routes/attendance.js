@@ -7,6 +7,9 @@ import { tenantScope, companyClause, resolveWriteCompanyId, ownRecordsClause } f
 import { validate } from '../middleware/validate.js';
 import { upload } from '../middleware/upload.js';
 import * as XLSX from 'xlsx';
+import { runSync } from '../services/attendanceSyncService.js';
+import { sendSyncReport } from '../services/attendanceSyncReport.js';
+import { testConnection, configProblems } from '../services/googleDriveClient.js';
 
 const router = Router();
 // Deliberately NOT module-gated: this is a self-service router. Every read
@@ -377,6 +380,128 @@ router.get('/export', authorize('admin', 'hr_manager', 'hr_specialist'), async (
     res.send(buf);
   } catch (err) {
     console.error('GET /attendance/export error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── Drive sync ──────────────────────────────────────────────────────────────
+// The daily import from the Google Drive folder the attendance software writes
+// to. See docs/attendance_drive_sync_plan.md. HR-only: these read and write
+// everyone's attendance, unlike the self-service routes above.
+const SYNC_ROLES = ['admin', 'hr_manager'];
+
+// GET /api/attendance/drive-sync/status — the page's whole payload
+router.get('/drive-sync/status', authorize(...SYNC_ROLES), async (req, res) => {
+  try {
+    const [runs] = await pool.query(
+      `SELECT id, DATE_FORMAT(run_date, '%Y-%m-%d') AS run_date, trigger_type, status,
+              files_seen, files_imported, files_failed, rows_written, summary, error,
+              started_at, finished_at
+         FROM attendance_sync_runs ORDER BY started_at DESC LIMIT 30`);
+    const [files] = await pool.query(
+      `SELECT id, drive_file_id, file_name, DATE_FORMAT(business_date, '%Y-%m-%d') AS business_date,
+              status, skip_reason, rows_total, rows_matched, rows_unmatched,
+              inserted, updated, skipped, error, attempts, imported_at
+         FROM attendance_sync_files ORDER BY business_date DESC, id DESC LIMIT 60`);
+    const [ignored] = await pool.query(
+      'SELECT id, device_id, device_name, reason, created_at FROM attendance_ignored_devices ORDER BY device_id');
+
+    res.json({
+      configured: configProblems().length === 0,
+      config_problems: configProblems(),
+      runs, files, ignored,
+      // Where the scheduler will fire; the page states it so nobody wonders.
+      scheduled_hour: Number(process.env.ATTENDANCE_SYNC_HOUR || 5),
+      start_date: process.env.ATTENDANCE_SYNC_START_DATE || null,
+    });
+  } catch (err) {
+    console.error('GET /attendance/drive-sync/status error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/attendance/drive-sync/test — prove the credentials and the sharing
+router.get('/drive-sync/test', authorize(...SYNC_ROLES), async (req, res) => {
+  try {
+    res.json(await testConnection());
+  } catch (err) {
+    res.status(500).json({ ok: false, problems: [err.message] });
+  }
+});
+
+// POST /api/attendance/drive-sync/run — the same pass the scheduler makes
+router.post('/drive-sync/run', authorize(...SYNC_ROLES), async (req, res) => {
+  try {
+    const overwriteManual = req.body?.overwrite_manual === true;
+    // A manual run is its own trigger type, so it never collides with the
+    // morning's scheduled claim for the same date.
+    const result = await runSync(pool, {
+      trigger: 'Manual', actorId: req.user.id, overwriteManual,
+    });
+    if (result.run_id && !result.skipped) {
+      await sendSyncReport(pool, {
+        status: result.status, summary: result.summary,
+        runDate: new Date().toISOString().slice(0, 10), error: result.error,
+      }).catch(() => {});
+    }
+    if (overwriteManual) {
+      await addAudit(pool, req.user, 'Attendance', 'Drive Sync Override',
+        'Manual sync run WITH overwrite of hand-corrected rows');
+    }
+    res.json(result);
+  } catch (err) {
+    console.error('POST /attendance/drive-sync/run error:', err);
+    res.status(500).json({ error: err.message || 'Sync failed' });
+  }
+});
+
+// POST /api/attendance/drive-sync/retry/:driveFileId — one failed file again
+router.post('/drive-sync/retry/:driveFileId', authorize(...SYNC_ROLES), async (req, res) => {
+  try {
+    const result = await runSync(pool, {
+      trigger: 'Retry', actorId: req.user.id,
+      onlyFileIds: [req.params.driveFileId],
+      overwriteManual: req.body?.overwrite_manual === true,
+      // Retries are keyed by the moment so several in a day do not collide on
+      // the run-claim, which exists to stop *scheduled* duplicates.
+      runDate: new Date().toISOString().slice(0, 10),
+    });
+    res.json(result);
+  } catch (err) {
+    console.error('POST /attendance/drive-sync/retry error:', err);
+    res.status(500).json({ error: err.message || 'Retry failed' });
+  }
+});
+
+// POST /api/attendance/drive-sync/ignore — stop reporting a device id
+router.post('/drive-sync/ignore', authorize(...SYNC_ROLES), validate({
+  device_id: { required: true, type: 'string', minLen: 1, maxLen: 64 },
+}), async (req, res) => {
+  try {
+    const { device_id, device_name, reason } = req.body;
+    await pool.query(
+      `INSERT INTO attendance_ignored_devices (device_id, device_name, reason, created_by)
+       VALUES (?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE device_name = VALUES(device_name), reason = VALUES(reason)`,
+      [String(device_id).trim(), device_name || null, reason || null, req.user.id]);
+    await addAudit(pool, req.user, 'Attendance', 'Device Ignored',
+      `Device "${device_id}" (${device_name || 'unnamed'}) will no longer be reported as unmatched`);
+    res.status(201).json({ success: true });
+  } catch (err) {
+    console.error('POST /attendance/drive-sync/ignore error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /api/attendance/drive-sync/ignore/:deviceId — start reporting it again
+router.delete('/drive-sync/ignore/:deviceId', authorize('admin'), async (req, res) => {
+  try {
+    await pool.query('DELETE FROM attendance_ignored_devices WHERE device_id = ?', [req.params.deviceId]);
+    await addAudit(pool, req.user, 'Attendance', 'Device Un-ignored',
+      `Device "${req.params.deviceId}" will be reported again`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('DELETE /attendance/drive-sync/ignore error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

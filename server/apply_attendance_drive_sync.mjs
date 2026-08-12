@@ -87,7 +87,12 @@ const TABLES = [
      started_by    INT NULL,
      started_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
      finished_at   TIMESTAMP NULL,
-     UNIQUE KEY uq_sync_run_date (run_date, trigger_type),
+     -- Only a SCHEDULED run is claimed: claim_key holds the date for those and
+     -- NULL for manual runs and retries. MySQL allows many NULLs in a unique
+     -- index, so the morning job is still exactly-once while a human can retry
+     -- a file as often as they need.
+     claim_key     VARCHAR(32) NULL,
+     UNIQUE KEY uq_sync_run_claim (claim_key),
      INDEX idx_sync_run_started (started_at)
    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 
@@ -110,6 +115,30 @@ try {
     await pool.query(ddl);
     const name = ddl.match(/CREATE TABLE IF NOT EXISTS (\w+)/)[1];
     console.log(`table ${name} ready`);
+  }
+
+  // The first version of this table keyed the claim on (run_date, trigger_type),
+  // which meant a second retry in one day was refused. Bring an existing table
+  // forward to the claim_key design.
+  if (!(await columnExists('attendance_sync_runs', 'claim_key'))) {
+    await pool.query('ALTER TABLE attendance_sync_runs ADD COLUMN claim_key VARCHAR(32) NULL');
+    console.log('attendance_sync_runs.claim_key added');
+  }
+  const [[oldKey]] = await pool.query(
+    `SELECT COUNT(*) c FROM information_schema.statistics
+      WHERE table_schema = DATABASE() AND table_name = 'attendance_sync_runs'
+        AND index_name = 'uq_sync_run_date'`);
+  if (oldKey.c) {
+    await pool.query('ALTER TABLE attendance_sync_runs DROP INDEX uq_sync_run_date');
+    console.log('dropped the old (run_date, trigger_type) claim key');
+  }
+  const [[newKey]] = await pool.query(
+    `SELECT COUNT(*) c FROM information_schema.statistics
+      WHERE table_schema = DATABASE() AND table_name = 'attendance_sync_runs'
+        AND index_name = 'uq_sync_run_claim'`);
+  if (!newKey.c) {
+    await pool.query('ALTER TABLE attendance_sync_runs ADD UNIQUE KEY uq_sync_run_claim (claim_key)');
+    console.log('claim key uq_sync_run_claim added');
   }
 
   for (const [col, ddl] of COLS) {

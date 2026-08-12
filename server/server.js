@@ -6,6 +6,10 @@ import { getAppSetting } from './services/appSettings.js';
 import { applyDueSalaryChanges } from './services/salaryReviewService.js';
 import { checkDomainRenewals } from './services/domainRenewalService.js';
 import { checkDocumentExpiry } from './services/documentExpiryService.js';
+import { runSync } from './services/attendanceSyncService.js';
+import { sendSyncReport } from './services/attendanceSyncReport.js';
+import { isConfigured as driveConfigured } from './services/googleDriveClient.js';
+import { scheduleDailyAt } from './services/dailySchedule.js';
 
 const PORT = process.env.PORT || 3001;
 
@@ -52,6 +56,32 @@ async function runDocumentExpiryCheck() {
   }
 }
 
+// Pull yesterday's attendance from the Drive folder, once a day at 05:00 local.
+// A time-of-day job rather than the 6-hourly interval the others use: the file
+// lands overnight and HR wants it waiting for them, not "some time today".
+//
+// The run claim lives in the database (see claimRun), so a redeploy at 05:30
+// neither repeats the morning's work nor skips the day.
+async function runAttendanceDriveSync() {
+  if (!driveConfigured()) return;   // not set up yet; say nothing every morning
+  const runDate = new Date().toISOString().slice(0, 10);
+  try {
+    const result = await runSync(pool, { trigger: 'Scheduled', runDate });
+    if (result.skipped) {
+      if (result.reason) console.log(`📥 Attendance sync: ${result.reason}`);
+      return;
+    }
+    console.log(`📥 Attendance sync (${result.status}): `
+      + `${result.summary?.files_imported || 0} file(s), `
+      + `${result.summary?.inserted || 0} new / ${result.summary?.updated || 0} updated row(s)`);
+    await sendSyncReport(pool, {
+      status: result.status, summary: result.summary, runDate, error: result.error,
+    });
+  } catch (err) {
+    console.error('Attendance Drive sync failed:', err.message);
+  }
+}
+
 app.listen(PORT, async () => {
   console.log(`\n🚀 IST HR API Server running on http://localhost:${PORT}`);
   console.log(`📋 Health check: http://localhost:${PORT}/api/health`);
@@ -69,4 +99,15 @@ app.listen(PORT, async () => {
 
   await runDocumentExpiryCheck();
   setInterval(runDocumentExpiryCheck, 6 * 60 * 60 * 1000); // every 6 hours
+
+  if (driveConfigured()) {
+    scheduleDailyAt({
+      hour: Number(process.env.ATTENDANCE_SYNC_HOUR || 5),
+      minute: Number(process.env.ATTENDANCE_SYNC_MINUTE || 0),
+      name: 'Attendance Drive sync',
+      onTick: runAttendanceDriveSync,
+    });
+  } else {
+    console.log('📥 Attendance Drive sync: not configured (GOOGLE_DRIVE_SA_* unset) — skipped');
+  }
 });
