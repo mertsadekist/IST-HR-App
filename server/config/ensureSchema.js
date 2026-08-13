@@ -325,6 +325,79 @@ const TABLE_GUARDS = [
      FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
      FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE SET NULL
    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  // Work schedules and the holiday calendar — see server/apply_work_schedules.mjs
+  // and docs/attendance_schedules_and_exceptions_plan.md. Reference data only:
+  // nothing reads these yet, and the attendance evaluator that will arrives in
+  // Phase 2. The seeded IST schedules come from the migration, not from here —
+  // a boot-time guard must never invent business data.
+  //
+  // weekday is 0 = Sunday … 6 = Saturday (JS getDay(), MySQL DAYOFWEEK() - 1).
+  `CREATE TABLE IF NOT EXISTS work_schedules (
+     id                 INT AUTO_INCREMENT PRIMARY KEY,
+     company_id         INT NOT NULL,
+     name_en            VARCHAR(150) NOT NULL,
+     name_ar            VARCHAR(150) NULL,
+     timezone           VARCHAR(60) NOT NULL DEFAULT 'Asia/Dubai',
+     grace_in_minutes   SMALLINT NOT NULL DEFAULT 10,
+     grace_out_minutes  SMALLINT NOT NULL DEFAULT 10,
+     late_case_minutes  SMALLINT NOT NULL DEFAULT 30,
+     early_case_minutes SMALLINT NOT NULL DEFAULT 30,
+     half_day_threshold_pct TINYINT NOT NULL DEFAULT 50,
+     is_default         BOOLEAN NOT NULL DEFAULT FALSE,
+     active             BOOLEAN NOT NULL DEFAULT TRUE,
+     notes              VARCHAR(500) NULL,
+     created_by         INT NULL,
+     created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     updated_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+     UNIQUE KEY uq_ws_company_name (company_id, name_en),
+     INDEX idx_ws_company (company_id, active),
+     FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+     FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  `CREATE TABLE IF NOT EXISTS work_schedule_days (
+     id            INT AUTO_INCREMENT PRIMARY KEY,
+     schedule_id   INT NOT NULL,
+     weekday       TINYINT NOT NULL,
+     is_working    BOOLEAN NOT NULL DEFAULT TRUE,
+     start_time    TIME NULL,
+     end_time      TIME NULL,
+     break_minutes SMALLINT NOT NULL DEFAULT 0,
+     UNIQUE KEY uq_wsd_schedule_day (schedule_id, weekday),
+     FOREIGN KEY (schedule_id) REFERENCES work_schedules(id) ON DELETE CASCADE
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  `CREATE TABLE IF NOT EXISTS employee_work_schedules (
+     id             INT AUTO_INCREMENT PRIMARY KEY,
+     employee_id    INT NOT NULL,
+     schedule_id    INT NOT NULL,
+     company_id     INT NOT NULL,
+     effective_from DATE NOT NULL,
+     effective_to   DATE NULL,
+     note           VARCHAR(300) NULL,
+     assigned_by    INT NULL,
+     created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     UNIQUE KEY uq_ews_emp_from (employee_id, effective_from),
+     INDEX idx_ews_lookup (employee_id, effective_from),
+     INDEX idx_ews_company (company_id),
+     FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE,
+     FOREIGN KEY (schedule_id) REFERENCES work_schedules(id) ON DELETE CASCADE,
+     FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+     FOREIGN KEY (assigned_by) REFERENCES users(id) ON DELETE SET NULL
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  `CREATE TABLE IF NOT EXISTS holidays (
+     id           INT AUTO_INCREMENT PRIMARY KEY,
+     company_id   INT NULL,
+     holiday_date DATE NOT NULL,
+     name_en      VARCHAR(150) NOT NULL,
+     name_ar      VARCHAR(150) NULL,
+     is_half_day  BOOLEAN NOT NULL DEFAULT FALSE,
+     notes        VARCHAR(300) NULL,
+     created_by   INT NULL,
+     created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     UNIQUE KEY uq_holiday_company_date (company_id, holiday_date),
+     INDEX idx_holiday_date (holiday_date),
+     FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+     FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   // Scanned proof attached to a leave request — see server/apply_leave_docs.mjs.
   `CREATE TABLE IF NOT EXISTS leave_files (
      id               INT AUTO_INCREMENT PRIMARY KEY,

@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { Building2, Network, Wrench, Box, Settings2, Mail, FileText } from 'lucide-react';
+import { Building2, Network, Wrench, Box, Settings2, Mail, FileText, CalendarClock } from 'lucide-react';
 import { cn } from '@utils/cn';
 import { useTranslation } from 'react-i18next';
 import { useSelector } from 'react-redux';
@@ -13,6 +13,7 @@ export default function SettingsLayout() {
     { path: '/settings/departments', icon: Network, label: t('nav.departments') },
     { path: '/settings/skills', icon: Wrench, label: t('nav.skills') },
     { path: '/settings/catalog', icon: Box, label: t('nav.asset_catalog') },
+    { path: '/settings/work-schedules', icon: CalendarClock, label: t('nav.work_schedules') },
     // Infrastructure / sensitive config — admin only.
     { path: '/settings/system', icon: Settings2, label: t('nav.system_config'), adminOnly: true },
     { path: '/settings/email', icon: Mail, label: t('nav.email_config', 'Email'), adminOnly: true },

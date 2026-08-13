@@ -35,6 +35,7 @@ const CompanySettings = lazy(() => import('@pages/settings/CompanySettings'));
 const DepartmentSettings = lazy(() => import('@pages/settings/DepartmentSettings'));
 const SkillsSettings = lazy(() => import('@pages/settings/SkillsSettings'));
 const AssetCatalog = lazy(() => import('@pages/settings/AssetCatalog'));
+const WorkSchedules = lazy(() => import('@pages/settings/WorkSchedules'));
 const SystemConfig = lazy(() => import('@pages/settings/SystemConfig'));
 
 // Admin
@@ -158,6 +159,7 @@ export default function App() {
                   <Route path="departments" element={<DepartmentSettings />} />
                   <Route path="skills" element={<SkillsSettings />} />
                   <Route path="catalog" element={<AssetCatalog />} />
+                  <Route path="work-schedules" element={<WorkSchedules />} />
                   <Route path="system" element={<SystemConfig />} />
                   <Route path="email" element={<EmailSettings />} />
                   <Route path="templates" element={<TemplateManager />} />
