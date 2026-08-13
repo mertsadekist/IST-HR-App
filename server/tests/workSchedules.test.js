@@ -367,18 +367,25 @@ describe('deleting a schedule', () => {
 });
 
 describe('holidays', () => {
+  // Far-future dates on purpose. An earlier version of this suite used December
+  // 2026 and started failing the moment the real UAE calendar was seeded — the
+  // group-wide National Day already occupied that date. Fixtures must not live
+  // in a year anyone's real data can reach.
+  const YEAR = 2099;
+  const DAY_ONE = `${YEAR}-12-02`;
+  const DAY_TWO = `${YEAR}-12-03`;
   let holidayId;
 
   it('records one for a single company', async () => {
     const res = await request.post('/api/work-schedules/holidays').set(bearer(tokAdmin))
-      .send({ company_id: fx.companyA, holiday_date: '2026-12-02', name_en: `${tag} National Day` });
+      .send({ company_id: fx.companyA, holiday_date: DAY_ONE, name_en: `${tag} National Day` });
     expect(res.status).toBe(201);
     holidayId = res.body.id;
   });
 
   it('refuses a second holiday on the same date for that company', async () => {
     const res = await request.post('/api/work-schedules/holidays').set(bearer(tokAdmin))
-      .send({ company_id: fx.companyA, holiday_date: '2026-12-02', name_en: 'Duplicate' });
+      .send({ company_id: fx.companyA, holiday_date: DAY_ONE, name_en: 'Duplicate' });
     expect(res.status).toBe(409);
   });
 
@@ -389,20 +396,20 @@ describe('holidays', () => {
   });
 
   it('lists it for that company', async () => {
-    const res = await request.get(`/api/work-schedules/holidays?year=2026&company_id=${fx.companyA}`).set(bearer(tokAdmin));
+    const res = await request.get(`/api/work-schedules/holidays?year=${YEAR}&company_id=${fx.companyA}`).set(bearer(tokAdmin));
     expect(res.status).toBe(200);
-    expect(res.body.some((h) => h.id === holidayId && h.holiday_date === '2026-12-02')).toBe(true);
+    expect(res.body.some((h) => h.id === holidayId && h.holiday_date === DAY_ONE)).toBe(true);
   });
 
   it('shows a group-wide holiday to every company rather than hiding it', async () => {
     // company_id NULL means "all companies", so it has to survive the scope
     // filter — the naive `AND company_id = ?` would drop it.
     const res = await request.post('/api/work-schedules/holidays').set(bearer(tokAdmin))
-      .send({ all_companies: true, holiday_date: '2026-12-03', name_en: `${tag} Group Holiday` });
+      .send({ all_companies: true, holiday_date: DAY_TWO, name_en: `${tag} Group Holiday` });
     expect(res.status).toBe(201);
 
-    const scoped = await request.get(`/api/work-schedules/holidays?year=2026&company_id=${fx.companyB}`).set(bearer(tokAdmin));
-    expect(scoped.body.some((h) => h.holiday_date === '2026-12-03')).toBe(true);
+    const scoped = await request.get(`/api/work-schedules/holidays?year=${YEAR}&company_id=${fx.companyB}`).set(bearer(tokAdmin));
+    expect(scoped.body.some((h) => h.holiday_date === DAY_TWO)).toBe(true);
 
     await pool.query('DELETE FROM holidays WHERE id = ?', [res.body.id]);
   });

@@ -263,8 +263,23 @@ schedule builder / coverage / holiday calendar, and a Schedule tab on the employ
 file. The four IST schedules are seeded by `apply_work_schedules.mjs`; all 22
 active staff resolve through their company default, so IST Real Estate Saturdays
 come out as a 300-minute working day and IST Markets Saturdays as a day off.
-Still to do by hand: enter the 2026 holiday list, and assign anyone whose shift
-differs from their company default (the no-meal-break staff).
+
+The 2026 UAE calendar is seeded by `apply_seed_uae_holidays_2026.mjs` — 14 days,
+group-wide (`company_id NULL`). Two of them are worth remembering:
+
+- **The Islamic New Year was settled from the punch record, not from a listing.**
+  It is published as Tuesday 16 June, *transferable* to Monday 15 June at the
+  Cabinet's discretion. IST's attendance shows zero punches company-wide on the
+  15th and seventeen on the 16th, so the Monday is what was seeded. For any
+  transferable holiday already in the past, the punch record is better evidence
+  than any published calendar.
+- **The Hijri dates carry their uncertainty in the `notes` field.** Moon sighting
+  can move them a day, so each says so and HR corrects it in the UI once the
+  Cabinet announces. The seed never overwrites a date already present, so a
+  correction survives every redeploy.
+
+Still to do by hand: assign anyone whose shift differs from their company default
+(the no-meal-break staff).
 
 **Phase 2 — The evaluator in shadow mode. ✅ Delivered.** `evaluateDay()` (pure,
 in `services/attendanceEvaluator.js`), `attendance_exceptions` +
