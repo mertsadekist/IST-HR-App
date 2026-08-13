@@ -2190,7 +2190,10 @@
     "t_holiday_deleted": "Holiday deleted",
     "t_operation_failed": "Operation failed",
     "t_failed_to_load_evaluation": "Failed to load the attendance checks",
-    "t_evaluation_complete": "Checked {{days}} day(s): {{opened}} new case(s), {{differs}} disagreement(s)"
+    "t_evaluation_complete": "Checked {{days}} day(s): {{opened}} new case(s), {{differs}} disagreement(s)",
+    "t_case_waived": "Case waived",
+    "t_choose_a_reason": "Choose a reason",
+    "t_reason_recorded": "Recorded — {{days}} of a day, {{paid}}"
   },
   "kb": {
     "title": "Knowledge Base",
@@ -2682,6 +2685,35 @@
     "status_Waived": "Waived",
     "status_Auto_resolved": "Auto-closed",
     "shadow_day": "Observation day {{day}} of {{total}}",
-    "shadow_complete": "Observation period complete — ready to review"
+    "shadow_complete": "Observation period complete — ready to review",
+    "tab_report": "Per employee",
+    "record_reason": "Record reason",
+    "record": "Record",
+    "record_reason_title": "Why did this happen?",
+    "waive_hint": "Waive — no reason needed, no cost",
+    "waived_by_hr": "Waived by HR",
+    "reason_label": "Reason",
+    "reason_placeholder": "Choose a reason…",
+    "days_label": "Share of the day",
+    "days_hint": "Pre-filled from the time actually lost ({{suggested}}). Change it if policy says otherwise.",
+    "note_label": "Note",
+    "note_placeholder": "What the employee said, or the decision taken",
+    "paid": "paid",
+    "unpaid": "unpaid",
+    "effect_paid": "{{name}} is paid. The time is excused and nothing is deducted.",
+    "effect_unpaid": "{{name}} is unpaid. {{days}} of a day will be deducted on the next payroll run.",
+    "no_report": "Nothing to report yet",
+    "no_report_desc": "Once the checks have run, each employee's absences and lateness appear here.",
+    "r_absences": "Absences",
+    "r_late": "Late",
+    "r_early": "Left early",
+    "r_short": "Short days",
+    "r_unreadable": "Unreadable",
+    "r_minutes": "Time lost",
+    "r_explained": "Explained",
+    "r_paid": "Paid days",
+    "r_unpaid": "Unpaid days",
+    "r_open": "Still open",
+    "report_note": "Paid and unpaid days come from the reasons recorded against each case. Unpaid days are what payroll will deduct."
   }
 }

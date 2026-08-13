@@ -43,6 +43,7 @@ node apply_attendance_evaluation.mjs
 node apply_seed_uae_holidays_2026.mjs
 node apply_backfill_employee_end_date.mjs
 node apply_monfri_schedule.mjs
+node apply_exception_leave_link.mjs
 node seed_asset_catalog.mjs
 node seed_social_accounts.mjs
 echo "✅ All migrations applied."

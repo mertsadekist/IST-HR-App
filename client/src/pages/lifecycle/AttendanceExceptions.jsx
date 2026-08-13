@@ -19,7 +19,9 @@ import Button from '@components/ui/Button';
 import Badge from '@components/ui/Badge';
 import EmptyState from '@components/ui/EmptyState';
 import { toast } from 'react-toastify';
-import { Eye, Play, AlertTriangle, Scale, Users, History, CheckCircle2 } from 'lucide-react';
+import Modal from '@components/ui/Modal';
+import Input from '@components/ui/Input';
+import { Eye, Play, AlertTriangle, Scale, Users, History, CheckCircle2, FileSignature, BarChart3, Ban } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 
@@ -41,7 +43,10 @@ export default function AttendanceExceptions() {
   const { currentCompanyId } = useSelector((s) => s.entity);
   const canRun = ['admin', 'hr_manager'].includes(useSelector((s) => s.auth.user?.role));
 
-  const [tab, setTab] = useState('exceptions'); // exceptions | comparison | runs
+  const [tab, setTab] = useState('exceptions'); // exceptions | report | comparison | runs
+  const [reasons, setReasons] = useState([]);
+  const [reasonFor, setReasonFor] = useState(null); // the case being explained
+  const [report, setReport] = useState([]);
   const [from, setFrom] = useState(dayjs().subtract(30, 'day').format('YYYY-MM-DD'));
   const [to, setTo] = useState(dayjs().format('YYYY-MM-DD'));
   const [severity, setSeverity] = useState('');
@@ -74,8 +79,29 @@ export default function AttendanceExceptions() {
   useEffect(() => {
     if (tab === 'comparison') evalApi.getComparison(params()).then(({ data }) => setComparison(data)).catch(() => setComparison([]));
     if (tab === 'runs') evalApi.getRuns().then(({ data }) => setRuns(data)).catch(() => setRuns([]));
+    if (tab === 'report') evalApi.getReport(params()).then(({ data }) => setReport(data.rows || [])).catch(() => setReport([]));
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [tab, from, to, currentCompanyId]);
+
+  useEffect(() => {
+    evalApi.getReasons({ company_id: currentCompanyId || undefined })
+      .then(({ data }) => setReasons(data)).catch(() => setReasons([]));
+  }, [currentCompanyId]);
+
+  /** A case has been explained: refresh the list, and the report if it is open. */
+  const afterResolve = () => {
+    setReasonFor(null);
+    load();
+    if (tab === 'report') evalApi.getReport(params()).then(({ data }) => setReport(data.rows || [])).catch(() => {});
+  };
+
+  const waive = async (e) => {
+    try {
+      await evalApi.updateException(e.id, { status: 'Waived', resolution: t('attendance_eval.waived_by_hr') });
+      toast.success(t('toasts.t_case_waived'));
+      afterResolve();
+    } catch (err) { toast.error(err.response?.data?.error || t('toasts.t_operation_failed')); }
+  };
 
   const run = async () => {
     setRunning(true);
@@ -105,6 +131,7 @@ export default function AttendanceExceptions() {
 
   const tabs = [
     { key: 'exceptions', icon: AlertTriangle, label: t('attendance_eval.tab_exceptions') },
+    { key: 'report', icon: BarChart3, label: t('attendance_eval.tab_report') },
     { key: 'comparison', icon: Scale, label: t('attendance_eval.tab_comparison') },
     { key: 'runs', icon: History, label: t('attendance_eval.tab_runs') },
   ];
@@ -226,9 +253,21 @@ export default function AttendanceExceptions() {
                               </p>
                             )}
                           </div>
-                          {e.employee_status !== 'Active' && (
-                            <Badge variant="warning" className="text-[10px] shrink-0">{e.employee_status}</Badge>
-                          )}
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {e.employee_status !== 'Active' && (
+                              <Badge variant="warning" className="text-[10px]">{e.employee_status}</Badge>
+                            )}
+                            {canRun && ['Open', 'Awaiting Employee', 'Awaiting Manager'].includes(e.status) && (
+                              <>
+                                <Button size="sm" variant="secondary" onClick={() => setReasonFor(e)}>
+                                  <FileSignature size={13} /> {t('attendance_eval.record_reason')}
+                                </Button>
+                                <Button size="sm" variant="ghost" onClick={() => waive(e)} title={t('attendance_eval.waive_hint')}>
+                                  <Ban size={13} />
+                                </Button>
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -270,6 +309,59 @@ export default function AttendanceExceptions() {
             </Card>
           )}
         </>
+      )}
+
+      {/* ───────── per-employee report ───────── */}
+      {tab === 'report' && (
+        report.length === 0 ? (
+          <Card><EmptyState icon={<BarChart3 className="w-6 h-6 text-surface-400" />}
+            title={t('attendance_eval.no_report')} description={t('attendance_eval.no_report_desc')} /></Card>
+        ) : (
+          <Card className="!p-0 overflow-x-auto">
+            <table className="w-full text-xs min-w-[880px]">
+              <thead className="bg-surface-50 text-surface-500"><tr>
+                <th className="text-start p-3">{t('attendance_eval.th_employee')}</th>
+                <th className="p-3">{t('attendance_eval.r_absences')}</th>
+                <th className="p-3">{t('attendance_eval.r_late')}</th>
+                <th className="p-3">{t('attendance_eval.r_early')}</th>
+                <th className="p-3">{t('attendance_eval.r_short')}</th>
+                <th className="p-3">{t('attendance_eval.r_unreadable')}</th>
+                <th className="p-3">{t('attendance_eval.r_minutes')}</th>
+                <th className="p-3">{t('attendance_eval.r_explained')}</th>
+                <th className="p-3">{t('attendance_eval.r_paid')}</th>
+                <th className="p-3">{t('attendance_eval.r_unpaid')}</th>
+                <th className="p-3">{t('attendance_eval.r_open')}</th>
+              </tr></thead>
+              <tbody>
+                {report.map((r) => (
+                  <tr key={r.employee_id} className="border-t border-surface-100">
+                    <td className="p-3">
+                      <span className="font-medium text-surface-800">{r.name}</span>
+                      {r.employee_status !== 'Active' && (
+                        <Badge variant="warning" className="text-[10px] ms-2">{r.employee_status}</Badge>
+                      )}
+                    </td>
+                    <td className={`p-3 text-center ${Number(r.absences) ? 'font-semibold text-red-600' : 'text-surface-400'}`}>{r.absences}</td>
+                    <td className="p-3 text-center">{r.late_arrivals}</td>
+                    <td className="p-3 text-center">{r.early_departures}</td>
+                    <td className="p-3 text-center">{r.short_days}</td>
+                    <td className="p-3 text-center">{r.unreadable_days}</td>
+                    <td className="p-3 text-center text-surface-500">
+                      {mins(Number(r.late_minutes) + Number(r.early_minutes))}
+                    </td>
+                    <td className="p-3 text-center">{r.explained} / {r.total_cases}</td>
+                    <td className="p-3 text-center text-emerald-700">{Number(r.paid_days).toFixed(2)}</td>
+                    <td className="p-3 text-center text-amber-700 font-medium">{Number(r.unpaid_days).toFixed(2)}</td>
+                    <td className={`p-3 text-center ${Number(r.still_open) ? 'font-semibold text-brand-700' : 'text-surface-300'}`}>{r.still_open}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="px-3 py-2 text-[11px] text-surface-400 border-t border-surface-100">
+              {t('attendance_eval.report_note')}
+            </p>
+          </Card>
+        )
       )}
 
       {/* ───────── comparison ───────── */}
@@ -370,7 +462,112 @@ export default function AttendanceExceptions() {
           </div>
         )
       )}
+
+      {reasonFor && (
+        <ReasonModal exc={reasonFor} reasons={reasons} t={t}
+          onClose={() => setReasonFor(null)} onSaved={afterResolve} />
+      )}
     </div>
+  );
+}
+
+/**
+ * Recording why a case happened.
+ *
+ * The reason is a leave type, and the type is what decides the cost — a paid one
+ * excuses the time, an unpaid one deducts it. So the modal states the
+ * consequence in money terms before HR commits, because "Unpaid Leave, 0.15 day"
+ * does not read as "this will cost him fifteen dirhams" to anybody.
+ *
+ * The share of a day is pre-filled from the minutes actually lost and stays
+ * editable: a policy may treat any late arrival as half a day regardless.
+ */
+function ReasonModal({ exc, reasons, onClose, onSaved, t }) {
+  const suggested = useMemo(() => {
+    if (exc.type === 'ABSENT_NO_RECORD' || exc.type === 'IMPLAUSIBLE_PUNCH') return 1;
+    const expected = Number(exc.expected_minutes) || 0;
+    const lost = (Number(exc.late_minutes) || 0) + (Number(exc.early_leave_minutes) || 0)
+      || Math.max(0, expected - (Number(exc.worked_minutes) || 0));
+    if (!expected || !lost) return 1;
+    return Math.min(1, Math.max(0.01, Math.round((lost / expected) * 100) / 100));
+  }, [exc]);
+
+  const [form, setForm] = useState({ leave_type_id: '', days: suggested, reason: '' });
+  const [saving, setSaving] = useState(false);
+  const chosen = reasons.find((r) => String(r.id) === String(form.leave_type_id));
+
+  const save = async (e) => {
+    e.preventDefault();
+    if (!form.leave_type_id) { toast.error(t('toasts.t_choose_a_reason')); return; }
+    setSaving(true);
+    try {
+      const { data } = await evalApi.recordReason(exc.id, {
+        leave_type_id: Number(form.leave_type_id),
+        days: Number(form.days),
+        reason: form.reason || undefined,
+      });
+      toast.success(t('toasts.t_reason_recorded', {
+        days: data.days,
+        paid: t(data.paid ? 'attendance_eval.paid' : 'attendance_eval.unpaid'),
+      }));
+      onSaved();
+    } catch (err) {
+      toast.error(err.response?.data?.error || t('toasts.t_operation_failed'));
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <Modal open onClose={onClose} title={t('attendance_eval.record_reason_title')} size="md">
+      <form onSubmit={save} className="space-y-4">
+        <div className="p-3 rounded-xl bg-surface-50 text-xs space-y-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-semibold text-surface-800">{exc.employee_name}</span>
+            <span className="text-surface-500">{exc.work_date}</span>
+            <Badge variant="inactive" className="text-[10px]">{t(`attendance_eval.type_${exc.type}`)}</Badge>
+          </div>
+          <p className="text-surface-500">{exc.detail}</p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-surface-700 mb-1.5">{t('attendance_eval.reason_label')}</label>
+          <select value={form.leave_type_id} onChange={(ev) => setForm((p) => ({ ...p, leave_type_id: ev.target.value }))}
+            className="w-full px-3 py-2.5 text-sm bg-white border border-surface-200 rounded-xl input-focus">
+            <option value="">{t('attendance_eval.reason_placeholder')}</option>
+            {reasons.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name} — {t(r.is_paid ? 'attendance_eval.paid' : 'attendance_eval.unpaid')}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <Input label={t('attendance_eval.days_label')} type="number" step="0.01" min="0.01" max="1"
+          value={form.days} onChange={(ev) => setForm((p) => ({ ...p, days: ev.target.value }))} />
+        <p className="text-[11px] text-surface-400 -mt-2">{t('attendance_eval.days_hint', { suggested })}</p>
+
+        <div>
+          <label className="block text-sm font-medium text-surface-700 mb-1.5">{t('attendance_eval.note_label')}</label>
+          <textarea value={form.reason} onChange={(ev) => setForm((p) => ({ ...p, reason: ev.target.value }))} rows={2}
+            placeholder={t('attendance_eval.note_placeholder')}
+            className="w-full px-3 py-2.5 text-sm bg-white border border-surface-200 rounded-xl input-focus resize-none" />
+        </div>
+
+        {chosen && (
+          <div className={`p-3 rounded-xl text-xs ${chosen.is_paid
+            ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+            : 'bg-amber-50 border border-amber-200 text-amber-900'}`}>
+            {chosen.is_paid
+              ? t('attendance_eval.effect_paid', { name: chosen.name })
+              : t('attendance_eval.effect_unpaid', { name: chosen.name, days: Number(form.days) || 0 })}
+          </div>
+        )}
+
+        <div className="flex justify-end gap-3 pt-1">
+          <Button type="button" variant="secondary" onClick={onClose}>{t('common.cancel')}</Button>
+          <Button type="submit" loading={saving}>{t('attendance_eval.record')}</Button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 

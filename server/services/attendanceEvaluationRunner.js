@@ -95,7 +95,19 @@ async function loadHolidays(from, to, db) {
   return (companyId, date) => index.get(`${companyId}|${date}`) || index.get(`*|${date}`) || null;
 }
 
-/** Approved leave, as a per-employee list of ranges. */
+/**
+ * Approved **full-day** leave, as a per-employee list of ranges.
+ *
+ * Partial leave is deliberately excluded. HR explains a 74-minute late arrival
+ * by recording 0.15 of a day against it, and if that counted here the evaluator
+ * would reach step 4, call the whole day "On Leave" and stop — erasing a day the
+ * person actually worked. A request only covers its dates when its day count
+ * reaches the number of dates it spans.
+ *
+ * The partial record still exists and still reaches payroll; it just does not
+ * excuse the day, it excuses the minutes. The case it explains is closed by
+ * being marked Resolved, which a re-run preserves.
+ */
 async function loadLeave(employees, from, to, db) {
   const index = new Map();
   if (!employees.length) return () => null;
@@ -109,7 +121,8 @@ async function loadLeave(employees, from, to, db) {
        LEFT JOIN leave_types lt ON lt.id = lr.leave_type_id
       WHERE lr.status = 'Approved'
         AND lr.employee_id IN (${ids.map(() => '?').join(',')})
-        AND lr.start_date <= ? AND lr.end_date >= ?`, [...ids, to, from]);
+        AND lr.start_date <= ? AND lr.end_date >= ?
+        AND lr.days >= DATEDIFF(lr.end_date, lr.start_date) + 1`, [...ids, to, from]);
   for (const r of rows) {
     if (!index.has(r.employee_id)) index.set(r.employee_id, []);
     index.get(r.employee_id).push(r);

@@ -2190,7 +2190,10 @@
     "t_holiday_deleted": "تم حذف العطلة",
     "t_operation_failed": "فشلت العملية",
     "t_failed_to_load_evaluation": "تعذّر تحميل فحص الحضور",
-    "t_evaluation_complete": "فُحص {{days}} يوم: {{opened}} حالة جديدة، {{differs}} اختلاف"
+    "t_evaluation_complete": "فُحص {{days}} يوم: {{opened}} حالة جديدة، {{differs}} اختلاف",
+    "t_case_waived": "تم التجاوز عن الحالة",
+    "t_choose_a_reason": "اختر سبباً",
+    "t_reason_recorded": "سُجّل — {{days}} من اليوم، {{paid}}"
   },
   "kb": {
     "title": "قاعدة المعرفة",
@@ -2682,6 +2685,35 @@
     "status_Waived": "مُتجاوَز عنها",
     "status_Auto_resolved": "أُغلقت تلقائياً",
     "shadow_day": "يوم المراقبة {{day}} من {{total}}",
-    "shadow_complete": "انتهت فترة المراقبة — جاهزة للمراجعة"
+    "shadow_complete": "انتهت فترة المراقبة — جاهزة للمراجعة",
+    "tab_report": "حسب الموظف",
+    "record_reason": "تسجيل السبب",
+    "record": "تسجيل",
+    "record_reason_title": "ما سبب ما حدث؟",
+    "waive_hint": "تجاوز — بلا سبب وبلا تكلفة",
+    "waived_by_hr": "تجاوزت عنه الموارد البشرية",
+    "reason_label": "السبب",
+    "reason_placeholder": "اختر سبباً…",
+    "days_label": "حصة اليوم",
+    "days_hint": "محسوبة من الوقت الضائع فعلاً ({{suggested}}). غيّرها إن كانت السياسة تقول غير ذلك.",
+    "note_label": "ملاحظة",
+    "note_placeholder": "ما ذكره الموظف، أو القرار المتخذ",
+    "paid": "مدفوعة",
+    "unpaid": "غير مدفوعة",
+    "effect_paid": "{{name}} مدفوعة. الوقت معذور ولا يُخصم شيء.",
+    "effect_unpaid": "{{name}} غير مدفوعة. سيُخصم {{days}} من اليوم في تشغيل الرواتب القادم.",
+    "no_report": "لا يوجد ما يُعرض بعد",
+    "no_report_desc": "بعد تشغيل الفحص تظهر هنا غيابات وتأخيرات كل موظف.",
+    "r_absences": "الغيابات",
+    "r_late": "تأخير",
+    "r_early": "خروج مبكر",
+    "r_short": "أيام ناقصة",
+    "r_unreadable": "غير مقروءة",
+    "r_minutes": "الوقت الضائع",
+    "r_explained": "مُفسَّرة",
+    "r_paid": "أيام مدفوعة",
+    "r_unpaid": "أيام غير مدفوعة",
+    "r_open": "ما تزال مفتوحة",
+    "report_note": "الأيام المدفوعة وغير المدفوعة مأخوذة من الأسباب المسجّلة على كل حالة. غير المدفوعة هي ما ستخصمه الرواتب."
   }
 }

@@ -261,6 +261,69 @@ describe('the cases it does raise', () => {
   });
 });
 
+describe('explaining a case with a partial day of leave', () => {
+  let paidTypeId;
+  let unpaidTypeId;
+
+  beforeAll(async () => {
+    [[{ id: paidTypeId }]] = [await pool.query(
+      'SELECT id FROM leave_types WHERE company_id IS NULL AND is_paid = 1 LIMIT 1').then((r) => r[0])];
+    [[{ id: unpaidTypeId }]] = [await pool.query(
+      'SELECT id FROM leave_types WHERE company_id IS NULL AND is_paid = 0 LIMIT 1').then((r) => r[0])];
+  });
+
+  it('does not turn the whole day into leave', async () => {
+    // The guard this exists for. HR explains a 50-minute late arrival by
+    // recording 0.1 of a day. If that counted as leave covering the date, the
+    // evaluator would reach its leave step, call the whole day "On Leave" and
+    // stop — erasing a day the person actually worked nearly all of.
+    const [lv] = await pool.query('INSERT INTO leave_requests SET ?', {
+      company_id: fx.company, employee_id: fx.tracked, leave_type_id: unpaidTypeId,
+      start_date: TUE, end_date: TUE, days: 0.1, status: 'Approved', reason: 'fixture partial',
+    });
+    await runEvaluation({ from: SUN, to: WED, companyId: fx.company, userId: fx.user });
+
+    const [[day]] = await pool.query(
+      'SELECT eval_status, eval_late_minutes FROM attendance WHERE employee_id = ? AND work_date = ?',
+      [fx.tracked, TUE]);
+    expect(day.eval_status).toBe('Late');          // still a worked day
+    expect(day.eval_late_minutes).toBe(50);        // still 50 minutes late
+    expect(day.eval_status).not.toBe('On Leave');
+
+    await pool.query('DELETE FROM leave_requests WHERE id = ?', [lv.insertId]);
+    await runEvaluation({ from: SUN, to: WED, companyId: fx.company, userId: fx.user });
+  });
+
+  it('does turn the day into leave when the leave really is a full day', async () => {
+    const [lv] = await pool.query('INSERT INTO leave_requests SET ?', {
+      company_id: fx.company, employee_id: fx.tracked, leave_type_id: paidTypeId,
+      start_date: TUE, end_date: TUE, days: 1, status: 'Approved', reason: 'fixture full',
+    });
+    await runEvaluation({ from: SUN, to: WED, companyId: fx.company, userId: fx.user });
+    const [[day]] = await pool.query(
+      'SELECT eval_status FROM attendance WHERE employee_id = ? AND work_date = ?', [fx.tracked, TUE]);
+    expect(day.eval_status).toBe('On Leave');
+
+    await pool.query('DELETE FROM leave_requests WHERE id = ?', [lv.insertId]);
+    await runEvaluation({ from: SUN, to: WED, companyId: fx.company, userId: fx.user });
+  });
+
+  it('counts a multi-day request as full only when its days cover the span', async () => {
+    // Two dates, one day recorded — half of each, not two full days off.
+    const [lv] = await pool.query('INSERT INTO leave_requests SET ?', {
+      company_id: fx.company, employee_id: fx.tracked, leave_type_id: paidTypeId,
+      start_date: TUE, end_date: WED, days: 1, status: 'Approved', reason: 'fixture half-half',
+    });
+    await runEvaluation({ from: SUN, to: WED, companyId: fx.company, userId: fx.user });
+    const [[day]] = await pool.query(
+      'SELECT eval_status FROM attendance WHERE employee_id = ? AND work_date = ?', [fx.tracked, TUE]);
+    expect(day.eval_status).not.toBe('On Leave');
+
+    await pool.query('DELETE FROM leave_requests WHERE id = ?', [lv.insertId]);
+    await runEvaluation({ from: SUN, to: WED, companyId: fx.company, userId: fx.user });
+  });
+});
+
 describe('the run log', () => {
   it('records what happened, so a sweep can be explained afterwards', async () => {
     const res = await runEvaluation({ from: SUN, to: WED, companyId: fx.company, userId: fx.user });
@@ -332,6 +395,75 @@ describe('the API', () => {
       process.env.JWT_SECRET, { expiresIn: '1h' });
     const res = await request.get('/api/attendance-evaluation/summary').set({ Authorization: `Bearer ${recruiter}` });
     expect(res.status).toBe(403);
+  });
+
+  it('records a reason as a fractional leave and closes the case', async () => {
+    await runEvaluation({ from: SUN, to: WED, companyId: fx.company, userId: fx.user });
+    const [[unpaid]] = await pool.query(
+      'SELECT id, name FROM leave_types WHERE company_id IS NULL AND is_paid = 0 LIMIT 1');
+    const [[exc]] = await pool.query(
+      "SELECT id FROM attendance_exceptions WHERE company_id = ? AND type = 'LATE_ARRIVAL'", [fx.company]);
+    if (!exc) return;
+
+    const res = await request.post(`/api/attendance-evaluation/exceptions/${exc.id}/leave`)
+      .set(bearer()).send({ leave_type_id: unpaid.id, reason: 'traffic' });
+    expect(res.status).toBe(201);
+    // 50 minutes lost against a 480-minute day.
+    expect(res.body.days).toBeCloseTo(0.1, 2);
+    expect(res.body.paid).toBe(false);
+
+    const [[after]] = await pool.query(
+      'SELECT status, leave_request_id, excused_minutes, resolution FROM attendance_exceptions WHERE id = ?', [exc.id]);
+    expect(after.status).toBe('Resolved');
+    expect(after.leave_request_id).toBeTruthy();
+    expect(after.excused_minutes).toBe(50);
+    expect(after.resolution).toMatch(/unpaid/);
+
+    const [[lv]] = await pool.query(
+      'SELECT days, status, start_date, end_date FROM leave_requests WHERE id = ?', [after.leave_request_id]);
+    expect(Number(lv.days)).toBeCloseTo(0.1, 2);
+    expect(lv.status).toBe('Approved');
+
+    // Re-running must not drag a resolved case back to Open.
+    await runEvaluation({ from: SUN, to: WED, companyId: fx.company, userId: fx.user });
+    const [[still]] = await pool.query('SELECT status FROM attendance_exceptions WHERE id = ?', [exc.id]);
+    expect(still.status).toBe('Resolved');
+
+    await pool.query('DELETE FROM leave_requests WHERE id = ?', [after.leave_request_id]);
+  });
+
+  it('refuses a second leave record against the same case', async () => {
+    const [[unpaid]] = await pool.query(
+      'SELECT id FROM leave_types WHERE company_id IS NULL AND is_paid = 0 LIMIT 1');
+    const [[exc]] = await pool.query(
+      'SELECT id FROM attendance_exceptions WHERE company_id = ? AND leave_request_id IS NOT NULL LIMIT 1',
+      [fx.company]);
+    if (!exc) return;
+    const res = await request.post(`/api/attendance-evaluation/exceptions/${exc.id}/leave`)
+      .set(bearer()).send({ leave_type_id: unpaid.id });
+    expect(res.status).toBe(409);
+  });
+
+  it('gives one report line per employee, counting each kind of case', async () => {
+    const res = await request.get(`/api/attendance-evaluation/report?from=${SUN}&to=${WED}&company_id=${fx.company}`)
+      .set(bearer());
+    expect(res.status).toBe(200);
+    const line = res.body.rows.find((r) => r.employee_id === fx.tracked);
+    expect(line).toBeTruthy();
+    expect(line).toHaveProperty('absences');
+    expect(line).toHaveProperty('late_arrivals');
+    expect(line).toHaveProperty('unpaid_days');
+    expect(Number(line.total_cases)).toBeGreaterThan(0);
+  });
+
+  it('reports across every company too, not only a named one', async () => {
+    // The company-wide call is a different query plan. With a company_id in
+    // hand MySQL treats the company as constant and allows a bare c.name in the
+    // select; without one, only_full_group_by rejects it. Passing a company on
+    // every test hid that completely.
+    const res = await request.get(`/api/attendance-evaluation/report?from=${SUN}&to=${WED}`).set(bearer());
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.rows)).toBe(true);
   });
 
   it('will not let a non-manager set the engine running', async () => {
