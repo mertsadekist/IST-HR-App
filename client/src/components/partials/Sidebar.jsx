@@ -9,7 +9,7 @@ import {
   BarChart3, ClipboardList, Trophy, Network, UserCog, Settings,
   Sparkles, ChevronDown, X, Package, Shield, Mail, Send,
   CalendarDays, Clock, Banknote, Inbox, HelpCircle, KeyRound, Share2, Globe,
-  Boxes, Layers, CloudDownload
+  Boxes, Layers, CloudDownload, ScanEye
 } from 'lucide-react';
 import { cn } from '@utils/cn';
 
@@ -58,6 +58,7 @@ const buildMenuGroups = (t) => [
         { path: '/leave', icon: CalendarDays, label: t('nav.leave', 'Leave'), roles: HR_ONLY },
         { path: '/attendance', icon: Clock, label: t('nav.attendance', 'Attendance'), roles: HR_ONLY },
         { path: '/attendance/sync', icon: CloudDownload, label: t('nav.attendance_sync'), roles: HR_ONLY },
+        { path: '/attendance/exceptions', icon: ScanEye, label: t('nav.attendance_exceptions'), roles: HR_ONLY },
         { path: '/payroll-runs', icon: Banknote, label: t('nav.payroll_runs', 'Payroll Runs'), roles: HR_AND_FINANCE },
         { path: '/salary-reviews', icon: TrendingUp, label: t('nav.salary_reviews', 'Salary Reviews'), roles: HR_ONLY },
         { path: '/performance', icon: TrendingUp, label: t('nav.performance', 'Performance'), roles: HR_ONLY },

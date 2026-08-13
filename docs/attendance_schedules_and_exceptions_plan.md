@@ -266,12 +266,39 @@ come out as a 300-minute working day and IST Markets Saturdays as a day off.
 Still to do by hand: enter the 2026 holiday list, and assign anyone whose shift
 differs from their company default (the no-meal-break staff).
 
-**Phase 2 — The evaluator in shadow mode.** `evaluateDay()` plus
-`attendance_exceptions`, run after each sync, writing exceptions and *proposed*
-values into the new columns while leaving `status` and `late_minutes` untouched. An
-HR page shows, per day, what the engine decided against what is stored. Run it two
-to four weeks. This is cheap precisely because the acquisition layer keeps a ledger
-of every file — the whole period can be replayed instead of waited out.
+**Phase 2 — The evaluator in shadow mode. ✅ Delivered.** `evaluateDay()` (pure,
+in `services/attendanceEvaluator.js`), `attendance_exceptions` +
+`attendance_evaluation_runs`, `eval_*` columns beside the stored ones on
+`attendance`, a runner invoked after every sync, and an **Attendance Checks** page
+comparing the engine against the record. `runEvaluation` throws if asked to run
+live, so the shadow guarantee is enforced in code rather than by convention.
+
+Three guards were added after the first run against live data produced 104
+absences that were all artefacts. Each is the same principle as the terminal
+steps — refuse to conclude from missing data:
+
+- **the day must have been observed.** The first run marked all 27 staff absent
+  on 13 Aug purely because that morning's file had not arrived. Live, that is 27
+  people losing a day's gross to a late sync.
+- **the employee must be on the device.** Somebody with no `attendance_id` is not
+  in the fingerprint system; a daily absence says nothing true about them.
+- **the employee must appear at least once in the range.** Otherwise it is an
+  offboarded person whose `end_date` was never entered — one finding, not one
+  case per working day.
+
+Those three cut the first run from 146 exceptions to 83, and the remaining
+absences concentrated in four people rather than spreading across the calendar.
+
+Two implementation notes worth keeping:
+
+- **`check_in` / `check_out` are `DATETIME`, not `TIME`**, and the MySQL driver
+  returns them shifted to UTC — a punch stored as 11:38 arrives in JavaScript as
+  07:38Z. Every read formats inside MySQL (`TIME_FORMAT`) to get the wall clock
+  that was actually recorded. Reading the column directly would put every
+  calculation four hours out.
+- The evaluator works in **seconds and rounds to minutes**, because the device
+  rounds too. Truncating disagreed with it by a minute on about half of all rows
+  and buried the real differences in noise.
 
 **Phase 3 — Live.** The evaluator writes authoritative values (Drive Sync / CSV
 rows only, never `Manual`), the queue gets its five statuses and proof upload, the

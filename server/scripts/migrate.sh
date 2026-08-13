@@ -39,6 +39,7 @@ node apply_fix_user_company_mismatch.mjs
 node apply_attendance_drive_sync.mjs
 node apply_work_schedules.mjs
 node apply_fix_employee_company_scope.mjs
+node apply_attendance_evaluation.mjs
 node seed_asset_catalog.mjs
 node seed_social_accounts.mjs
 echo "✅ All migrations applied."

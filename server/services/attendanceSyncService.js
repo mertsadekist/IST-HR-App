@@ -401,6 +401,25 @@ export async function runSync(pool, {
       + (summary.unmatched.length ? `, ${summary.unmatched.length} unmatched device id(s)` : '')
       + (filesFailed ? `, ${filesFailed} failed` : ''));
 
+    // Judge the days that just landed, in shadow mode.
+    //
+    // Deliberately after `finish` and wrapped: the sync is the critical path and
+    // the evaluator is an observer. A fault in the evaluator must never lose an
+    // imported file or fail the morning run — the worst it may do is leave the
+    // evaluation to the next pass.
+    if (filesImported && summary.files?.length) {
+      try {
+        const days = summary.files.filter(Boolean).sort();
+        const { runEvaluation } = await import('./attendanceEvaluationRunner.js');
+        summary.evaluation = await runEvaluation({
+          from: days[0], to: days[days.length - 1], trigger: 'Post-Sync', shadow: true,
+        });
+      } catch (e) {
+        console.error('post-sync evaluation failed (the import itself is unaffected):', e.message);
+        summary.evaluation_error = e.message;
+      }
+    }
+
     return { ok: !filesFailed, run_id: runId, status, summary };
   } catch (err) {
     await finish({ status: 'Failed', error: String(err.message).slice(0, 1000) });

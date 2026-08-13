@@ -44,6 +44,25 @@ export function minutesOfDay(time) {
   return h * 60 + min;
 }
 
+/**
+ * 'HH:MM:SS' → seconds since midnight.
+ *
+ * Punch times carry seconds and the source device rounds to the nearest minute
+ * when it reports lateness. Truncating instead would disagree with it by a minute
+ * on roughly half of all rows, and shadow mode would drown in one-minute
+ * "disagreements" that mean nothing. Schedule times are whole minutes, so only
+ * punches need this.
+ */
+export function secondsOfDay(time) {
+  const m = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(String(time || '').trim());
+  if (!m) return null;
+  const h = +m[1];
+  const min = +m[2];
+  const s = +(m[3] || 0);
+  if (h > 23 || min > 59 || s > 59) return null;
+  return h * 3600 + min * 60 + s;
+}
+
 /** Minutes since midnight → 'HH:MM'. */
 export function formatMinutes(mins) {
   if (mins == null || Number.isNaN(mins)) return null;
