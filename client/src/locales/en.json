@@ -1551,7 +1551,18 @@
     "im_updated": "Updated",
     "im_skipped": "Skipped",
     "im_unmatched": "Unmatched device IDs",
-    "import_unmatched_hint": "Set these device IDs as the Attendance ID on the matching employees, then re-import."
+    "import_unmatched_hint": "Set these device IDs as the Attendance ID on the matching employees, then re-import.",
+    "th_engine": "Engine",
+    "th_engine_hint": "What the schedule engine makes of this day. Shadow mode — not applied.",
+    "engine_note": "The Engine column is the schedule engine's own view, shown for comparison only. Nothing in it has been applied — the Status column is still the record, and it is what payroll reads.",
+    "engine_not_checked": "The engine has not looked at this day",
+    "engine_agrees": "The engine agrees with the record",
+    "engine_late": "{{time}} late",
+    "engine_early": "{{time}} early",
+    "engine_expected": "Expected",
+    "engine_no_schedule": "No schedule resolves for this day",
+    "st_weekend": "Day off",
+    "st_unknown": "Not known"
   },
   "payroll_runs": {
     "wps_export": "WPS File",

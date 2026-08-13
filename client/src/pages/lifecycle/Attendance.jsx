@@ -140,10 +140,21 @@ export default function Attendance() {
         <Card><EmptyState icon={<Clock className="w-6 h-6 text-surface-400" />} title={t('attendance.no_records')} /></Card>
       ) : (
         <Card className="!p-0 overflow-hidden">
+          {isHR && (
+            <p className="px-3 py-2 text-[11px] text-indigo-800 bg-indigo-50 border-b border-indigo-100">
+              {t('attendance.engine_note')}
+            </p>
+          )}
           <table className="w-full text-sm">
             <thead className="bg-surface-50 text-surface-500 text-xs"><tr>
               <th className="text-left p-3">{t('attendance.th_date')}</th><th className="text-left p-3">{t('attendance.th_employee')}</th>
-              <th className="p-3">{t('attendance.th_check_in')}</th><th className="p-3">{t('attendance.th_check_out')}</th><th className="p-3">{t('attendance.th_hours')}</th><th className="p-3">{t('attendance.th_status')}</th>{isHR && <th className="p-3"></th>}</tr></thead>
+              <th className="p-3">{t('attendance.th_check_in')}</th><th className="p-3">{t('attendance.th_check_out')}</th><th className="p-3">{t('attendance.th_hours')}</th><th className="p-3">{t('attendance.th_status')}</th>
+              {isHR && (
+                <th className="p-3 border-l border-surface-200 bg-indigo-50/60 text-indigo-700" title={t('attendance.th_engine_hint')}>
+                  {t('attendance.th_engine')}
+                </th>
+              )}
+              {isHR && <th className="p-3"></th>}</tr></thead>
             <tbody>
               {rows.map((r) => (
                 <tr key={r.id} className="border-t border-surface-50">
@@ -153,6 +164,7 @@ export default function Attendance() {
                   <td className="p-3 text-center">{r.check_out || '—'}</td>
                   <td className="p-3 text-center">{fmtHM(r.work_hours)}</td>
                   <td className="p-3 text-center"><Badge variant={statusVariant(r.status)} className="text-[10px]">{stLabel(t, r.status)}</Badge></td>
+                  {isHR && <EngineCell row={r} t={t} />}
                   {isHR && (
                     <td className="p-3 text-center">
                       <button onClick={() => setEditRow(r)} title={t('common.edit', 'Edit')}
@@ -170,6 +182,67 @@ export default function Attendance() {
       <ImportModal open={importModal} onClose={() => setImportModal(false)} onDone={load} />
       {editRow && <EditAttendanceModal row={editRow} onClose={() => setEditRow(null)} onSaved={() => { setEditRow(null); load(); }} />}
     </div>
+  );
+}
+
+/**
+ * The schedule engine's verdict, beside the recorded one.
+ *
+ * Read-only and deliberately quiet. While the engine runs in shadow mode this
+ * column is an opinion, not a record: `status` to its left is still what is
+ * stored and still what payroll reads. So agreement is shown as a muted tick
+ * rather than a second badge — a row where the two agree should draw no
+ * attention at all, and only a real disagreement should.
+ *
+ * A day the engine has not looked at shows nothing, which is honest: it has no
+ * opinion rather than an opinion of "fine".
+ */
+function EngineCell({ row, t }) {
+  const cell = 'p-3 text-center border-l border-surface-200 bg-indigo-50/40';
+  if (!row.evaluated_at || !row.eval_status) {
+    return <td className={`${cell} text-surface-300`} title={t('attendance.engine_not_checked')}>—</td>;
+  }
+
+  const late = row.eval_late_minutes;
+  const early = row.eval_early_leave_minutes;
+  const mins = (n) => (n < 60 ? `${n}m` : `${Math.floor(n / 60)}h${n % 60 ? ` ${n % 60}m` : ''}`);
+
+  const detail = [
+    late > 0 ? t('attendance.engine_late', { time: mins(late) }) : null,
+    early > 0 ? t('attendance.engine_early', { time: mins(early) }) : null,
+  ].filter(Boolean).join(' · ');
+
+  const expected = row.expected_in
+    ? `${t('attendance.engine_expected')} ${row.expected_in}–${row.expected_out}${row.schedule_name ? ` (${row.schedule_name})` : ''}`
+    : t('attendance.engine_no_schedule');
+
+  // A day is only "clean" when the status matches, nothing is late or early, AND
+  // no case is open on it. A missing punch is the case that makes the first two
+  // agree while the engine is really saying it cannot read the day.
+  const agrees = row.status && row.eval_status === row.status;
+  const clean = agrees && !detail && !row.eval_exception;
+
+  if (clean) {
+    return (
+      <td className={cell}>
+        <span className="text-emerald-500 text-xs" title={`${t('attendance.engine_agrees')} · ${expected}`}>✓</span>
+      </td>
+    );
+  }
+
+  const blocking = row.eval_severity === 'Blocking';
+  return (
+    <td className={cell} title={expected}>
+      {!agrees && (
+        <Badge variant={statusVariant(row.eval_status)} className="text-[10px]">{stLabel(t, row.eval_status)}</Badge>
+      )}
+      {row.eval_exception && (
+        <div className={`text-[10px] mt-0.5 whitespace-nowrap ${blocking ? 'text-red-600 font-medium' : 'text-amber-700'}`}>
+          {t(`attendance_eval.type_${row.eval_exception}`)}
+        </div>
+      )}
+      {detail && <div className="text-[10px] text-surface-500 mt-0.5 whitespace-nowrap">{detail}</div>}
+    </td>
   );
 }
 

@@ -115,4 +115,26 @@ describe('Entity scoping', () => {
     });
     expect(res.status).toBe(403);
   });
+
+  it('carries the schedule engine\'s verdict to HR but never to the employee', async () => {
+    // The engine runs in shadow mode: its opinion is shown beside the record for
+    // comparison. An employee seeing "Absent" against their own day, from an
+    // engine nobody has acted on, would reasonably read it as a decision taken
+    // about them — so the columns are withheld from self-service entirely.
+    const hr = await request.get('/api/attendance').set(auth(tokHrA));
+    expect(hr.status).toBe(200);
+    if (hr.body.length) {
+      expect(hr.body[0]).toHaveProperty('eval_status');
+      expect(hr.body[0]).toHaveProperty('expected_in');
+      expect(hr.body[0]).toHaveProperty('eval_exception');
+    }
+
+    const emp = await request.get('/api/attendance').set(auth(tokEmpA));
+    expect(emp.status).toBe(200);
+    for (const row of emp.body) {
+      expect(row).not.toHaveProperty('eval_status');
+      expect(row).not.toHaveProperty('eval_exception');
+      expect(row).not.toHaveProperty('expected_in');
+    }
+  });
 });

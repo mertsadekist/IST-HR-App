@@ -56,12 +56,38 @@ router.get('/', async (req, res) => {
     const co = self ? ownRecordsClause() : companyClause(req, 'a.company_id');
     // Return check_in/out as wall-clock strings (DATE_FORMAT) so the stored local
     // time is shown verbatim — never shifted by the server/browser timezone.
+    // The evaluator's opinion travels beside the record for HR only, and never
+    // in place of it. `status` is still the stored value and still what payroll
+    // reads; the eval_* columns are the schedule engine's separate verdict while
+    // it runs in shadow mode. Employees do not get them: a colleague seeing
+    // "Absent" against their own day, from an engine nobody has acted on yet,
+    // would reasonably read it as a decision that had been taken about them.
+    const evalCols = self ? '' : `,
+                      a.eval_status, a.eval_late_minutes, a.eval_early_leave_minutes,
+                      a.eval_worked_minutes, a.expected_minutes, a.evaluated_at,
+                      DATE_FORMAT(a.expected_in, '%H:%i')  AS expected_in,
+                      DATE_FORMAT(a.expected_out, '%H:%i') AS expected_out,
+                      ws.name_en AS schedule_name,
+                      -- The most serious case still open on this day, if any.
+                      -- Without it the column would show a green tick for a day
+                      -- whose punch is missing entirely: the engine's *status*
+                      -- agrees with the record, while the engine is in fact
+                      -- saying it cannot read the day at all.
+                      (SELECT x.type FROM attendance_exceptions x
+                        WHERE x.employee_id = a.employee_id AND x.work_date = a.work_date
+                          AND x.status <> 'Auto-resolved'
+                        ORDER BY FIELD(x.severity, 'Blocking', 'Review', 'Info') LIMIT 1) AS eval_exception,
+                      (SELECT x.severity FROM attendance_exceptions x
+                        WHERE x.employee_id = a.employee_id AND x.work_date = a.work_date
+                          AND x.status <> 'Auto-resolved'
+                        ORDER BY FIELD(x.severity, 'Blocking', 'Review', 'Info') LIMIT 1) AS eval_severity`;
     let sql = `SELECT a.id, a.employee_id, a.company_id, a.work_hours, a.status, a.notes,
                       DATE_FORMAT(a.work_date, '%Y-%m-%d') AS work_date,
                       DATE_FORMAT(a.check_in, '%H:%i') AS check_in,
                       DATE_FORMAT(a.check_out, '%H:%i') AS check_out,
-                      e.first_name, e.last_name
+                      e.first_name, e.last_name${evalCols}
                FROM attendance a JOIN employees e ON a.employee_id = e.id
+               ${self ? '' : 'LEFT JOIN work_schedules ws ON ws.id = a.schedule_id'}
                WHERE 1=1` + co.clause;
     const params = [...co.params];
 
