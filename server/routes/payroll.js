@@ -79,18 +79,51 @@ router.post('/runs/generate', authorize('admin', 'hr_manager', 'accountant'), va
       [companyId]
     );
 
+    // The first day of the period, for the overlap arithmetic below. `period` is
+    // validated as YYYY-MM by the route, so this is always a real date.
+    const periodStart = `${period}-01`;
+
     let totalGross = 0, totalDeductions = 0, totalNet = 0;
     for (const emp of employees) {
-      // Approved unpaid-leave days whose start falls in the period
+      // Unpaid-leave days that actually fall inside this period.
+      //
+      // This used to key on DATE_FORMAT(lr.start_date, '%Y-%m') = period, which
+      // billed a leave spanning two months entirely to the one it started in: a
+      // request running 25 July to 31 August deducted all 38 days from July and
+      // nothing from August. What a period owes is the part of the leave that
+      // lands in it.
+      //
+      // Counting overlapping calendar days is the right measure because that is
+      // how the request itself was measured — leave.js sets
+      // days = inclusiveDays(start_date, end_date).
       const [[ul]] = await conn.query(
-        `SELECT COALESCE(SUM(lr.days),0) days FROM leave_requests lr
-         JOIN leave_types lt ON lr.leave_type_id = lt.id
-         WHERE lr.employee_id = ? AND lr.status = 'Approved' AND lt.is_paid = 0
-           AND DATE_FORMAT(lr.start_date, '%Y-%m') = ?`, [emp.id, period]);
-      // Unauthorized absence days from attendance
+        `SELECT COALESCE(SUM(
+                  DATEDIFF(LEAST(lr.end_date, LAST_DAY(?)), GREATEST(lr.start_date, ?)) + 1
+                ), 0) days
+           FROM leave_requests lr
+           JOIN leave_types lt ON lt.id = lr.leave_type_id
+          WHERE lr.employee_id = ? AND lr.status = 'Approved' AND lt.is_paid = 0
+            AND lr.start_date <= LAST_DAY(?) AND lr.end_date >= ?`,
+        [periodStart, periodStart, emp.id, periodStart, periodStart]);
+
+      // Absence days that are NOT already accounted for by approved leave.
+      //
+      // The two figures were computed independently and neither excluded the
+      // other, so a day that was both an 'Absent' attendance row and inside an
+      // approved unpaid leave was deducted twice — once here and once above.
+      //
+      // The exclusion is on ANY approved leave, not only unpaid, which closes a
+      // second hole: a day of approved PAID leave that carried an 'Absent' row
+      // was being deducted, and a paid day must never be.
       const [[ab]] = await conn.query(
-        `SELECT COUNT(*) days FROM attendance
-         WHERE employee_id = ? AND status = 'Absent' AND DATE_FORMAT(work_date, '%Y-%m') = ?`, [emp.id, period]);
+        `SELECT COUNT(*) days FROM attendance a
+          WHERE a.employee_id = ? AND a.status = 'Absent'
+            AND DATE_FORMAT(a.work_date, '%Y-%m') = ?
+            AND NOT EXISTS (
+              SELECT 1 FROM leave_requests lr
+               WHERE lr.employee_id = a.employee_id AND lr.status = 'Approved'
+                 AND a.work_date BETWEEN lr.start_date AND lr.end_date)`,
+        [emp.id, period]);
 
       const calc = computePayrollItem({
         basicSalary: emp.basic_salary,
