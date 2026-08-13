@@ -220,6 +220,32 @@ describe('the cases it does raise', () => {
     expect(exc.status).toBe('Open');
   });
 
+  it('closes a case once leave is approved for the day, even long afterwards', async () => {
+    // The real scenario this was written for: somebody is absent for weeks, HR
+    // later records unpaid leave covering the period, and every one of those
+    // days should stop being an unexplained absence. Approving the leave
+    // re-runs the evaluator over the dates it covers (see routes/leave.js), so
+    // the cases close on their own rather than waiting for someone to notice.
+    const [[type]] = await pool.query("SELECT id FROM leave_types WHERE is_paid = 0 LIMIT 1");
+    if (!type) return;
+    const [lv] = await pool.query('INSERT INTO leave_requests SET ?', {
+      employee_id: fx.tracked, company_id: fx.company, leave_type_id: type.id,
+      start_date: WED, end_date: WED, days: 1, status: 'Approved', reason: 'fixture',
+    });
+
+    await runEvaluation({ from: SUN, to: WED, companyId: fx.company, userId: fx.user });
+
+    const [[day]] = await pool.query(
+      'SELECT eval_status FROM attendance WHERE employee_id = ? AND work_date = ?', [fx.tracked, WED]);
+    expect(day.eval_status).toBe('On Leave');
+    const [[exc]] = await pool.query(
+      "SELECT status FROM attendance_exceptions WHERE company_id = ? AND type = 'MISSING_PUNCH'", [fx.company]);
+    expect(exc.status).toBe('Auto-resolved');
+
+    await pool.query('DELETE FROM leave_requests WHERE id = ?', [lv.insertId]);
+    await runEvaluation({ from: SUN, to: WED, companyId: fx.company, userId: fx.user });
+  });
+
   it('never overwrites a decision a person made', async () => {
     // Waived and Resolved are human judgements. A re-run may update the detail
     // and the minutes, but it must not drag the case back to Open.

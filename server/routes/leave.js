@@ -415,6 +415,29 @@ router.put('/requests/:id/approve', authorize('admin', 'hr_manager'), async (req
     await addAudit(pool, req.user, 'Leave', 'Approved', `Leave request #${lr.id} approved (decision by ${String(req.body.approver_name).trim()})`);
     const empUserId = await userIdForEmployee(pool, lr.employee_id);
     await notify(pool, { userId: empUserId, companyId: lr.company_id, type: 'leave', title: 'Leave approved', body: `Your leave request (${lr.days} day(s)) was approved`, link: '/leave' });
+
+    // Re-judge the days this leave covers.
+    //
+    // Approving leave for a date already past turns an absence into an explained
+    // day, but the attendance evaluator only revisits the range it is given —
+    // the nightly run covers the day that just synced, not last month. Without
+    // this, HR records the leave, opens Attendance Checks, and still sees every
+    // one of those days sitting there as an unexplained absence.
+    //
+    // Wrapped and after the response path is settled: leave approval is the
+    // critical action here, and a fault in the evaluator must not undo it.
+    try {
+      const [[range]] = await pool.query(
+        `SELECT DATE_FORMAT(start_date, '%Y-%m-%d') f, DATE_FORMAT(end_date, '%Y-%m-%d') t
+           FROM leave_requests WHERE id = ?`, [lr.id]);
+      if (range?.f && range?.t) {
+        const { runEvaluation } = await import('../services/attendanceEvaluationRunner.js');
+        await runEvaluation({ from: range.f, to: range.t, companyId: lr.company_id, userId: req.user.id, trigger: 'Manual' });
+      }
+    } catch (e) {
+      console.error('post-approval attendance re-check failed (the approval itself stands):', e.message);
+    }
+
     res.json({ success: true });
   } catch (err) {
     await conn.rollback();
