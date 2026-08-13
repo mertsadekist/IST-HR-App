@@ -127,6 +127,19 @@ export default function AttendanceExceptions() {
         <div className="text-xs text-indigo-900">
           <p className="font-semibold">{t('attendance_eval.shadow_banner_title')}</p>
           <p className="mt-0.5">{t('attendance_eval.shadow_banner_body')}</p>
+          {summary?.shadow && (
+            <div className="mt-2 flex items-center gap-2">
+              <div className="h-1.5 w-40 rounded-full bg-indigo-200 overflow-hidden">
+                <div className="h-full bg-indigo-500 rounded-full"
+                  style={{ width: `${Math.min(100, (summary.shadow.day / summary.shadow.total_days) * 100)}%` }} />
+              </div>
+              <span className="font-medium">
+                {summary.shadow.complete
+                  ? t('attendance_eval.shadow_complete')
+                  : t('attendance_eval.shadow_day', { day: summary.shadow.day, total: summary.shadow.total_days })}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 

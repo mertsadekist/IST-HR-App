@@ -2669,6 +2669,8 @@
     "status_Awaiting_Manager": "With the manager",
     "status_Resolved": "Resolved",
     "status_Waived": "Waived",
-    "status_Auto_resolved": "Auto-closed"
+    "status_Auto_resolved": "Auto-closed",
+    "shadow_day": "Observation day {{day}} of {{total}}",
+    "shadow_complete": "Observation period complete — ready to review"
   }
 }

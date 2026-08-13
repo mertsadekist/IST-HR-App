@@ -16,6 +16,33 @@ import pool from '../config/db.js';
 import { listSchedules, resolveDayRule, scheduleSnapshot } from './workScheduleService.js';
 import { evaluateDay, eachDate, diffAgainstStored } from './attendanceEvaluator.js';
 import { OPEN_STATUSES, EVALUATION_VERSION } from '../config/attendanceExceptions.js';
+import { getAppSetting, setAppSetting } from './appSettings.js';
+
+/** How long the engine observes before anyone decides whether to trust it. */
+export const SHADOW_PERIOD_DAYS = 28;
+const SHADOW_START_KEY = 'attendance_shadow_started_at';
+
+/**
+ * Day 1 of shadow mode, pinned on the first run and never recomputed.
+ *
+ * Persisted for the same reason the Drive sync's start date is: a value derived
+ * from "today" on every run silently moves with the calendar, and a review window
+ * that keeps sliding forward is one nobody ever reaches the end of.
+ */
+export async function shadowProgress(today = new Date().toISOString().slice(0, 10)) {
+  let start = await getAppSetting(SHADOW_START_KEY, null);
+  if (!start || !/^\d{4}-\d{2}-\d{2}$/.test(start)) {
+    start = today;
+    await setAppSetting(SHADOW_START_KEY, start);
+  }
+  const day = Math.floor((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000) + 1;
+  return {
+    started_at: start,
+    day: Math.max(1, day),
+    total_days: SHADOW_PERIOD_DAYS,
+    complete: day >= SHADOW_PERIOD_DAYS,
+  };
+}
 
 /**
  * Assignments, company defaults and schedules, arranged so that resolving one
@@ -125,7 +152,13 @@ export async function runEvaluation({
     // Three "we have no evidence" categories, reported rather than turned into
     // accusations. Each one used to produce absences on the first run.
     days_not_observed: [], untracked_employees: [], dormant_employees: [],
+    // The cases that are new this run, named. Counts alone tell the morning
+    // email that something happened but not to whom, which is the only part
+    // anyone can act on. Capped so a first sweep over months cannot produce an
+    // unreadable email.
+    opened_cases: [],
   };
+  report.shadow = await shadowProgress();
 
   try {
     const [allEmployees] = await db.query(
@@ -193,6 +226,24 @@ export async function runEvaluation({
     /** Every (employee, date, type) the engine produced this run. */
     const produced = new Set();
 
+    // Which cases already exist, snapshotted before the loop.
+    //
+    // NOT derived from affectedRows. `INSERT … ON DUPLICATE KEY UPDATE` is
+    // documented to return 1 for an insert and 2 for a changed update, but on
+    // this connection an unchanged upsert also returns 1 — the same trap the
+    // Drive importer hit, and fixed the same way. Trusting it here made every
+    // morning's email announce a dozen "new" cases that had existed for days,
+    // which is the fastest way to train somebody to stop reading it.
+    const existingCases = new Set();
+    {
+      const [rows] = await db.query(
+        `SELECT employee_id, DATE_FORMAT(work_date, '%Y-%m-%d') work_date, type
+           FROM attendance_exceptions WHERE work_date BETWEEN ? AND ?
+           ${companyId ? 'AND company_id = ?' : ''}`,
+        companyId ? [from, to, companyId] : [from, to]);
+      for (const r of rows) existingCases.add(`${r.employee_id}|${r.work_date}|${r.type}`);
+    }
+
     for (const emp of employees) {
       for (const date of dates) {
         // Nobody is absent before they joined or after they left. Without this
@@ -246,9 +297,11 @@ export async function runEvaluation({
         }
 
         for (const exc of verdict.exceptions) {
-          produced.add(`${emp.id}|${date}|${exc.type}`);
+          const key = `${emp.id}|${date}|${exc.type}`;
+          produced.add(key);
           report.by_type[exc.type] = (report.by_type[exc.type] || 0) + 1;
-          const [res] = await db.query(
+          const wasPresent = existingCases.has(key);
+          await db.query(
             `INSERT INTO attendance_exceptions
                (employee_id, company_id, work_date, attendance_id, type, severity, detail,
                 late_minutes, early_leave_minutes, worked_minutes, expected_minutes,
@@ -268,8 +321,18 @@ export async function runEvaluation({
               String(exc.detail || '').slice(0, 600),
               exc.late_minutes ?? verdict.late_minutes, exc.early_leave_minutes ?? verdict.early_leave_minutes,
               verdict.worked_minutes, verdict.expected_minutes, shadow, EVALUATION_VERSION]);
-          // affectedRows is 1 for an insert and 2 for an update that changed something.
-          if (res.affectedRows === 1) report.exceptions_opened++; else report.exceptions_updated++;
+          if (wasPresent) {
+            report.exceptions_updated++;
+          } else {
+            report.exceptions_opened++;
+            existingCases.add(key);
+            if (report.opened_cases.length < 40) {
+              report.opened_cases.push({
+                employee: `${emp.first_name} ${emp.last_name}`.trim(),
+                date, type: exc.type, severity: exc.severity, detail: exc.detail,
+              });
+            }
+          }
         }
       }
     }

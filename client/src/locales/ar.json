@@ -2669,6 +2669,8 @@
     "status_Awaiting_Manager": "لدى المدير",
     "status_Resolved": "مُعالَجة",
     "status_Waived": "مُتجاوَز عنها",
-    "status_Auto_resolved": "أُغلقت تلقائياً"
+    "status_Auto_resolved": "أُغلقت تلقائياً",
+    "shadow_day": "يوم المراقبة {{day}} من {{total}}",
+    "shadow_complete": "انتهت فترة المراقبة — جاهزة للمراجعة"
   }
 }

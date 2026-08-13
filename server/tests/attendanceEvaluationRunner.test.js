@@ -176,6 +176,32 @@ describe('the cases it does raise', () => {
     expect(n.c).toBe(2);
   });
 
+  it('counts a case as new only once, however often it re-runs', async () => {
+    // Not a nicety — the morning email leads with "N new case(s)". Getting this
+    // wrong announced a dozen new cases every day for cases that had existed for
+    // a week, which is the fastest way to train somebody to stop reading it.
+    //
+    // The cause is worth remembering: `INSERT … ON DUPLICATE KEY UPDATE` is
+    // documented to return affectedRows 1 for an insert and 2 for a changed
+    // update, but on this connection an unchanged upsert also returns 1. The
+    // Drive importer hit the same trap. Neither may derive "was it new" from it.
+    await pool.query('DELETE FROM attendance_exceptions WHERE company_id = ?', [fx.company]);
+
+    const first = await runEvaluation({ from: SUN, to: WED, companyId: fx.company, userId: fx.user });
+    expect(first.exceptions_opened).toBe(2);
+    expect(first.exceptions_updated).toBe(0);
+    expect(first.opened_cases).toHaveLength(2);
+
+    const second = await runEvaluation({ from: SUN, to: WED, companyId: fx.company, userId: fx.user });
+    expect(second.exceptions_opened).toBe(0);
+    expect(second.exceptions_updated).toBe(2);
+    // Nothing new means nothing to name in the email.
+    expect(second.opened_cases).toEqual([]);
+
+    const third = await runEvaluation({ from: SUN, to: WED, companyId: fx.company, userId: fx.user });
+    expect(third.exceptions_opened).toBe(0);
+  });
+
   it('closes a case once the day is fixed, rather than deleting it', async () => {
     await pool.query('UPDATE attendance SET check_out = ? WHERE employee_id = ? AND work_date = ?',
       [`${WED} 19:00:00`, fx.tracked, WED]);

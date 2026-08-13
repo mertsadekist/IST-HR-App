@@ -28,6 +28,61 @@ function section(title, items, render, tone = '#5B21B6') {
     </ul>`;
 }
 
+/**
+ * What the schedule engine made of the days that just landed.
+ *
+ * Deliberately set apart from everything above it, and deliberately says twice
+ * that nothing was applied. The section is full of the words "absent" and "late"
+ * against real colleagues' names, and somebody skimming it at six in the morning
+ * must not come away thinking a decision has been taken about anyone.
+ *
+ * Blocking cases are listed by name because they are the only part that can be
+ * acted on. The review-level ones are counted, not listed — a daily email that
+ * names every twelve-minute overrun stops being read.
+ */
+function evaluationSection(evaluation) {
+  const e = evaluation;
+  if (!e) return '';
+
+  const blocking = (e.opened_cases || []).filter((c) => c.severity === 'Blocking');
+  const other = (e.opened_cases || []).filter((c) => c.severity !== 'Blocking');
+  const shadow = e.shadow || {};
+  const progress = shadow.day
+    ? `Day ${shadow.day} of ${shadow.total_days}${shadow.complete ? ' — the observation period is complete' : ''}`
+    : '';
+
+  const nothing = !e.exceptions_opened && !e.disagreements;
+
+  return `
+    <div style="margin-top:22px;border:1px solid #ddd6fe;border-radius:8px;padding:12px;background:#faf5ff">
+      <h3 style="font-size:13px;color:#5B21B6;margin:0 0 2px">Schedule checks — shadow mode</h3>
+      <p style="font-size:11px;color:#7c3aed;margin:0 0 10px">
+        Nothing below has been applied. No attendance record, status or payroll figure was changed.
+        ${esc(progress)}
+      </p>
+      ${nothing
+    ? '<p style="font-size:12px;color:#555;margin:0">The engine agreed with every day it looked at.</p>'
+    : `<p style="font-size:12px;color:#444;margin:0 0 8px">
+             ${e.days_evaluated || 0} day(s) checked · <b>${e.exceptions_opened || 0}</b> new case(s)
+             · ${e.exceptions_closed || 0} closed · <b>${e.disagreements || 0}</b> disagreement(s) with the stored record
+           </p>`}
+      ${section('Needs a person', blocking,
+    (c) => `<b>${esc(c.employee)}</b> on ${esc(c.date)} — ${esc(String(c.type).replace(/_/g, ' ').toLowerCase())}`, '#b45309')}
+      ${other.length
+    ? `<p style="font-size:12px;color:#666;margin:10px 0 0">
+             and ${other.length} for review: ${esc([...new Set(other.map((c) => String(c.type).replace(/_/g, ' ').toLowerCase()))].join(', '))}
+           </p>`
+    : ''}
+      ${(e.days_not_observed || []).length
+    ? `<p style="font-size:11px;color:#b45309;margin:8px 0 0">
+             No file covered ${esc(e.days_not_observed.join(', '))} — nobody was marked absent for those days.
+           </p>` : ''}
+      <p style="font-size:11px;color:#999;margin:10px 0 0">
+        Attendance → Attendance Checks shows the full comparison.
+      </p>
+    </div>`;
+}
+
 /** @returns {{subject: string, html: string, text: string}} */
 export function buildSyncReport({ status, summary, runDate, error }) {
   const s = summary || {};
@@ -82,6 +137,10 @@ export function buildSyncReport({ status, summary, runDate, error }) {
     ${section('Company differs from the employee record', s.company_mismatch,
     (c) => `${esc(c.employee)} — the file says ${esc(c.file_says)}, the record says company ${esc(c.record_company_id)}`)}
     ${section('Errors', s.errors, (e) => `${esc(e.employee || e.file || '')}: ${esc(e.message)}`, '#b91c1c')}
+    ${evaluationSection(s.evaluation)}
+    ${s.evaluation_error
+    ? `<p style="font-size:11px;color:#b45309;margin-top:10px">The schedule checks did not run: ${esc(s.evaluation_error)}. The import itself is unaffected.</p>`
+    : ''}
     <p style="margin-top:20px;font-size:11px;color:#999">
       Attendance → Drive Sync in the HR system shows the full history and lets you retry a file.
     </p>
@@ -94,6 +153,10 @@ export function buildSyncReport({ status, summary, runDate, error }) {
       ? `new ${s.inserted || 0}, updated ${s.updated || 0}, unmatched ${(s.unmatched || []).length}, left alone ${(s.skipped_manual || []).length}`
       : (error || ''),
     (s.unmatched || []).length ? `Unknown devices: ${s.unmatched.map((u) => `${u.device_id} ${u.name}`).join('; ')}` : '',
+    s.evaluation
+      ? `Schedule checks (shadow mode, nothing applied): ${s.evaluation.exceptions_opened || 0} new case(s), `
+        + `${s.evaluation.disagreements || 0} disagreement(s)`
+      : '',
   ].filter(Boolean);
 
   return { subject: `${headline} — ${runDate}`, html, text: textLines.join('\n') };

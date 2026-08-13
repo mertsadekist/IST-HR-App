@@ -14,7 +14,7 @@ import { requireModule, MODULES } from '../config/permissions.js';
 import { authorize } from '../middleware/rbac.js';
 import { addAudit } from '../services/auditService.js';
 import { tenantScope, companyClause } from '../middleware/tenant.js';
-import { runEvaluation } from '../services/attendanceEvaluationRunner.js';
+import { runEvaluation, shadowProgress } from '../services/attendanceEvaluationRunner.js';
 import { EXCEPTION_TYPES, EXCEPTION_STATUSES, OPEN_STATUSES } from '../config/attendanceExceptions.js';
 
 const router = Router();
@@ -123,6 +123,7 @@ router.get('/summary', async (req, res) => {
 
     res.json({
       from, to,
+      shadow: await shadowProgress(),
       by_type: byType,
       agreement: {
         evaluated: Number(agreement.evaluated) || 0,
