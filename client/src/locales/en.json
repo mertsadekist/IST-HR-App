@@ -1494,7 +1494,14 @@
     "needs_document": "Document required",
     "draws_on": "From {{name}}",
     "retired": "Retired",
-    "tier_range": "Days {{from}}–{{to}}: {{pct}}% pay"
+    "tier_range": "Days {{from}}–{{to}}: {{pct}}% pay",
+    "mode_full": "Full day(s)",
+    "mode_part": "Part of one day",
+    "f_date": "Date",
+    "f_hours": "Hours",
+    "hours_required": "Enter how many hours",
+    "hours_hint": "Enter the hours away and the system works out the share of the day from that employee's own schedule — an hour off a five-hour Saturday is more of the day than an hour off a nine-hour Tuesday. Only that share is deducted for an unpaid type.",
+    "submitted_partial": "Submitted — {{days}} of a day"
   },
   "attendance": {
     "title": "Attendance",

@@ -312,14 +312,21 @@ function ReportTab({ employees = [] }) {
 
 function RequestModal({ open, onClose, types, isHR, employees = [], onSaved }) {
   const { t } = useTranslation();
-  const [form, setForm] = useState({ leave_type_id: '', start_date: '', end_date: '', reason: '', employee_id: '' });
+  const blank = { leave_type_id: '', start_date: '', end_date: '', reason: '', employee_id: '', partial_hours: '' };
+  const [form, setForm] = useState(blank);
+  // Full days, or part of one. Kept as an explicit choice rather than inferred
+  // from whether the hours box is filled, so the date fields can change shape
+  // with it — a part-day request covers one date, not a range.
+  const [mode, setMode] = useState('full');
   const [proof, setProof] = useState(null);
   const [saving, setSaving] = useState(false);
   const save = async () => {
     if (!form.leave_type_id || !form.start_date || !form.end_date) { toast.error(t('leave.type_dates_required')); return; }
+    if (mode === 'part' && !(Number(form.partial_hours) > 0)) { toast.error(t('leave.hours_required')); return; }
     setSaving(true);
     try {
       const body = { ...form };
+      if (mode !== 'part') delete body.partial_hours;
       if (!isHR || !body.employee_id) delete body.employee_id;
       const { data } = await leaveApi.createRequest(body);
       // Attaching here is optional; the proof becomes mandatory at decision time.
@@ -330,9 +337,11 @@ function RequestModal({ open, onClose, types, isHR, employees = [], onSaved }) {
         try { await leaveApi.uploadRequestFile(data.id, fd); }
         catch (e) { toast.error(apiErr(e, t('leave.proof_upload_failed'))); }
       }
-      toast.success(t('leave.submitted')); onSaved();
-      setForm({ leave_type_id: '', start_date: '', end_date: '', reason: '', employee_id: '' });
-      setProof(null);
+      toast.success(data?.days < 1
+        ? t('leave.submitted_partial', { days: data.days })
+        : t('leave.submitted'));
+      onSaved();
+      setForm(blank); setMode('full'); setProof(null);
     } catch (e) { toast.error(apiErr(e, t('leave.submit_failed'))); } finally { setSaving(false); }
   };
   return (
@@ -342,10 +351,45 @@ function RequestModal({ open, onClose, types, isHR, employees = [], onSaved }) {
           <select value={form.leave_type_id} onChange={(e) => setForm((f) => ({ ...f, leave_type_id: e.target.value }))} className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1">
             <option value="">{t('leave.select')}</option>{types.map((tp) => <option key={tp.id} value={tp.id}>{tp.name}</option>)}
           </select></div>
-        <div className="grid grid-cols-2 gap-3">
-          <div><label className="text-xs font-semibold text-surface-700">{t('leave.f_start')} *</label><input type="date" value={form.start_date} onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value }))} className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1" /></div>
-          <div><label className="text-xs font-semibold text-surface-700">{t('leave.f_end')} *</label><input type="date" value={form.end_date} onChange={(e) => setForm((f) => ({ ...f, end_date: e.target.value }))} className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1" /></div>
+        {/* Full days or part of one */}
+        <div className="flex gap-1 bg-surface-100 rounded-xl p-1">
+          {['full', 'part'].map((m) => (
+            <button key={m} type="button"
+              onClick={() => { setMode(m); if (m === 'part') setForm((f) => ({ ...f, end_date: f.start_date })); }}
+              className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                mode === m ? 'bg-white text-brand-700 shadow-sm' : 'text-surface-500 hover:text-surface-700'}`}>
+              {t(`leave.mode_${m}`)}
+            </button>
+          ))}
         </div>
+
+        {mode === 'full' ? (
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="text-xs font-semibold text-surface-700">{t('leave.f_start')} *</label><input type="date" value={form.start_date} onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value }))} className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1" /></div>
+            <div><label className="text-xs font-semibold text-surface-700">{t('leave.f_end')} *</label><input type="date" value={form.end_date} onChange={(e) => setForm((f) => ({ ...f, end_date: e.target.value }))} className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1" /></div>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-surface-700">{t('leave.f_date')} *</label>
+                {/* One date: the range collapses, so both ends move together. */}
+                <input type="date" value={form.start_date}
+                  onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value, end_date: e.target.value }))}
+                  className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-surface-700">{t('leave.f_hours')} *</label>
+                <input type="number" min="0.25" max="12" step="0.25" value={form.partial_hours}
+                  onChange={(e) => setForm((f) => ({ ...f, partial_hours: e.target.value }))}
+                  placeholder="1" className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1" />
+              </div>
+            </div>
+            <p className="text-[11px] text-surface-500 bg-indigo-50 border border-indigo-100 rounded-lg px-2.5 py-2">
+              {t('leave.hours_hint')}
+            </p>
+          </>
+        )}
         {isHR && (
           <div>
             <label className="text-xs font-semibold text-surface-700">{t('leave.f_employee_self')}</label>

@@ -7,6 +7,7 @@ import { tenantScope, companyClause, resolveWriteCompanyId, ownRecordsClause } f
 import { validate } from '../middleware/validate.js';
 import { notify, notifyRole, userIdForEmployee } from '../services/notificationService.js';
 import { annualEntitlement, completedMonths } from '../services/leavePolicyService.js';
+import { resolveEffectiveSchedule } from '../services/workScheduleService.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -333,12 +334,48 @@ router.post('/requests', validate({
     const [[emp]] = await pool.query('SELECT company_id FROM employees WHERE id = ?' + eco.clause, [employeeId, ...eco.params]);
     if (!emp) return res.status(404).json({ error: 'Employee not found' });
 
-    const days = inclusiveDays(start_date, end_date);
+    let days = inclusiveDays(start_date, end_date);
     if (days <= 0) return res.status(422).json({ error: 'Validation failed', errors: [{ field: 'end_date', message: 'end_date must be on or after start_date' }] });
+
+    // Part of a day, entered in hours.
+    //
+    // Hours rather than a fraction because nobody asks for "0.13 of a day" —
+    // they say they will be an hour late. The fraction is derived from the
+    // employee's own scheduled day for that date, so an hour off a five-hour
+    // Saturday is 0.2 of a day while an hour off a nine-to-seven Tuesday is 0.13.
+    // Getting that wrong is how somebody loses a day's pay for a blood test.
+    let partialNote = null;
+    if (req.body.partial_hours != null && req.body.partial_hours !== '') {
+      const hours = Number(req.body.partial_hours);
+      if (!Number.isFinite(hours) || hours <= 0) {
+        return res.status(422).json({ error: 'Validation failed', errors: [{ field: 'partial_hours', message: 'Hours must be a positive number' }] });
+      }
+      if (start_date !== end_date) {
+        return res.status(422).json({
+          error: 'Validation failed',
+          errors: [{ field: 'partial_hours', message: 'A part-day request covers a single date — set the same start and end date' }],
+        });
+      }
+      const resolved = await resolveEffectiveSchedule(employeeId, start_date).catch(() => null);
+      const dayMinutes = resolved?.dayRule?.expected_minutes || 0;
+      // No schedule, or a day the schedule treats as a rest day: fall back to a
+      // standard eight-hour day rather than refusing, and say which was used.
+      const basis = dayMinutes > 0 ? dayMinutes : 480;
+      if (hours * 60 > basis) {
+        return res.status(422).json({
+          error: 'Validation failed',
+          errors: [{ field: 'partial_hours', message: `That is longer than the scheduled day (${(basis / 60).toFixed(2)} hours). File a full day instead.` }],
+        });
+      }
+      days = Math.max(0.01, Math.round((hours * 60 / basis) * 100) / 100);
+      partialNote = `Part day: ${hours} hour(s) of a ${(basis / 60).toFixed(2)}-hour day`
+        + (dayMinutes > 0 ? '' : ' (no schedule for that date — an 8-hour day was assumed)');
+    }
 
     const [r] = await pool.query('INSERT INTO leave_requests SET ?', {
       company_id: emp.company_id, employee_id: employeeId, leave_type_id,
-      start_date, end_date, days, reason: reason || null,
+      start_date, end_date, days,
+      reason: [reason || null, partialNote].filter(Boolean).join(' — ') || null,
       status: 'Pending', created_by: req.user.id,
     });
     await addAudit(pool, req.user, 'Leave', 'Requested', `Leave request #${r.insertId} (${days} day(s)) for employee #${employeeId}`);

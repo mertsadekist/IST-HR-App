@@ -143,3 +143,92 @@ describe('Self-service scoping & isolation', () => {
     expect(res.status).toBe(422);
   });
 });
+
+describe('part of a day, entered in hours', () => {
+  // A part-day request exists so that "I will be an hour late" costs an hour, not
+  // a day. Filed as a whole day against an unpaid type it cost one employee 367
+  // dirhams for a blood test.
+  let scheduleId;
+
+  beforeAll(async () => {
+    // A five-hour Saturday alongside eight-hour weekdays, so the same hour is
+    // demonstrably a different share of the day.
+    const [s] = await pool.query('INSERT INTO work_schedules SET ?', {
+      company_id: f.companyA, name_en: `${tag} Sched`, is_default: true,
+    });
+    scheduleId = s.insertId;
+    for (let weekday = 0; weekday <= 6; weekday++) {
+      const working = weekday >= 1 && weekday <= 6;
+      await pool.query('INSERT INTO work_schedule_days SET ?', {
+        schedule_id: scheduleId, weekday, is_working: working,
+        start_time: working ? '10:00:00' : null,
+        end_time: working ? (weekday === 6 ? '15:00:00' : '19:00:00') : null,
+        break_minutes: working && weekday !== 6 ? 60 : 0,
+      });
+    }
+  }, 30000);
+
+  afterAll(async () => {
+    if (scheduleId) await pool.query('DELETE FROM work_schedules WHERE id = ?', [scheduleId]);
+  });
+
+  const ask = (body) => request.post('/api/leave/requests').set(auth(tokHrA))
+    .send({ employee_id: f.ids.empA, company_id: f.companyA, leave_type_id: annualTypeId, ...body });
+
+  it('turns an hour of an eight-hour day into 0.13 of a day', async () => {
+    const res = await ask({ start_date: '2026-09-15', end_date: '2026-09-15', partial_hours: 1 });
+    expect(res.status).toBe(201);
+    expect(Number(res.body.days)).toBeCloseTo(0.13, 2);
+  });
+
+  it('makes the same hour worth more of a shorter day', async () => {
+    // 19 September 2026 is a Saturday: five hours, so an hour is a fifth of it.
+    const res = await ask({ start_date: '2026-09-19', end_date: '2026-09-19', partial_hours: 1 });
+    expect(res.status).toBe(201);
+    expect(Number(res.body.days)).toBeCloseTo(0.2, 2);
+  });
+
+  it('records what the fraction was derived from, in words', async () => {
+    // "0.13" on its own is unreadable a month later.
+    const res = await ask({ start_date: '2026-09-16', end_date: '2026-09-16', partial_hours: 2, reason: 'dentist' });
+    const [[lr]] = await pool.query('SELECT reason FROM leave_requests WHERE id = ?', [res.body.id]);
+    expect(lr.reason).toContain('dentist');
+    expect(lr.reason).toMatch(/2 hour\(s\) of a 8\.00-hour day/);
+  });
+
+  it('assumes an eight-hour day when the date is a rest day, and says so', async () => {
+    // 20 September 2026 is a Sunday — a rest day on this schedule, so there is no
+    // scheduled length to take a share of. Refusing outright would block a
+    // legitimate request; guessing silently would hide the assumption.
+    const res = await ask({ start_date: '2026-09-20', end_date: '2026-09-20', partial_hours: 1 });
+    expect(res.status).toBe(201);
+    expect(Number(res.body.days)).toBeCloseTo(0.13, 2);
+    const [[lr]] = await pool.query('SELECT reason FROM leave_requests WHERE id = ?', [res.body.id]);
+    expect(lr.reason).toMatch(/8-hour day was assumed/);
+  });
+
+  it('refuses more hours than the day is long', async () => {
+    const res = await ask({ start_date: '2026-09-15', end_date: '2026-09-15', partial_hours: 10 });
+    expect(res.status).toBe(422);
+    expect(res.body.errors[0].message).toMatch(/longer than the scheduled day/);
+  });
+
+  it('refuses a part day spread over a date range', async () => {
+    const res = await ask({ start_date: '2026-09-15', end_date: '2026-09-17', partial_hours: 1 });
+    expect(res.status).toBe(422);
+    expect(res.body.errors[0].message).toMatch(/single date/);
+  });
+
+  it('refuses zero or negative hours rather than recording nothing', async () => {
+    for (const partial_hours of [0, -2, 'soon']) {
+      const res = await ask({ start_date: '2026-09-15', end_date: '2026-09-15', partial_hours });
+      expect(res.status).toBe(422);
+    }
+  });
+
+  it('still files whole days when no hours are given', async () => {
+    const res = await ask({ start_date: '2026-09-21', end_date: '2026-09-23' });
+    expect(res.status).toBe(201);
+    expect(Number(res.body.days)).toBe(3);
+  });
+});
