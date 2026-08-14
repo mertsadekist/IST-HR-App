@@ -1488,7 +1488,13 @@
     "pm_half": "Half Paid",
     "pm_none": "No Paid",
     "kind_request_proof": "Request",
-    "kind_approval_proof": "Decision"
+    "kind_approval_proof": "Decision",
+    "tiered": "Tiered pay",
+    "accrual_service": "Accrues with service",
+    "needs_document": "Document required",
+    "draws_on": "From {{name}}",
+    "retired": "Retired",
+    "tier_range": "Days {{from}}–{{to}}: {{pct}}% pay"
   },
   "attendance": {
     "title": "Attendance",

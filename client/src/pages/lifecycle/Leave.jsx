@@ -151,14 +151,55 @@ export default function Leave() {
           </div>
           <div className="divide-y divide-surface-50">
             {types.map((tp) => (
-              <div key={tp.id} className="flex items-center gap-3 p-3">
-                <span className="w-2.5 h-2.5 rounded-full" style={{ background: tp.color || '#7c3aed' }} />
-                <span className="font-medium text-surface-800">{tp.name}</span>
-                <Badge variant={tp.paid_mode === 'None' ? 'info' : tp.paid_mode === 'Half' ? 'warning' : 'success'} className="text-[10px]">
-                  {t(`leave.pm_${String(tp.paid_mode || (tp.is_paid ? 'Full' : 'None')).toLowerCase()}`)}
-                </Badge>
-                {tp.company_id == null && <Badge variant="info" className="text-[10px]">{t('leave.global')}</Badge>}
-                <span className="ml-auto text-xs text-surface-400">{t('leave.days_per_year', { n: tp.default_days })}</span>
+              <div key={tp.id} className="p-3.5">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: tp.color || '#7c3aed' }} />
+                  <span className="font-medium text-surface-800">{tp.name}</span>
+                  {/* A tiered type has no single pay mode: sick leave is full, half
+                      and unpaid depending on how much of the year has gone. The
+                      tier list below says so; a flat badge here would contradict it. */}
+                  {(tp.tiers?.length || 0) > 1 ? (
+                    <Badge variant="warning" className="text-[10px]">{t('leave.tiered')}</Badge>
+                  ) : (
+                    <Badge variant={tp.paid_mode === 'None' ? 'info' : tp.paid_mode === 'Half' ? 'warning' : 'success'} className="text-[10px]">
+                      {t(`leave.pm_${String(tp.paid_mode || (tp.is_paid ? 'Full' : 'None')).toLowerCase()}`)}
+                    </Badge>
+                  )}
+                  {tp.accrual === 'Service Based' && (
+                    <Badge variant="info" className="text-[10px]">{t('leave.accrual_service')}</Badge>
+                  )}
+                  {!!tp.requires_document && (
+                    <Badge variant="inactive" className="text-[10px]">{t('leave.needs_document')}</Badge>
+                  )}
+                  {tp.draws_on_name && (
+                    <Badge variant="info" className="text-[10px]">{t('leave.draws_on', { name: tp.draws_on_name })}</Badge>
+                  )}
+                  {tp.status === 'Inactive' && <Badge variant="inactive" className="text-[10px]">{t('leave.retired')}</Badge>}
+                  <span className="ms-auto text-xs text-surface-400 shrink-0">
+                    {Number(tp.default_days) > 0 ? t('leave.days_per_year', { n: tp.default_days }) : '—'}
+                  </span>
+                </div>
+
+                {(tp.tiers?.length || 0) > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2 ms-4">
+                    {tp.tiers.map((tr, i) => (
+                      <span key={i} className={`px-2 py-0.5 rounded-lg text-[11px] ${
+                        Number(tr.pay_factor) >= 1 ? 'bg-emerald-50 text-emerald-700'
+                          : Number(tr.pay_factor) > 0 ? 'bg-amber-50 text-amber-700'
+                            : 'bg-surface-100 text-surface-500'}`}>
+                        {t('leave.tier_range', {
+                          from: Number(tr.from_day),
+                          to: tr.to_day == null ? '∞' : Number(tr.to_day),
+                          pct: Math.round(Number(tr.pay_factor) * 100),
+                        })}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {tp.description && (
+                  <p className="text-[11px] text-surface-500 mt-2 ms-4 leading-relaxed">{tp.description}</p>
+                )}
               </div>
             ))}
           </div>

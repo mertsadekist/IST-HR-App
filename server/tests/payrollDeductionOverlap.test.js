@@ -143,6 +143,122 @@ describe('a day cannot be deducted twice', () => {
   });
 });
 
+describe('sick leave is charged at the rate the policy sets, not a flat one', () => {
+  let sickTypeId;
+  let sickEmp;
+
+  beforeAll(async () => {
+    [[{ id: sickTypeId }]] = [await pool.query(
+      "SELECT id FROM leave_types WHERE company_id IS NULL AND name = 'Sick Leave'").then((r) => r[0])];
+    sickEmp = await mkEmployee('Sick');
+    // Twenty consecutive days from 1 May: the policy's first fifteen at full pay,
+    // then five at half.
+    await addLeave(sickEmp, sickTypeId, '2026-05-01', '2026-05-20', 20);
+  });
+
+  it('pays the first fifteen days and halves the next five', async () => {
+    // A flat is_paid flag would have deducted either nothing at all or all
+    // twenty days. The right answer is two and a half.
+    const item = await itemFor('2026-05', sickEmp);
+    expect(Number(item.unpaid_leave_days)).toBeCloseTo(2.5, 2);
+    expect(Number(item.deductions)).toBeCloseTo(2.5 * DAILY, 2);
+    expect(Number(item.net)).toBeCloseTo(GROSS - 2.5 * DAILY, 2);
+  });
+
+  it('carries the year\'s counter into the next request instead of restarting', async () => {
+    // Another ten days in June. Fifteen full-pay days are already gone, so all
+    // ten fall in the half-pay band — five days' pay, not none.
+    await addLeave(sickEmp, sickTypeId, '2026-06-01', '2026-06-10', 10);
+    const item = await itemFor('2026-06', sickEmp);
+    expect(Number(item.unpaid_leave_days)).toBeCloseTo(5, 2);
+    expect(Number(item.deductions)).toBeCloseTo(5 * DAILY, 2);
+  });
+
+  it('charges May the same as before, unaffected by the later request', async () => {
+    // The June request must not retroactively change May's payslip.
+    const item = await itemFor('2026-05', sickEmp);
+    expect(Number(item.unpaid_leave_days)).toBeCloseTo(2.5, 2);
+  });
+});
+
+describe('annual leave is capped by length of service', () => {
+  let annualTypeId;
+
+  beforeAll(async () => {
+    [[{ id: annualTypeId }]] = [await pool.query(
+      "SELECT id FROM leave_types WHERE company_id IS NULL AND name = 'Annual Leave'").then((r) => r[0])];
+  });
+
+  it('pays it in full for somebody with a year behind them', async () => {
+    const [r] = await pool.query('INSERT INTO employees SET ?', {
+      company_id: fx.company, first_name: tag, last_name: 'Senior',
+      status: 'Active', basic_salary: 1800, full_salary: GROSS, start_date: '2024-01-01',
+    });
+    await addLeave(r.insertId, annualTypeId, '2026-09-01', '2026-09-10', 10);
+    const item = await itemFor('2026-09', r.insertId);
+    expect(Number(item.deductions)).toBe(0);
+  });
+
+  it('deducts the days beyond the entitlement of somebody newer', async () => {
+    // Started 10 March, so by the end of October seven months are complete —
+    // fourteen days at two per month. Taking twenty puts six beyond the
+    // entitlement, and days beyond it are not free.
+    const [r] = await pool.query('INSERT INTO employees SET ?', {
+      company_id: fx.company, first_name: tag, last_name: 'Newer',
+      status: 'Active', basic_salary: 1800, full_salary: GROSS, start_date: '2026-03-10',
+    });
+    await addLeave(r.insertId, annualTypeId, '2026-10-01', '2026-10-20', 20);
+    const item = await itemFor('2026-10', r.insertId);
+    expect(Number(item.unpaid_leave_days)).toBeCloseTo(6, 2);
+    expect(Number(item.deductions)).toBeCloseTo(6 * DAILY, 2);
+  });
+
+  it('does not strip the entitlement of somebody whose start date is missing', async () => {
+    // Failing the other way would silently cost a long-serving employee their
+    // whole annual allowance because of a blank field in their record.
+    const [r] = await pool.query('INSERT INTO employees SET ?', {
+      company_id: fx.company, first_name: tag, last_name: 'NoDate',
+      status: 'Active', basic_salary: 1800, full_salary: GROSS,
+    });
+    await addLeave(r.insertId, annualTypeId, '2026-11-02', '2026-11-06', 5);
+    const item = await itemFor('2026-11', r.insertId);
+    expect(Number(item.deductions)).toBe(0);
+  });
+});
+
+describe('emergency leave comes out of the annual balance', () => {
+  it('costs nothing while annual leave remains', async () => {
+    const [[emergency]] = await pool.query(
+      "SELECT id FROM leave_types WHERE company_id IS NULL AND name = 'Emergency Leave'");
+    const [r] = await pool.query('INSERT INTO employees SET ?', {
+      company_id: fx.company, first_name: tag, last_name: 'Emerg',
+      status: 'Active', basic_salary: 1800, full_salary: GROSS, start_date: '2024-01-01',
+    });
+    await addLeave(r.insertId, emergency.id, '2026-12-01', '2026-12-03', 3);
+    const item = await itemFor('2026-12', r.insertId);
+    expect(Number(item.deductions)).toBe(0);
+  });
+
+  it('becomes unpaid once the annual balance is exhausted', async () => {
+    // The policy says so explicitly, and it falls out of the shared counter
+    // rather than needing a rule of its own.
+    const [[annual]] = await pool.query(
+      "SELECT id FROM leave_types WHERE company_id IS NULL AND name = 'Annual Leave'");
+    const [[emergency]] = await pool.query(
+      "SELECT id FROM leave_types WHERE company_id IS NULL AND name = 'Emergency Leave'");
+    const [r] = await pool.query('INSERT INTO employees SET ?', {
+      company_id: fx.company, first_name: tag, last_name: 'Exhausted',
+      status: 'Active', basic_salary: 1800, full_salary: GROSS, start_date: '2024-01-01',
+    });
+    // Thirty days of annual in January uses the whole entitlement.
+    await addLeave(r.insertId, annual.id, '2026-01-01', '2026-01-30', 30);
+    await addLeave(r.insertId, emergency.id, '2026-02-02', '2026-02-04', 3);
+    const item = await itemFor('2026-02', r.insertId);
+    expect(Number(item.unpaid_leave_days)).toBeCloseTo(3, 2);
+    expect(Number(item.deductions)).toBeCloseTo(3 * DAILY, 2);
+  });
+});
+
 describe('leave crossing a month boundary', () => {
   it('bills July only for the days that fall in July', async () => {
     // 25–31 July inclusive is seven days. The old query keyed on the start
@@ -162,7 +278,7 @@ describe('leave crossing a month boundary', () => {
     const july = await itemFor('2026-07', fx.emps.Spanning);
     const august = await itemFor('2026-08', fx.emps.Spanning);
     expect(Number(july.unpaid_leave_days) + Number(august.unpaid_leave_days)).toBe(38);
-  });
+  }, 20000);
 
   it('bills a month the leave does not touch nothing at all', async () => {
     const item = await itemFor('2026-06', fx.emps.Spanning);

@@ -6,6 +6,7 @@ import { addAudit } from '../services/auditService.js';
 import { tenantScope, companyClause, resolveWriteCompanyId, ownRecordsClause } from '../middleware/tenant.js';
 import { validate } from '../middleware/validate.js';
 import { notify, notifyRole, userIdForEmployee } from '../services/notificationService.js';
+import { annualEntitlement, completedMonths } from '../services/leavePolicyService.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -85,8 +86,25 @@ router.get('/types', async (req, res) => {
       }
     }
     if (scopeCompany != null) { sql += ' AND (company_id = ? OR company_id IS NULL)'; params.push(scopeCompany); }
-    sql += ' ORDER BY company_id IS NULL DESC, name';
+    // sort_order carries the order the policy lists them in, which is the order
+    // HR reads them in. Alphabetical would put Unauthorized Absence second.
+    sql += ' ORDER BY sort_order, company_id IS NULL DESC, name';
     const [rows] = await pool.query(sql, params);
+
+    // The pay tiers travel with the type. Without them the page cannot show that
+    // sick leave is fifteen days at full pay and thirty at half, and a single
+    // paid/unpaid badge would state the opposite of the policy.
+    if (rows.length) {
+      const [tiers] = await pool.query(
+        `SELECT leave_type_id, from_day, to_day, pay_factor, label
+           FROM leave_type_tiers WHERE leave_type_id IN (${rows.map(() => '?').join(',')})
+          ORDER BY leave_type_id, from_day`, rows.map((r) => r.id));
+      const names = new Map(rows.map((r) => [r.id, r.name]));
+      for (const r of rows) {
+        r.tiers = tiers.filter((t) => t.leave_type_id === r.id);
+        r.draws_on_name = r.deducts_from_leave_type_id ? names.get(r.deducts_from_leave_type_id) || null : null;
+      }
+    }
     res.json(rows);
   } catch (err) { console.error('GET /leave/types error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
@@ -229,15 +247,45 @@ router.get('/report', async (req, res) => {
     if (!emp) return res.status(404).json({ error: 'Employee not found' });
 
     const [summary] = await pool.query(
-      `SELECT lt.id AS leave_type_id, lt.name, lt.color, lt.is_paid,
+      `SELECT lt.id AS leave_type_id, lt.name, lt.color, lt.is_paid, lt.accrual,
+              lt.default_days, lt.description, lt.requires_document, lt.eligibility_months,
+              lt.deducts_from_leave_type_id,
               COALESCE(lb.entitled, lt.default_days) AS entitled,
-              COALESCE(lb.used, 0) AS used
+              COALESCE(lb.used, 0) AS used,
+              lb.entitled IS NOT NULL AS entitled_is_override
        FROM leave_types lt
        LEFT JOIN leave_balances lb ON lb.leave_type_id = lt.id AND lb.employee_id = ? AND lb.year = ?
        WHERE lt.status = 'Active' AND (lt.company_id = ? OR lt.company_id IS NULL)
-       ORDER BY lt.company_id IS NULL DESC, lt.name`,
+       ORDER BY lt.sort_order, lt.name`,
       [employeeId, year, emp.company_id]
     );
+
+    // Annual leave accrues with service, so the flat default_days on the type is
+    // the wrong number for anybody in their first year — thirty days for somebody
+    // three months in is not what the policy grants. An explicit balance override
+    // still wins, because that is how Management's discretion below six months is
+    // recorded.
+    const [[svc]] = await pool.query(
+      "SELECT DATE_FORMAT(start_date, '%Y-%m-%d') start_date FROM employees WHERE id = ?", [employeeId]);
+    const asOf = `${year}-12-31`;
+    for (const row of summary) {
+      if (row.accrual === 'Service Based' && !row.entitled_is_override && svc?.start_date) {
+        row.entitled = annualEntitlement(svc.start_date, asOf);
+        row.service_months = completedMonths(svc.start_date, asOf);
+      }
+    }
+    // A type that draws on another has no balance of its own. Emergency leave
+    // comes out of the annual entitlement, so showing it a separate five days —
+    // which a stale balance row from before the policy still did — invites HR to
+    // grant days that do not exist.
+    const byId = new Map(summary.map((r) => [r.leave_type_id, r]));
+    for (const row of summary) {
+      if (!row.deducts_from_leave_type_id) continue;
+      const target = byId.get(row.deducts_from_leave_type_id);
+      row.draws_on = target ? target.name : null;
+      row.entitled = null;
+      if (target) target.used = Number(target.used) + Number(row.used || 0);
+    }
 
     // DATE_FORMAT keeps the plain calendar date (no Date-object timezone shift on serialization).
     const [requests] = await pool.query(

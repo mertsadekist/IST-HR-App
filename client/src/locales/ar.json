@@ -1488,7 +1488,13 @@
     "pm_half": "مدفوعة نصفية",
     "pm_none": "غير مدفوعة",
     "kind_request_proof": "الطلب",
-    "kind_approval_proof": "القرار"
+    "kind_approval_proof": "القرار",
+    "tiered": "أجر متدرّج",
+    "accrual_service": "يتراكم مع الخدمة",
+    "needs_document": "مستند مطلوب",
+    "draws_on": "من {{name}}",
+    "retired": "موقوف",
+    "tier_range": "الأيام {{from}}–{{to}}: {{pct}}% من الأجر"
   },
   "attendance": {
     "title": "الحضور",

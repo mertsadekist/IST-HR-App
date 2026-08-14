@@ -6,6 +6,9 @@ import { addAudit } from '../services/auditService.js';
 import { tenantScope, companyClause, ownRecordsClause } from '../middleware/tenant.js';
 import { validate } from '../middleware/validate.js';
 import { computePayrollItem } from '../services/payrollService.js';
+import {
+  loadLeavePolicy, leaveDeductionForPeriod, annualEntitlement,
+} from '../services/leavePolicyService.js';
 import { buildWpsWorkbook, wpsReadiness } from '../services/wpsService.js';
 import { notifyRole } from '../services/notificationService.js';
 import { sendEmail } from '../services/emailService.js';
@@ -75,36 +78,68 @@ router.post('/runs/generate', authorize('admin', 'hr_manager', 'accountant'), va
     // already left. Their earned final period is a settlement matter, not a
     // monthly-payroll one — see the note in offboarding.
     const [employees] = await conn.query(
-      "SELECT id, first_name, last_name, basic_salary, full_salary FROM employees WHERE company_id = ? AND status IN ('Active','Onboarding')",
+      "SELECT id, first_name, last_name, basic_salary, full_salary, "
+      + "DATE_FORMAT(start_date, '%Y-%m-%d') start_date "
+      + "FROM employees WHERE company_id = ? AND status IN ('Active','Onboarding')",
       [companyId]
     );
 
-    // The first day of the period, for the overlap arithmetic below. `period` is
-    // validated as YYYY-MM by the route, so this is always a real date.
+    // `period` is validated as YYYY-MM by the route, so these are always real.
     const periodStart = `${period}-01`;
+    const year = Number(period.slice(0, 4));
+    const [[{ last_day: periodEndDate }]] = await conn.query(
+      "SELECT DATE_FORMAT(LAST_DAY(?), '%Y-%m-%d') last_day", [periodStart]);
+
+    // The pay tiers, the pools types draw on, and the yearly caps — loaded once
+    // for the whole run rather than per employee.
+    const policy = await loadLeavePolicy(conn);
 
     let totalGross = 0, totalDeductions = 0, totalNet = 0;
     for (const emp of employees) {
-      // Unpaid-leave days that actually fall inside this period.
+      // What leave costs this period, under the company policy.
       //
-      // This used to key on DATE_FORMAT(lr.start_date, '%Y-%m') = period, which
-      // billed a leave spanning two months entirely to the one it started in: a
-      // request running 25 July to 31 August deducted all 38 days from July and
-      // nothing from August. What a period owes is the part of the leave that
-      // lands in it.
+      // Not a count of "unpaid" days any more, because a day is no longer simply
+      // paid or unpaid: sick leave is fifteen days at full pay, thirty at half
+      // and forty-five at nothing, so the rate depends on how much of the year's
+      // sick leave has already gone. leaveDeductionForPeriod walks the year in
+      // date order and returns the days' worth actually withheld — a half-pay day
+      // contributing half a day, not one and not none.
       //
-      // Counting overlapping calendar days is the right measure because that is
-      // how the request itself was measured — leave.js sets
-      // days = inclusiveDays(start_date, end_date).
-      const [[ul]] = await conn.query(
-        `SELECT COALESCE(SUM(
-                  DATEDIFF(LEAST(lr.end_date, LAST_DAY(?)), GREATEST(lr.start_date, ?)) + 1
-                ), 0) days
+      // The whole leave year is fetched, not just this month, for that reason:
+      // "the first fifteen days" is a statement about sequence, and a request
+      // straddling a month end has to carry its counter across.
+      const [yearLeave] = await conn.query(
+        `SELECT lr.leave_type_id, lr.days,
+                DATE_FORMAT(lr.start_date, '%Y-%m-%d') start_date,
+                DATE_FORMAT(lr.end_date,   '%Y-%m-%d') end_date
            FROM leave_requests lr
-           JOIN leave_types lt ON lt.id = lr.leave_type_id
-          WHERE lr.employee_id = ? AND lr.status = 'Approved' AND lt.is_paid = 0
-            AND lr.start_date <= LAST_DAY(?) AND lr.end_date >= ?`,
-        [periodStart, periodStart, emp.id, periodStart, periodStart]);
+          WHERE lr.employee_id = ? AND lr.status = 'Approved'
+            AND lr.end_date >= ? AND lr.start_date <= ?
+          ORDER BY lr.start_date`,
+        [emp.id, `${year}-01-01`, `${year}-12-31`]);
+
+      const capByType = new Map(policy.capByType);
+      // Annual leave is capped by service, so the cap differs per employee.
+      //
+      // With no start date on the record there is no service to measure, and the
+      // policy's full allowance is used rather than nothing. Withholding pay
+      // because a date is missing from an HR record is the wrong direction to
+      // fail in — a long-serving employee whose start date was never entered
+      // would otherwise lose their whole annual entitlement silently.
+      if (policy.annualTypeId) {
+        capByType.set(policy.annualTypeId, emp.start_date
+          ? annualEntitlement(emp.start_date, periodEndDate)
+          : policy.defaultDaysByType.get(policy.annualTypeId) ?? null);
+      }
+      const leaveCost = leaveDeductionForPeriod({
+        requests: yearLeave,
+        tiersByType: policy.tiersByType,
+        poolByType: policy.poolByType,
+        capByType,
+        periodStart,
+        periodEnd: periodEndDate,
+      });
+      const ul = { days: leaveCost.deduction_days };
 
       // Absence days that are NOT already accounted for by approved leave.
       //
