@@ -221,25 +221,25 @@ describe('the cases it does raise', () => {
   });
 
   it('closes a case once leave is approved for the day, even long afterwards', async () => {
-    // The real scenario this was written for: somebody is absent for weeks, HR
-    // later records unpaid leave covering the period, and every one of those
-    // days should stop being an unexplained absence. Approving the leave
-    // re-runs the evaluator over the dates it covers (see routes/leave.js), so
-    // the cases close on their own rather than waiting for someone to notice.
-    const [[type]] = await pool.query("SELECT id FROM leave_types WHERE is_paid = 0 LIMIT 1");
+    // The real scenario: somebody accumulates cases, HR later records leave
+    // covering those days, and they should stop being unexplained. Approving
+    // the leave re-runs the evaluator over the dates it covers (see
+    // routes/leave.js), so the cases close on their own.
+    //
+    // Tuesday, the 50-minutes-late day, is the one used here — the leave
+    // excuses the lateness, so the LATE_ARRIVAL case goes. The day itself is
+    // still a worked day; see the tests below for why that matters.
+    const [[type]] = await pool.query('SELECT id FROM leave_types WHERE is_paid = 0 LIMIT 1');
     if (!type) return;
     const [lv] = await pool.query('INSERT INTO leave_requests SET ?', {
       employee_id: fx.tracked, company_id: fx.company, leave_type_id: type.id,
-      start_date: WED, end_date: WED, days: 1, status: 'Approved', reason: 'fixture',
+      start_date: TUE, end_date: TUE, days: 1, status: 'Approved', reason: 'fixture',
     });
 
     await runEvaluation({ from: SUN, to: WED, companyId: fx.company, userId: fx.user });
 
-    const [[day]] = await pool.query(
-      'SELECT eval_status FROM attendance WHERE employee_id = ? AND work_date = ?', [fx.tracked, WED]);
-    expect(day.eval_status).toBe('On Leave');
     const [[exc]] = await pool.query(
-      "SELECT status FROM attendance_exceptions WHERE company_id = ? AND type = 'MISSING_PUNCH'", [fx.company]);
+      "SELECT status FROM attendance_exceptions WHERE company_id = ? AND type = 'LATE_ARRIVAL'", [fx.company]);
     expect(exc.status).toBe('Auto-resolved');
 
     await pool.query('DELETE FROM leave_requests WHERE id = ?', [lv.insertId]);
@@ -294,15 +294,22 @@ describe('explaining a case with a partial day of leave', () => {
     await runEvaluation({ from: SUN, to: WED, companyId: fx.company, userId: fx.user });
   });
 
-  it('does turn the day into leave when the leave really is a full day', async () => {
+  it('does not erase a worked day even when the leave is a full one', async () => {
+    // This assertion used to read the other way, and it was wrong. A full day of
+    // leave filed against a day the person actually attended does not undo their
+    // attendance — the punches say they were there. It excuses what is missing
+    // from the day; it does not stand in for the day.
     const [lv] = await pool.query('INSERT INTO leave_requests SET ?', {
       company_id: fx.company, employee_id: fx.tracked, leave_type_id: paidTypeId,
       start_date: TUE, end_date: TUE, days: 1, status: 'Approved', reason: 'fixture full',
     });
     await runEvaluation({ from: SUN, to: WED, companyId: fx.company, userId: fx.user });
     const [[day]] = await pool.query(
-      'SELECT eval_status FROM attendance WHERE employee_id = ? AND work_date = ?', [fx.tracked, TUE]);
-    expect(day.eval_status).toBe('On Leave');
+      'SELECT eval_status, eval_late_minutes, eval_worked_minutes FROM attendance WHERE employee_id = ? AND work_date = ?',
+      [fx.tracked, TUE]);
+    expect(day.eval_status).toBe('Late');
+    expect(day.eval_late_minutes).toBe(50);
+    expect(day.eval_worked_minutes).toBeGreaterThan(0);
 
     await pool.query('DELETE FROM leave_requests WHERE id = ?', [lv.insertId]);
     await runEvaluation({ from: SUN, to: WED, companyId: fx.company, userId: fx.user });

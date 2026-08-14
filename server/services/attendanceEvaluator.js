@@ -104,6 +104,8 @@ export function evaluateDay({ date, row, schedule, dayRule, holiday = null, leav
     expected_in: dayRule?.is_working ? formatMinutes(minutesOfDay(dayRule.start_time)) : null,
     expected_out: dayRule?.is_working ? formatMinutes(minutesOfDay(dayRule.end_time)) : null,
     exceptions: [],
+    excused: false,
+    excused_by: null,
     evaluation_version: EVALUATION_VERSION,
   };
 
@@ -138,16 +140,22 @@ export function evaluateDay({ date, row, schedule, dayRule, holiday = null, leav
     };
   }
 
-  // 4 ── approved leave
-  if (leave) {
-    const kind = leave.leave_type_name || 'leave';
-    return {
-      ...base,
-      status: 'On Leave',
-      exceptions: hasAnyPunch
-        ? [exception('LEAVE_OVERLAP', `Punched in while on approved ${kind}. The leave may need cancelling for this day.`)]
-        : [],
-    };
+  // 4 ── approved leave, but only for a day nobody turned up to
+  //
+  // The punches decide whether this is a worked day; the leave decides whether
+  // what is missing from it is excused. Those are two different questions, and
+  // conflating them was wrong: somebody who files an hour of leave for a blood
+  // test, then comes in at 11:00 and works until 19:00, had the whole day
+  // erased as "On Leave" — a day he worked eight hours of.
+  //
+  // A partial leave never covers a day on its own either. Eleven per cent of a
+  // day excuses eleven per cent; if he did not come at all, that is still an
+  // absence with a small excuse against it, not a day off.
+  if (leave && !hasAnyPunch) {
+    if (leave.is_full_day) {
+      return { ...base, status: 'On Leave', exceptions: [] };
+    }
+    // Falls through to the absence branch below, carrying the excuse with it.
   }
 
   // 5 ── absent, but only if the day was actually observed
@@ -166,8 +174,12 @@ export function evaluateDay({ date, row, schedule, dayRule, holiday = null, leav
       ...base,
       status: 'Absent',
       worked_minutes: 0,
-      exceptions: [exception('ABSENT_NO_RECORD',
-        'A working day with no punches and no approved leave.')],
+      excused: !!leave,
+      excused_by: leave ? (leave.leave_type_name || 'leave') : null,
+      exceptions: [exception('ABSENT_NO_RECORD', leave
+        ? `No punches at all, and the approved ${leave.leave_type_name || 'leave'} covers only `
+          + `${leave.days} of the day — the rest is unexplained.`
+        : 'A working day with no punches and no approved leave.')],
     };
   }
 
@@ -223,20 +235,35 @@ export function evaluateDay({ date, row, schedule, dayRule, holiday = null, leav
   const early = earlyRaw > graceOut ? earlyRaw : 0;
 
   // 9 ── thresholds
+  //
+  // Approved leave covering the day is an explanation already given and already
+  // decided by a person, so nothing here is raised as a case. The minutes are
+  // still recorded — the report should show the hour he missed — but nobody is
+  // asked to explain what HR has already signed off.
+  const excused = !!leave;
   const exceptions = [];
-  if (late >= (schedule.late_case_minutes ?? 30)) {
-    exceptions.push(exception('LATE_ARRIVAL',
-      `Arrived ${fmtDuration(late)} after ${formatMinutes(startAt)}.`, { late_minutes: late }));
-  }
-  if (early >= (schedule.early_case_minutes ?? 30)) {
-    exceptions.push(exception('EARLY_DEPARTURE',
-      `Left ${fmtDuration(early)} before ${formatMinutes(endAt)}.`, { early_leave_minutes: early }));
-  }
-  // Short overall without either end crossing its own threshold.
-  if (!exceptions.length && expected > 0 && netMinutes < expected - (graceIn + graceOut)) {
-    exceptions.push(exception('INSUFFICIENT_HOURS',
-      `Worked ${fmtDuration(netMinutes)} against ${fmtDuration(expected)} expected, `
-      + 'without either arrival or departure crossing its own threshold.'));
+  if (!excused) {
+    if (late >= (schedule.late_case_minutes ?? 30)) {
+      exceptions.push(exception('LATE_ARRIVAL',
+        `Arrived ${fmtDuration(late)} after ${formatMinutes(startAt)}.`, { late_minutes: late }));
+    }
+    if (early >= (schedule.early_case_minutes ?? 30)) {
+      exceptions.push(exception('EARLY_DEPARTURE',
+        `Left ${fmtDuration(early)} before ${formatMinutes(endAt)}.`, { early_leave_minutes: early }));
+    }
+    // Short overall without either end crossing its own threshold.
+    if (!exceptions.length && expected > 0 && netMinutes < expected - (graceIn + graceOut)) {
+      exceptions.push(exception('INSUFFICIENT_HOURS',
+        `Worked ${fmtDuration(netMinutes)} against ${fmtDuration(expected)} expected, `
+        + 'without either arrival or departure crossing its own threshold.'));
+    }
+  } else if (!late && !early && netMinutes >= expected) {
+    // Leave was approved and then the full day was worked anyway. Not a fault,
+    // but the leave is doing nothing and may be worth cancelling before it is
+    // deducted.
+    exceptions.push(exception('LEAVE_OVERLAP',
+      `Worked the full day despite approved ${leave.leave_type_name || 'leave'}. `
+      + 'The leave may need cancelling so it is not deducted.'));
   }
 
   return {
@@ -246,6 +273,8 @@ export function evaluateDay({ date, row, schedule, dayRule, holiday = null, leav
     early_leave_minutes: early,
     worked_minutes: netMinutes,
     expected_minutes: expected,
+    excused,
+    excused_by: excused ? (leave.leave_type_name || 'leave') : null,
     exceptions,
   };
 }

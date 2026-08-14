@@ -96,39 +96,43 @@ async function loadHolidays(from, to, db) {
 }
 
 /**
- * Approved **full-day** leave, as a per-employee list of ranges.
+ * Approved leave, as a per-employee list of ranges, each flagged full-day or not.
  *
- * Partial leave is deliberately excluded. HR explains a 74-minute late arrival
- * by recording 0.15 of a day against it, and if that counted here the evaluator
- * would reach step 4, call the whole day "On Leave" and stop — erasing a day the
- * person actually worked. A request only covers its dates when its day count
- * reaches the number of dates it spans.
+ * Both shapes are returned because they answer different questions. A full-day
+ * leave can make a day nobody attended into a day off. Any leave — full or
+ * partial — excuses whatever is missing from a day somebody did attend. The
+ * evaluator decides which applies; this only has to report the facts.
  *
- * The partial record still exists and still reaches payroll; it just does not
- * excuse the day, it excuses the minutes. The case it explains is closed by
- * being marked Resolved, which a re-run preserves.
+ * `is_full_day` is the day count reaching the number of dates spanned. A
+ * request from the 11th to the 11th carrying 0.11 covers a tenth of one day,
+ * not the day.
  */
 async function loadLeave(employees, from, to, db) {
   const index = new Map();
   if (!employees.length) return () => null;
   const ids = employees.map((e) => e.id);
   const [rows] = await db.query(
-    `SELECT lr.employee_id,
+    `SELECT lr.employee_id, lr.days,
             DATE_FORMAT(lr.start_date, '%Y-%m-%d') start_date,
             DATE_FORMAT(lr.end_date,   '%Y-%m-%d') end_date,
-            lt.name AS leave_type_name
+            lt.name AS leave_type_name, lt.is_paid,
+            (lr.days >= DATEDIFF(lr.end_date, lr.start_date) + 1) AS is_full_day
        FROM leave_requests lr
        LEFT JOIN leave_types lt ON lt.id = lr.leave_type_id
       WHERE lr.status = 'Approved'
         AND lr.employee_id IN (${ids.map(() => '?').join(',')})
-        AND lr.start_date <= ? AND lr.end_date >= ?
-        AND lr.days >= DATEDIFF(lr.end_date, lr.start_date) + 1`, [...ids, to, from]);
+        AND lr.start_date <= ? AND lr.end_date >= ?`, [...ids, to, from]);
   for (const r of rows) {
     if (!index.has(r.employee_id)) index.set(r.employee_id, []);
     index.get(r.employee_id).push(r);
   }
-  return (employeeId, date) =>
-    (index.get(employeeId) || []).find((l) => l.start_date <= date && l.end_date >= date) || null;
+  // A full-day leave wins over a partial one covering the same date: it is the
+  // stronger statement about the day, and the one that can stand in for it.
+  return (employeeId, date) => {
+    const covering = (index.get(employeeId) || [])
+      .filter((l) => l.start_date <= date && l.end_date >= date);
+    return covering.find((l) => l.is_full_day) || covering[0] || null;
+  };
 }
 
 /**

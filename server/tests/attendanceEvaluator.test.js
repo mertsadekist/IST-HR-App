@@ -103,19 +103,62 @@ describe('3 — the weekly day off', () => {
   });
 });
 
-describe('4 — approved leave', () => {
-  const leave = { start_date: MONDAY, end_date: MONDAY, leave_type_name: 'Annual Leave' };
+describe('4 — approved leave excuses the day, it does not replace it', () => {
+  const fullDay = { start_date: MONDAY, end_date: MONDAY, days: 1, is_full_day: 1, leave_type_name: 'Annual Leave' };
+  const partial = { start_date: MONDAY, end_date: MONDAY, days: 0.13, is_full_day: 0, leave_type_name: 'Immediate Leave' };
 
-  it('is leave, not absence', () => {
-    const v = on(MONDAY, null, { leave });
+  it('is leave when nobody turned up', () => {
+    const v = on(MONDAY, null, { leave: fullDay });
     expect(v.status).toBe('On Leave');
     expect(v.exceptions).toEqual([]);
   });
 
-  it('surfaces punches on a leave day as something to reconcile', () => {
-    const v = on(MONDAY, { check_in: '10:00:00', check_out: '19:00:00' }, { leave });
+  it('is a WORKED day when he turned up, however the leave was filed', () => {
+    // The case this was written for. Mert filed an hour of leave for a blood
+    // test, came in at 11:00 and worked to 19:00. The first version erased the
+    // whole day as "On Leave" — eight hours he actually worked.
+    const v = on(MONDAY, { check_in: '11:00:00', check_out: '19:00:00' }, { leave: partial });
+    expect(v.status).toBe('Late');
+    expect(v.late_minutes).toBe(60);
+    expect(v.worked_minutes).toBe(420);
+    expect(v.status).not.toBe('On Leave');
+  });
+
+  it('excuses the lateness rather than raising a case about it', () => {
+    // HR already decided this. Asking them to explain it again is noise.
+    const v = on(MONDAY, { check_in: '11:00:00', check_out: '19:00:00' }, { leave: partial });
+    expect(v.exceptions).toEqual([]);
+    expect(v.excused).toBe(true);
+    expect(v.excused_by).toBe('Immediate Leave');
+  });
+
+  it('still records the minutes, so the report shows the time missed', () => {
+    const v = on(MONDAY, { check_in: '11:00:00', check_out: '19:00:00' }, { leave: partial });
+    expect(v.late_minutes).toBe(60);
+  });
+
+  it('excuses an early departure the same way', () => {
+    const v = on(MONDAY, { check_in: '10:00:00', check_out: '17:00:00' }, { leave: partial });
+    expect(v.exceptions).toEqual([]);
+    expect(v.early_leave_minutes).toBe(120);
+  });
+
+  it('a full day worked against approved leave is worth flagging, not punishing', () => {
+    const v = on(MONDAY, { check_in: '10:00:00', check_out: '19:00:00' }, { leave: fullDay });
     expect(types(v)).toEqual(['LEAVE_OVERLAP']);
-    expect(v.exceptions[0].detail).toContain('Annual Leave');
+    expect(v.exceptions[0].severity).toBe('Info');
+    expect(v.exceptions[0].detail).toMatch(/may need cancelling/);
+    expect(v.status).toBe('Present');
+  });
+
+  it('will not let a fraction of a day stand in for a whole missing one', () => {
+    // No punches and 0.13 of a day approved: that is an absence with a small
+    // excuse against it, not a day off.
+    const v = on(MONDAY, null, { leave: partial });
+    expect(v.status).toBe('Absent');
+    expect(types(v)).toEqual(['ABSENT_NO_RECORD']);
+    expect(v.excused).toBe(true);
+    expect(v.exceptions[0].detail).toMatch(/covers only/);
   });
 });
 
@@ -266,8 +309,9 @@ describe('the order holds', () => {
   it('prefers the day off over the absence', () => {
     expect(on(SUNDAY, null).status).toBe('Weekend');
   });
-  it('prefers leave over the absence', () => {
-    expect(on(MONDAY, null, { leave: { leave_type_name: 'Sick Leave' } }).status).toBe('On Leave');
+  it('prefers a full day of leave over the absence', () => {
+    expect(on(MONDAY, null, { leave: { leave_type_name: 'Sick Leave', days: 1, is_full_day: 1 } }).status)
+      .toBe('On Leave');
   });
   it('never returns more than one blocking exception for a day', () => {
     const cases = [
