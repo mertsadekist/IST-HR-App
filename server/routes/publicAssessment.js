@@ -21,6 +21,11 @@ async function logToApplicantTimeline(session, eventType, detail) {
 }
 
 const router = Router();
+// Session status, the current stage, and the countdown deadline all change
+// server-side without a page navigation — a cached GET here would show a
+// candidate stale stage content or let them think a deadline still has time
+// left. Never cache.
+router.use((req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
 
 function parseJSON(v, fallback) { try { return typeof v === 'string' ? JSON.parse(v) : (v ?? fallback); } catch { return fallback; } }
 

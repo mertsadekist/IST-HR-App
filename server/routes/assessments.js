@@ -11,6 +11,10 @@ import { evaluateAnswer } from '../services/deepseekService.js';
 import { scoreStage, stagePassed, anyFlaggedForReview, finalStatus } from '../services/assessmentService.js';
 
 const router = Router();
+// Template lock state, session status, and scores change from other tabs/users
+// constantly — a browser (or intermediate proxy) serving a stale cached GET
+// here means editing against a lock check that's already wrong. Never cache.
+router.use((req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
 router.use(auth, tenantScope, requireModule(MODULES.RECRUITMENT));
 
 const HR = ['admin', 'hr_manager', 'recruiter'];
@@ -557,8 +561,13 @@ router.post('/sessions/:id/advance', authorize(...HR), async (req, res) => {
   try {
     const session = await getSessionForHR(req, req.params.id);
     if (!session) return res.status(404).json({ error: 'Session not found' });
-    if (!(session.status === 'Completed' && session.final_status === 'HR Review Required')) {
-      return res.status(409).json({ error: 'Only a session held for HR review can be advanced.' });
+    // A Failed outcome is not necessarily final: the AI can score confidently
+    // and still be wrong, and once HR overrides an answer's score the stage
+    // may now clear the passing threshold. Re-run the same pass check either
+    // way — Failed or HR Review Required — so the applicant can be moved on.
+    const reviewable = ['Completed', 'Stopped'].includes(session.status) && ['Failed', 'HR Review Required'].includes(session.final_status);
+    if (!reviewable) {
+      return res.status(409).json({ error: 'Only a Failed or HR Review Required session can be reopened.' });
     }
     const stages = await loadVersionTree(session.template_version_id);
     const stage = stages.find((s) => s.stage_order === session.current_stage);

@@ -12,6 +12,10 @@ import {
 
 const STATUS_VARIANT = { Pending: 'pending', InProgress: 'info', Paused: 'warning', Stopped: 'danger', Completed: 'success' };
 const FINAL_STATUS_VARIANT = { Passed: 'success', Failed: 'danger', 'HR Review Required': 'warning', 'Assessment Completed': 'info' };
+// A Failed outcome isn't necessarily final — the AI can score confidently and
+// still be wrong. Once HR overrides a score and the stage clears the passing
+// threshold, both this and "HR Review Required" can be reopened the same way.
+const REOPENABLE_FINAL_STATUSES = ['Failed', 'HR Review Required'];
 const apiErr = (e, f) => e?.response?.data?.error || f;
 
 export default function AssessmentPanel({ applicationId, hasInterview }) {
@@ -119,7 +123,7 @@ export default function AssessmentPanel({ applicationId, hasInterview }) {
                 <Ban size={13} /> {t('assessment.stop')}
               </Button>
             )}
-            {detail?.final_status === 'HR Review Required' && (
+            {REOPENABLE_FINAL_STATUSES.includes(detail?.final_status) && (
               <Button size="sm" onClick={() => run(() => assessmentsApi.advanceSession(latest.id), t('assessment.advanced_ok'))} loading={busy}>
                 <ArrowRightCircle size={13} /> {t('assessment.advance')}
               </Button>

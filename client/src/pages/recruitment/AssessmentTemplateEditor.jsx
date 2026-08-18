@@ -166,6 +166,10 @@ export default function AssessmentTemplateEditor({ open, onClose, vacancy }) {
     setLoading(true);
     try {
       const templateId = template?.id;
+      // Reset to Stage 1 only on the very first open or an explicit version
+      // switch — a refresh after saving a question (any stage) must leave the
+      // HR user exactly where they were, not bounce them back to Stage 1.
+      const shouldResetStage = !templateId || !!versionId;
       if (!versionId || !templateId) {
         const { data } = await assessmentsApi.listTemplates({ vacancy_id: vacancy.id });
         const existing = data.find((tpl) => tpl.status !== 'Archived') || data[0];
@@ -176,7 +180,7 @@ export default function AssessmentTemplateEditor({ open, onClose, vacancy }) {
         const { data: full } = await assessmentsApi.getTemplate(templateId, { version_id: versionId });
         setTemplate(full);
       }
-      setActiveStageIdx(0);
+      if (shouldResetStage) setActiveStageIdx(0);
     } catch {
       toast.error(t('assessment.load_failed'));
     } finally {
