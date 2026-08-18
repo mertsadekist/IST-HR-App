@@ -42,7 +42,7 @@ export const HEARD_ABOUT_US_OPTIONS = ['Social Media', 'LinkedIn', 'Referral', '
 function parseJSON(v, fallback) { try { return typeof v === 'string' ? JSON.parse(v) : (v || fallback); } catch { return fallback; } }
 
 // Public, whitelisted view of a published vacancy + company branding.
-router.get('/jobs/:slug', async (req, res) => {
+router.get('/:slug', async (req, res) => {
   try {
     const [[v]] = await pool.query(
       `SELECT v.id, v.company_id, v.title, v.work_location, v.employment_type, v.workplace_type,
@@ -71,7 +71,7 @@ router.get('/jobs/:slug', async (req, res) => {
 });
 
 // Submit an application.
-router.post('/jobs/:slug/apply', upload.single('cv'), async (req, res) => {
+router.post('/:slug/apply', upload.single('cv'), async (req, res) => {
   try {
     // Honeypot: hidden field that real users never fill
     if (req.body.company_url) return res.status(400).json({ error: 'Rejected' });

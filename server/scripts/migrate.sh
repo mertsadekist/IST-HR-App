@@ -50,4 +50,5 @@ node seed_asset_catalog.mjs
 node seed_social_accounts.mjs
 node apply_assessment_module.mjs
 node seed_assessment_bdmanager.mjs
+node apply_assessment_confirm.mjs
 echo "✅ All migrations applied."

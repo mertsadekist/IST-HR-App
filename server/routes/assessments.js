@@ -290,6 +290,17 @@ async function logSessionEvent(sessionId, companyId, user, eventType, detail) {
   } catch (e) { console.error('assessment session event error:', e.message); }
 }
 
+// For the applicant-timeline entries HR reads on the Applicant Detail page, and
+// the global audit log — distinct from assessment_session_events, which is
+// too fine-grained (autosaves, per-question AI calls) for either of those.
+async function logToApplicantTimeline(session, user, eventType, action, detail) {
+  await pool.query('INSERT INTO application_events SET ?', {
+    company_id: session.company_id, application_id: session.application_id,
+    user_id: user?.id || null, user_name: user?.name || 'System', event_type: eventType, detail,
+  });
+  await addAudit(pool, user, 'Recruitment', action, detail, session.company_id);
+}
+
 async function getApplication(req, appId) {
   const co = companyClause(req, 'company_id');
   const [[a]] = await pool.query('SELECT * FROM job_applications WHERE id = ?' + co.clause, [appId, ...co.params]);
@@ -304,6 +315,11 @@ router.post('/applications/:appId/sessions', authorize(...HR), async (req, res) 
     const [[{ c: interviewCount }]] = await pool.query('SELECT COUNT(*) c FROM interviews WHERE application_id = ?', [app.id]);
     if (interviewCount === 0) {
       return res.status(409).json({ error: 'Schedule an interview for this applicant before sending an assessment.' });
+    }
+    const [[{ c: activeCount }]] = await pool.query(
+      "SELECT COUNT(*) c FROM assessment_sessions WHERE application_id = ? AND status IN ('Pending','InProgress','Paused')", [app.id]);
+    if (activeCount > 0) {
+      return res.status(409).json({ error: 'This applicant already has an active assessment session. Stop it before sending a new one.' });
     }
 
     const [[tpl]] = await pool.query(
@@ -361,6 +377,61 @@ router.get('/sessions/:id', authorize(...HR), async (req, res) => {
   } catch (err) { console.error('GET /assessments/sessions/:id error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
+// ── Final applicant report ───────────────────────────────────────────────────
+router.get('/sessions/:id/report', authorize(...HR), async (req, res) => {
+  try {
+    const co = companyClause(req, 's.company_id');
+    const [[session]] = await pool.query(
+      `SELECT s.*, t.name AS template_name, t.position_title, tv.version_no,
+              c.first_name, c.last_name, v.title AS vacancy_title
+       FROM assessment_sessions s
+       JOIN assessment_template_versions tv ON tv.id = s.template_version_id
+       JOIN assessment_templates t ON t.id = tv.template_id
+       JOIN job_applications a ON a.id = s.application_id
+       JOIN candidates c ON c.id = a.candidate_id
+       JOIN vacancies v ON v.id = a.vacancy_id
+       WHERE s.id = ?` + co.clause, [req.params.id, ...co.params]);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+    const stages = await loadVersionTree(session.template_version_id);
+    const [answers] = await pool.query('SELECT * FROM assessment_answers WHERE session_id = ?', [session.id]);
+    const answerByQuestion = new Map(answers.map((a) => [a.question_id, a]));
+
+    const stageColumns = { 1: session.stage1_score, 2: session.stage2_score, 3: session.stage3_score };
+    const report = {
+      applicant_name: `${session.first_name} ${session.last_name}`,
+      position_title: session.position_title || session.vacancy_title,
+      template_name: session.template_name,
+      template_version: session.version_no,
+      status: session.status,
+      final_status: session.final_status,
+      started_at: session.started_at,
+      completed_at: session.completed_at,
+      overall_score: session.overall_score,
+      consistency_flag: !!session.consistency_flag,
+      consistency_note: session.consistency_note,
+      stages: stages.map((s) => ({
+        name: s.name,
+        score: stageColumns[s.stage_order],
+        max_score: s.max_score,
+        passing_score: s.passing_score,
+        questions: s.questions.map((q) => {
+          const a = answerByQuestion.get(q.id);
+          const answerDisplay = q.type === 'multiple_choice'
+            ? (q.options || []).find((o) => o.key === a?.selected_option_key)?.text || a?.selected_option_key || null
+            : a?.answer_text || null;
+          return {
+            question_text: q.question_text, type: q.type, answer: answerDisplay,
+            score: a?.hr_override_score ?? a?.ai_score ?? null, weight: q.weight,
+            ai_evaluation: a?.ai_evaluation || null, hr_note: a?.hr_note || null,
+            manually_adjusted: a?.hr_override_score != null,
+          };
+        }),
+      })),
+    };
+    res.json(report);
+  } catch (err) { console.error('GET /assessments/sessions/:id/report error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
 async function getSessionForHR(req, id) {
   const co = companyClause(req, 'company_id');
   const [[session]] = await pool.query('SELECT * FROM assessment_sessions WHERE id = ?' + co.clause, [id, ...co.params]);
@@ -375,6 +446,7 @@ router.put('/sessions/:id/pause', authorize(...HR), async (req, res) => {
     if (session.status !== 'InProgress') return res.status(409).json({ error: 'Only an in-progress assessment can be paused.' });
     await pool.query("UPDATE assessment_sessions SET status = 'Paused', paused_at = NOW() WHERE id = ?", [session.id]);
     await logSessionEvent(session.id, session.company_id, req.user, 'paused', 'Paused by HR');
+    await addAudit(pool, req.user, 'Recruitment', 'Assessment Paused', `Session #${session.id}`, session.company_id);
     res.json({ success: true });
   } catch (err) { console.error('PUT /assessments/sessions/:id/pause error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
@@ -389,6 +461,7 @@ router.put('/sessions/:id/resume', authorize(...HR), async (req, res) => {
     const deadline = new Date(Date.now() + remainingMs);
     await pool.query("UPDATE assessment_sessions SET status = 'InProgress', stage_deadline_at = ?, paused_at = NULL WHERE id = ?", [deadline, session.id]);
     await logSessionEvent(session.id, session.company_id, req.user, 'resumed', 'Resumed by HR');
+    await addAudit(pool, req.user, 'Recruitment', 'Assessment Resumed', `Session #${session.id}`, session.company_id);
     res.json({ success: true });
   } catch (err) { console.error('PUT /assessments/sessions/:id/resume error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
@@ -402,6 +475,7 @@ router.put('/sessions/:id/stop', authorize(...HR), async (req, res) => {
       "UPDATE assessment_sessions SET status = 'Stopped', completed_at = NOW(), stopped_reason = ?, final_status = COALESCE(final_status, 'HR Review Required') WHERE id = ?",
       [req.body.reason || null, session.id]);
     await logSessionEvent(session.id, session.company_id, req.user, 'stopped', req.body.reason || 'Stopped by HR');
+    await logToApplicantTimeline(session, req.user, 'assessment_stopped', 'Assessment Stopped', req.body.reason || `Assessment session #${session.id} stopped by HR`);
     res.json({ success: true });
   } catch (err) { console.error('PUT /assessments/sessions/:id/stop error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
@@ -436,6 +510,7 @@ router.put('/answers/:id/override', authorize(...HR), validate({ hr_override_sco
     await pool.query('UPDATE assessment_answers SET hr_override_score = ?, hr_note = ?, reviewed_by = ?, reviewed_at = NOW() WHERE id = ?',
       [score, req.body.hr_note || null, req.user.id, answer.id]);
     await logSessionEvent(answer.session_id, answer.company_id, req.user, 'hr_reviewed', `Answer #${answer.id} score set to ${score ?? '(cleared)'}`);
+    await addAudit(pool, req.user, 'Recruitment', 'Assessment Answer Reviewed', `Answer #${answer.id} score set to ${score ?? '(cleared)'}`, answer.company_id);
     res.json({ success: true });
   } catch (err) { console.error('PUT /assessments/answers/:id/override error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
@@ -467,6 +542,7 @@ router.post('/sessions/:id/advance', authorize(...HR), async (req, res) => {
          stage_deadline_at = ?, completed_at = NULL, final_status = NULL WHERE id = ?`,
         [stageScore, nextStage.stage_order, deadline, session.id]);
       await logSessionEvent(session.id, session.company_id, req.user, 'advanced', `HR advanced applicant to stage ${nextStage.stage_order}`);
+      await logToApplicantTimeline(session, req.user, 'assessment_advanced', 'Assessment Advanced', `HR advanced applicant to assessment stage ${nextStage.stage_order} after review`);
       return res.json({ success: true, resumed: true, next_stage: nextStage.stage_order });
     }
 
@@ -486,6 +562,7 @@ router.post('/sessions/:id/advance', authorize(...HR), async (req, res) => {
       `UPDATE assessment_sessions SET ${scoreColumn} = ?, overall_score = ?, final_status = ? WHERE id = ?`,
       [stageScore, Number(priorTotal) + stageScore, terminal, session.id]);
     await logSessionEvent(session.id, session.company_id, req.user, 'advanced', `HR finalized assessment as ${terminal}`);
+    await logToApplicantTimeline(session, req.user, 'assessment_finalized', 'Assessment Finalized', `HR finalized the assessment as ${terminal}`);
     res.json({ success: true, resumed: false, final_status: terminal });
   } catch (err) { console.error('POST /assessments/sessions/:id/advance error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });

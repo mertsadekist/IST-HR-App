@@ -111,9 +111,14 @@ app.use('/api/ai/', rateLimit({ windowMs: 60_000, max: 30 }));
 app.use('/api/cv-scorer/', rateLimit({ windowMs: 60_000, max: 30 }));
 app.use('/api/email/', rateLimit({ windowMs: 60_000, max: 60 }));
 
-// Public recruitment endpoints (NO auth) — stricter per-IP rate limit
-app.use('/api/public', rateLimit({ windowMs: 60_000, max: 40, message: 'Too many requests. Please slow down.' }), publicRoutes);
-app.use('/api/public', rateLimit({ windowMs: 60_000, max: 40, message: 'Too many requests. Please slow down.' }), publicAssessmentRoutes);
+// Public recruitment endpoints (NO auth) — stricter per-IP rate limit.
+// Each router gets its own non-overlapping prefix so its limiter counts only
+// its own traffic — a candidate autosaving through a live assessment must not
+// compete with the careers page's budget, or vice versa.
+app.use('/api/public/jobs', rateLimit({ windowMs: 60_000, max: 40, message: 'Too many requests. Please slow down.' }), publicRoutes);
+// A timed, multi-stage assessment with per-question autosave legitimately
+// makes far more requests per minute than a one-shot job application.
+app.use('/api/public/assessment', rateLimit({ windowMs: 60_000, max: 120, message: 'Too many requests. Please slow down.' }), publicAssessmentRoutes);
 
 // API Routes
 app.use('/api/auth', authRoutes);

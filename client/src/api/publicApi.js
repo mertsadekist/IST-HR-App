@@ -11,5 +11,6 @@ export const applyToJob = (slug, formData) => pub.post(`/jobs/${slug}/apply`, fo
 export const getAssessment = (token) => pub.get(`/assessment/${token}`);
 export const startAssessment = (token) => pub.post(`/assessment/${token}/start`);
 export const saveAssessmentAnswer = (token, questionId, data) => pub.put(`/assessment/${token}/answers/${questionId}`, data);
-export const submitAssessmentStage = (token, stageOrder) => pub.post(`/assessment/${token}/stages/${stageOrder}/submit`);
+export const confirmAssessmentAnswer = (token, questionId, data) => pub.post(`/assessment/${token}/answers/${questionId}/confirm`, data);
+export const submitAssessmentStage = (token, stageOrder, data) => pub.post(`/assessment/${token}/stages/${stageOrder}/submit`, data);
 export const getAssessmentResult = (token) => pub.get(`/assessment/${token}/result`);

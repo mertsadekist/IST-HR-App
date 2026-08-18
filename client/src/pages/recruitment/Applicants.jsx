@@ -179,7 +179,7 @@ function Detail({ detail, reload, downloadCV }) {
 
           <InterviewForm applicationId={detail.id} reload={reload} />
           <EvalForm applicationId={detail.id} reload={reload} />
-          {detail.interviews?.length > 0 && <AssessmentPanel applicationId={detail.id} />}
+          <AssessmentPanel applicationId={detail.id} hasInterview={detail.interviews?.length > 0} />
         </div>
 
         {/* Interviews + evaluations + timeline */}

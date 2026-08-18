@@ -20,6 +20,7 @@ export const deleteQuestion = (id) => api.delete(`/assessments/questions/${id}`)
 export const createSession = (applicationId) => api.post(`/assessments/applications/${applicationId}/sessions`);
 export const listSessions = (applicationId) => api.get(`/assessments/applications/${applicationId}/sessions`);
 export const getSession = (id) => api.get(`/assessments/sessions/${id}`);
+export const getSessionReport = (id) => api.get(`/assessments/sessions/${id}/report`);
 export const pauseSession = (id) => api.put(`/assessments/sessions/${id}/pause`);
 export const resumeSession = (id) => api.put(`/assessments/sessions/${id}/resume`);
 export const stopSession = (id, reason) => api.put(`/assessments/sessions/${id}/stop`, { reason });

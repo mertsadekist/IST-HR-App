@@ -10,7 +10,7 @@ import Select from '@components/ui/Select';
 import EmptyState from '@components/ui/EmptyState';
 import { confirmDelete } from '@utils/confirm';
 import { toast } from 'react-toastify';
-import { Plus, Edit3, Trash2, ClipboardList, Lock, GitBranch } from 'lucide-react';
+import { Plus, Edit3, Trash2, ClipboardList, Lock, GitBranch, CheckCircle2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 const QUESTION_TYPES = ['multiple_choice', 'short_answer', 'open_ended', 'scenario'];
@@ -147,19 +147,26 @@ export default function AssessmentTemplateEditor({ open, onClose, vacancy }) {
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [activating, setActivating] = useState(false);
   const [activeStageIdx, setActiveStageIdx] = useState(0);
   const [questionModal, setQuestionModal] = useState({ open: false, stage: null, editing: null });
 
   useEffect(() => { if (open && vacancy) load(); }, [open, vacancy?.id]);
 
-  const load = async () => {
+  const load = async (versionId) => {
     setLoading(true);
     try {
-      const { data } = await assessmentsApi.listTemplates({ vacancy_id: vacancy.id });
-      const existing = data.find((tpl) => tpl.status !== 'Archived') || data[0];
-      if (!existing) { setTemplate(null); return; }
-      const { data: full } = await assessmentsApi.getTemplate(existing.id);
-      setTemplate(full);
+      const templateId = template?.id;
+      if (!versionId || !templateId) {
+        const { data } = await assessmentsApi.listTemplates({ vacancy_id: vacancy.id });
+        const existing = data.find((tpl) => tpl.status !== 'Archived') || data[0];
+        if (!existing) { setTemplate(null); return; }
+        const { data: full } = await assessmentsApi.getTemplate(existing.id);
+        setTemplate(full);
+      } else {
+        const { data: full } = await assessmentsApi.getTemplate(templateId, { version_id: versionId });
+        setTemplate(full);
+      }
       setActiveStageIdx(0);
     } catch {
       toast.error(t('assessment.load_failed'));
@@ -180,6 +187,24 @@ export default function AssessmentTemplateEditor({ open, onClose, vacancy }) {
       toast.error(err.response?.data?.error || t('assessment.load_failed'));
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleActivate = async () => {
+    const unbalanced = template.stages.find((s) => s.questions.reduce((n, q) => n + q.weight, 0) !== s.max_score);
+    if (unbalanced) {
+      toast.error(t('assessment.stage_not_balanced', { name: unbalanced.name }));
+      return;
+    }
+    setActivating(true);
+    try {
+      await assessmentsApi.updateTemplate(template.id, { status: 'Active' });
+      toast.success(t('assessment.template_activated'));
+      await load();
+    } catch (err) {
+      toast.error(err.response?.data?.error || t('assessment.load_failed'));
+    } finally {
+      setActivating(false);
     }
   };
 
@@ -223,6 +248,10 @@ export default function AssessmentTemplateEditor({ open, onClose, vacancy }) {
   const earlierQuestions = template && activeStage
     ? template.stages.filter((s) => s.stage_order < activeStage.stage_order).flatMap((s) => s.questions.map((q) => ({ ...q, stage_name: s.name })))
     : [];
+  // Editing is blocked both when this exact version already has live sessions
+  // (server-enforced) and when the HR user is simply browsing an older version
+  // from the history dropdown — that content is frozen for historical accuracy.
+  const readOnly = !!(template?.locked || (template?.version && !template.version.is_current));
 
   return (
     <Modal open={open} onClose={onClose} title={`${vacancy.title} — ${t('assessment.template')}`} size="xl">
@@ -240,14 +269,31 @@ export default function AssessmentTemplateEditor({ open, onClose, vacancy }) {
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <Badge variant={template.status === 'Active' ? 'success' : template.status === 'Draft' ? 'pending' : 'inactive'}>{template.status}</Badge>
-              <Badge variant="info"><GitBranch size={11} /> v{template.version?.version_no}</Badge>
+              {template.versions?.length > 1 ? (
+                <Select
+                  value={String(template.version?.id || '')}
+                  onChange={(e) => load(Number(e.target.value))}
+                  options={template.versions.map((v) => ({ value: String(v.id), label: `v${v.version_no}${v.is_current ? ` (${t('assessment.current_version')})` : ''}` }))}
+                  containerClassName="w-40"
+                />
+              ) : (
+                <Badge variant="info"><GitBranch size={11} /> v{template.version?.version_no}</Badge>
+              )}
               {template.locked && <Badge variant="warning"><Lock size={11} /> {t('assessment.locked_notice')}</Badge>}
+              {!template.version?.is_current && <Badge variant="inactive">{t('assessment.viewing_history')}</Badge>}
             </div>
-            {template.locked && (
-              <Button size="sm" variant="secondary" onClick={handlePublishVersion} loading={publishing}>
-                <GitBranch size={14} /> {t('assessment.publish_new_version')}
-              </Button>
-            )}
+            <div className="flex items-center gap-2">
+              {template.status === 'Draft' && template.version?.is_current && (
+                <Button size="sm" onClick={handleActivate} loading={activating}>
+                  <CheckCircle2 size={14} /> {t('assessment.activate_template')}
+                </Button>
+              )}
+              {template.locked && template.version?.is_current && (
+                <Button size="sm" variant="secondary" onClick={handlePublishVersion} loading={publishing}>
+                  <GitBranch size={14} /> {t('assessment.publish_new_version')}
+                </Button>
+              )}
+            </div>
           </div>
 
           {/* Stage tabs */}
@@ -270,15 +316,15 @@ export default function AssessmentTemplateEditor({ open, onClose, vacancy }) {
               <Card className="!p-4">
                 <div className="grid grid-cols-3 gap-3">
                   <Input
-                    label={t('assessment.stage_name')} value={activeStage.name} disabled={template.locked}
+                    label={t('assessment.stage_name')} value={activeStage.name} disabled={readOnly}
                     onChange={(e) => handleStageField(activeStage, 'name', e.target.value)}
                   />
                   <Input
-                    label={t('assessment.duration_minutes')} type="number" min="1" value={activeStage.duration_minutes} disabled={template.locked}
+                    label={t('assessment.duration_minutes')} type="number" min="1" value={activeStage.duration_minutes} disabled={readOnly}
                     onChange={(e) => handleStageField(activeStage, 'duration_minutes', Number(e.target.value))}
                   />
                   <Input
-                    label={t('assessment.passing_score')} type="number" min="0" max={activeStage.max_score} value={activeStage.passing_score} disabled={template.locked}
+                    label={t('assessment.passing_score')} type="number" min="0" max={activeStage.max_score} value={activeStage.passing_score} disabled={readOnly}
                     onChange={(e) => handleStageField(activeStage, 'passing_score', Number(e.target.value))}
                   />
                 </div>
@@ -291,7 +337,7 @@ export default function AssessmentTemplateEditor({ open, onClose, vacancy }) {
 
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-surface-700">{t('assessment.questions')}</h3>
-                {!template.locked && (
+                {!readOnly && (
                   <Button size="sm" onClick={() => setQuestionModal({ open: true, stage: activeStage, editing: null })}>
                     <Plus size={14} /> {t('assessment.add_question')}
                   </Button>
@@ -312,7 +358,7 @@ export default function AssessmentTemplateEditor({ open, onClose, vacancy }) {
                         </div>
                         <p className="text-sm text-surface-800 truncate">{q.question_text}</p>
                       </div>
-                      {!template.locked && (
+                      {!readOnly && (
                         <div className="flex gap-1 shrink-0">
                           <button onClick={() => setQuestionModal({ open: true, stage: activeStage, editing: q })} className="p-1.5 text-surface-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors">
                             <Edit3 size={14} />

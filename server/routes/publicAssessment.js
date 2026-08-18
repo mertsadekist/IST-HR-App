@@ -7,6 +7,18 @@ import { Router } from 'express';
 import pool from '../config/db.js';
 import { scoreStage, stagePassed, anyFlaggedForReview, finalStatus } from '../services/assessmentService.js';
 import { evaluateAnswer, evaluateConsistencyPair } from '../services/deepseekService.js';
+import { addAudit } from '../services/auditService.js';
+
+// So the applicant's move shows up in the Applicant Detail timeline HR already
+// reads, and in the global audit log — mirrors the "sent" write the
+// authenticated session-create route makes on the other side of the flow.
+async function logToApplicantTimeline(session, eventType, detail) {
+  await pool.query('INSERT INTO application_events SET ?', {
+    company_id: session.company_id, application_id: session.application_id,
+    user_id: null, user_name: 'Applicant', event_type: eventType, detail,
+  });
+  await addAudit(pool, { id: null, name: 'Applicant' }, 'Recruitment', 'Assessment Completed', detail, session.company_id);
+}
 
 const router = Router();
 
@@ -31,7 +43,7 @@ function sanitizeQuestion(q) {
   };
 }
 
-router.get('/assessment/:token', async (req, res) => {
+router.get('/:token', async (req, res) => {
   try {
     const ctx = await loadSession(req.params.token);
     if (!ctx) return res.status(404).json({ error: 'This assessment link is invalid or has expired.' });
@@ -49,21 +61,23 @@ router.get('/assessment/:token', async (req, res) => {
       const stage = stages.find((s) => s.stage_order === session.current_stage);
       const [questions] = await pool.query('SELECT * FROM assessment_questions WHERE stage_id = ? ORDER BY question_order', [stage.id]);
       const [answers] = await pool.query(
-        'SELECT question_id, answer_text, selected_option_key FROM assessment_answers WHERE session_id = ? AND question_id IN (?)',
+        'SELECT question_id, answer_text, selected_option_key, confirmed_at FROM assessment_answers WHERE session_id = ? AND question_id IN (?)',
         [session.id, questions.map((q) => q.id)]);
       base.stage = {
         id: stage.id, stage_order: stage.stage_order, name: stage.name, duration_minutes: stage.duration_minutes,
         questions: questions.map(sanitizeQuestion),
       };
       base.stage_deadline_at = session.stage_deadline_at;
-      base.answers = Object.fromEntries(answers.map((a) => [a.question_id, { answer_text: a.answer_text, selected_option_key: a.selected_option_key }]));
+      base.answers = Object.fromEntries(answers.map((a) => [a.question_id, {
+        answer_text: a.answer_text, selected_option_key: a.selected_option_key, confirmed: !!a.confirmed_at,
+      }]));
     }
 
     res.json(base);
   } catch (err) { console.error('GET /public/assessment/:token error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
-router.post('/assessment/:token/start', async (req, res) => {
+router.post('/:token/start', async (req, res) => {
   try {
     const ctx = await loadSession(req.params.token);
     if (!ctx) return res.status(404).json({ error: 'This assessment link is invalid or has expired.' });
@@ -81,7 +95,7 @@ router.post('/assessment/:token/start', async (req, res) => {
   } catch (err) { console.error('POST /public/assessment/:token/start error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
-router.put('/assessment/:token/answers/:questionId', async (req, res) => {
+router.put('/:token/answers/:questionId', async (req, res) => {
   try {
     const ctx = await loadSession(req.params.token);
     if (!ctx) return res.status(404).json({ error: 'This assessment link is invalid or has expired.' });
@@ -93,18 +107,46 @@ router.put('/assessment/:token/answers/:questionId', async (req, res) => {
     if (!question) return res.status(404).json({ error: 'Question not found in the current stage.' });
 
     const { answer_text, selected_option_key } = req.body;
+    // Editing after a confirm clears it — a confirmation is only meaningful for
+    // the content the applicant actually saw when they confirmed it.
     await pool.query(
-      `INSERT INTO assessment_answers (company_id, session_id, question_id, answer_text, selected_option_key, autosaved_at)
-       VALUES (?, ?, ?, ?, ?, NOW())
-       ON DUPLICATE KEY UPDATE answer_text = VALUES(answer_text), selected_option_key = VALUES(selected_option_key), autosaved_at = NOW()`,
+      `INSERT INTO assessment_answers (company_id, session_id, question_id, answer_text, selected_option_key, autosaved_at, confirmed_at)
+       VALUES (?, ?, ?, ?, ?, NOW(), NULL)
+       ON DUPLICATE KEY UPDATE answer_text = VALUES(answer_text), selected_option_key = VALUES(selected_option_key), autosaved_at = NOW(), confirmed_at = NULL`,
       [session.company_id, session.id, question.id, answer_text || null, selected_option_key || null]);
     res.json({ success: true });
   } catch (err) { console.error('PUT /public/assessment/:token/answers error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
+router.post('/:token/answers/:questionId/confirm', async (req, res) => {
+  try {
+    const ctx = await loadSession(req.params.token);
+    if (!ctx) return res.status(404).json({ error: 'This assessment link is invalid or has expired.' });
+    const { session, stages } = ctx;
+    if (session.status !== 'InProgress') return res.status(409).json({ error: 'This assessment is not currently in progress.' });
+
+    const stage = stages.find((s) => s.stage_order === session.current_stage);
+    const [[question]] = await pool.query('SELECT * FROM assessment_questions WHERE id = ? AND stage_id = ?', [req.params.questionId, stage.id]);
+    if (!question) return res.status(404).json({ error: 'Question not found in the current stage.' });
+
+    // Accept the latest content in the same call, in case the debounced
+    // autosave hasn't landed yet — confirm must never file a stale draft.
+    const { answer_text, selected_option_key } = req.body;
+    const hasContent = question.type === 'multiple_choice' ? !!selected_option_key : !!(answer_text && answer_text.trim());
+    if (!hasContent) return res.status(422).json({ error: 'Answer this question before confirming it.' });
+
+    await pool.query(
+      `INSERT INTO assessment_answers (company_id, session_id, question_id, answer_text, selected_option_key, autosaved_at, confirmed_at)
+       VALUES (?, ?, ?, ?, ?, NOW(), NOW())
+       ON DUPLICATE KEY UPDATE answer_text = VALUES(answer_text), selected_option_key = VALUES(selected_option_key), autosaved_at = NOW(), confirmed_at = NOW()`,
+      [session.company_id, session.id, question.id, answer_text || null, selected_option_key || null]);
+    res.json({ success: true });
+  } catch (err) { console.error('POST /public/assessment/:token/answers/:id/confirm error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
 const STAGE_SCORE_COLUMN = { 1: 'stage1_score', 2: 'stage2_score', 3: 'stage3_score' };
 
-router.post('/assessment/:token/stages/:stageOrder/submit', async (req, res) => {
+router.post('/:token/stages/:stageOrder/submit', async (req, res) => {
   try {
     const ctx = await loadSession(req.params.token);
     if (!ctx) return res.status(404).json({ error: 'This assessment link is invalid or has expired.' });
@@ -121,6 +163,16 @@ router.post('/assessment/:token/stages/:stageOrder/submit', async (req, res) => 
       'SELECT * FROM assessment_answers WHERE session_id = ? AND question_id IN (?)',
       [session.id, questions.map((q) => q.id)]);
     const answerByQuestion = new Map(existingAnswers.map((a) => [a.question_id, a]));
+
+    // A deliberate early submit requires every answer confirmed first. A timer
+    // expiry (force: true) must still end the stage on whatever exists —
+    // the applicant does not get to keep going past their deadline.
+    if (!req.body.force) {
+      const unconfirmed = questions.filter((q) => !answerByQuestion.get(q.id)?.confirmed_at).map((q) => q.question_order);
+      if (unconfirmed.length) {
+        return res.status(409).json({ error: 'Confirm every answer before submitting this stage.', unconfirmed });
+      }
+    }
 
     // Ensure every question has an answer row (blank if the applicant skipped it), then score each one.
     for (const q of questions) {
@@ -194,6 +246,7 @@ router.post('/assessment/:token/stages/:stageOrder/submit', async (req, res) => 
       await pool.query('INSERT INTO assessment_session_events SET ?', {
         company_id: session.company_id, session_id: session.id, user_name: 'System', event_type: 'completed', detail: `Assessment completed — ${terminal}`,
       });
+      await logToApplicantTimeline(session, 'assessment_completed', `Assessment completed — ${terminal}`);
       res.json({ success: true, completed: true, passed });
     } else {
       const deadline = new Date(Date.now() + nextStage.duration_minutes * 60_000);
@@ -206,7 +259,7 @@ router.post('/assessment/:token/stages/:stageOrder/submit', async (req, res) => 
   } catch (err) { console.error('POST /public/assessment/:token/stages/:order/submit error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
-router.get('/assessment/:token/result', async (req, res) => {
+router.get('/:token/result', async (req, res) => {
   try {
     const ctx = await loadSession(req.params.token);
     if (!ctx) return res.status(404).json({ error: 'This assessment link is invalid or has expired.' });
