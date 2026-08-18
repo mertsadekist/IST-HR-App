@@ -372,3 +372,78 @@ describe('the salary explanation workbook', () => {
     await pool.query('DELETE FROM companies WHERE id = ?', [other.insertId]);
   });
 });
+
+describe('a rest day is never an absence, however the device reported it', () => {
+  // The live case: the fingerprint device emits a row for every registered ID
+  // every day, including people's days off, and reports "no punches" for them.
+  // The importer stored that as an absence and payroll charged a full day, so six
+  // employees lost 1100 dirhams for a Saturday none of them work.
+  let monFriEmp;
+  let sixDayEmp;
+  let monFriSchedule;
+
+  beforeAll(async () => {
+    // Mon–Fri, Saturday and Sunday off.
+    const [s] = await pool.query('INSERT INTO work_schedules SET ?', {
+      company_id: fx.company, name_en: `${tag} MonFri`, is_default: false,
+    });
+    monFriSchedule = s.insertId;
+    for (let weekday = 0; weekday <= 6; weekday++) {
+      const working = weekday >= 1 && weekday <= 5;
+      await pool.query('INSERT INTO work_schedule_days SET ?', {
+        schedule_id: monFriSchedule, weekday, is_working: working,
+        start_time: working ? '10:00:00' : null, end_time: working ? '19:00:00' : null,
+        break_minutes: working ? 60 : 0,
+      });
+    }
+
+    monFriEmp = await mkEmployee('MonFri');
+    await pool.query('INSERT INTO employee_work_schedules SET ?', {
+      employee_id: monFriEmp, schedule_id: monFriSchedule, company_id: fx.company,
+      effective_from: '2026-01-01',
+    });
+    // 2026-03-07 is a Saturday: his day off.
+    await addAbsence(monFriEmp, '2026-03-07');
+    // 2026-03-09 is a Monday: a real absence.
+    await addAbsence(monFriEmp, '2026-03-09');
+
+    // Somebody with no assignment at all, on a company with no default schedule
+    // either — the absence must still count.
+    sixDayEmp = await mkEmployee('NoSchedule');
+    await addAbsence(sixDayEmp, '2026-03-07');
+  }, 30000);
+
+  it('does not charge a Saturday to somebody whose schedule ends on Friday', async () => {
+    const item = await itemFor('2026-03', monFriEmp);
+    expect(Number(item.absence_days)).toBe(1);          // the Monday only
+    expect(Number(item.deductions)).toBe(DAILY);
+    expect(Number(item.deductions)).not.toBe(2 * DAILY);
+  });
+
+  it('still charges the working day either side of it', async () => {
+    const { buildPayrollExplanation } = await import('../services/payrollExplainerService.js');
+    const [[run]] = await pool.query(
+      "SELECT id FROM payroll_runs WHERE company_id = ? AND period = '2026-03'", [fx.company]);
+    const data = await buildPayrollExplanation(pool, run.id);
+    const e = data.employees.find((x) => x.employee_id === monFriEmp);
+    expect(e.lines.map((l) => l.date)).toEqual(['2026-03-09']);
+  });
+
+  it('still charges an absence when no schedule resolves at all', async () => {
+    // Failing the other way would quietly stop deducting for anyone whose
+    // schedule was never set up. No schedule is not evidence of a rest day.
+    const item = await itemFor('2026-03', sixDayEmp);
+    expect(Number(item.absence_days)).toBe(1);
+    expect(Number(item.deductions)).toBe(DAILY);
+  });
+
+  it('keeps the explanation reconciled with the payslip', async () => {
+    const { buildPayrollExplanation } = await import('../services/payrollExplainerService.js');
+    const [[run]] = await pool.query(
+      "SELECT id FROM payroll_runs WHERE company_id = ? AND period = '2026-03'", [fx.company]);
+    const data = await buildPayrollExplanation(pool, run.id);
+    for (const e of data.employees) {
+      expect(e.matches, `${e.name}: explained ${e.recomputed_deduction} vs stored ${e.stored_deduction}`).toBe(true);
+    }
+  });
+});

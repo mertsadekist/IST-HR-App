@@ -144,6 +144,28 @@ export async function buildPayrollExplanation(db, runId) {
             SELECT 1 FROM leave_requests lr
              WHERE lr.employee_id = a.employee_id AND lr.status = 'Approved'
                AND a.work_date BETWEEN lr.start_date AND lr.end_date)
+          -- The same rest-day exclusion payroll applies. If the explanation
+          -- listed days payroll no longer charges, it would not reconcile — and
+          -- an explanation that does not add up to the payslip is worse than none.
+          AND COALESCE((
+            SELECT wsd.is_working
+              FROM employee_work_schedules ews
+              JOIN work_schedule_days wsd
+                ON wsd.schedule_id = ews.schedule_id
+               AND wsd.weekday = DAYOFWEEK(a.work_date) - 1
+             WHERE ews.employee_id = a.employee_id
+               AND ews.effective_from <= a.work_date
+               AND (ews.effective_to IS NULL OR ews.effective_to >= a.work_date)
+             ORDER BY ews.effective_from DESC LIMIT 1
+          ), (
+            SELECT wsd.is_working
+              FROM work_schedules def
+              JOIN work_schedule_days wsd
+                ON wsd.schedule_id = def.id
+               AND wsd.weekday = DAYOFWEEK(a.work_date) - 1
+             WHERE def.company_id = a.company_id AND def.is_default = TRUE AND def.active = TRUE
+             LIMIT 1
+          ), TRUE) = TRUE
         ORDER BY a.work_date`, [it.employee_id, periodStart, periodEnd]);
 
     const absenceLines = absences.map((a) => {

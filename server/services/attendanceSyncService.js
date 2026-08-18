@@ -91,6 +91,8 @@ export async function importRows(pool, {
     inserted: 0, updated: 0,
     skipped_manual: [], unmatched: [], ignored: [],
     reclassified_leave: [], missing_punch: [], company_mismatch: [],
+    // Rows the device produced for somebody's day off, with nothing on them.
+    rest_day_skipped: [],
     errors: [],
   };
   if (!rows.length) return report;
@@ -127,6 +129,38 @@ export async function importRows(pool, {
     for (const l of lv) onLeave.set(l.employee_id, l.type_name);
   }
 
+  // Whose weekly rest day this is.
+  //
+  // The device emits a row for every registered fingerprint every day, including
+  // days that person does not work, and reports "no punches" for them — which
+  // this importer used to store as an unauthorised absence. Payroll reads the
+  // stored status, so six people were deducted a full day for a Saturday none of
+  // them work: 1100 dirhams for turning up exactly as their contract says.
+  //
+  // The schedule is the only thing that knows. Resolved per employee for this one
+  // date, falling back to the company default the same way the evaluator does.
+  const restDay = new Set();
+  if (empIds.length) {
+    const [sched] = await pool.query(
+      `SELECT e.id AS employee_id, wsd.is_working
+         FROM employees e
+         LEFT JOIN employee_work_schedules ews
+                ON ews.id = (SELECT x.id FROM employee_work_schedules x
+                              WHERE x.employee_id = e.id AND x.effective_from <= ?
+                                AND (x.effective_to IS NULL OR x.effective_to >= ?)
+                              ORDER BY x.effective_from DESC LIMIT 1)
+         LEFT JOIN work_schedules def
+                ON def.company_id = e.company_id AND def.is_default = TRUE AND def.active = TRUE
+         LEFT JOIN work_schedule_days wsd
+                ON wsd.schedule_id = COALESCE(ews.schedule_id, def.id)
+               AND wsd.weekday = DAYOFWEEK(?) - 1
+        WHERE e.id IN (?)`,
+      [businessDate, businessDate, businessDate, empIds]);
+    // is_working NULL means no schedule resolved at all. That is not evidence of a
+    // rest day, so the row is stored as it always was rather than quietly dropped.
+    for (const r of sched) if (r.is_working === 0) restDay.add(r.employee_id);
+  }
+
   for (const row of rows) {
     if (ignored.has(row.device_id)) {
       report.ignored.push({ device_id: row.device_id, name: row.name });
@@ -141,6 +175,16 @@ export async function importRows(pool, {
     const prevSource = existing.get(emp.id);
     if (prevSource === 'Manual' && !overwriteManual) {
       report.skipped_manual.push({ employee: emp.name, date: businessDate });
+      continue;
+    }
+
+    // A rest day the person did not work is not a fact worth recording, and
+    // recording it as an absence costs them a day's pay. Punches on a rest day
+    // ARE kept — working through your day off is worth knowing, and the evaluator
+    // raises it as a compensation candidate.
+    const hasPunch = !!(row.check_in || row.check_out);
+    if (restDay.has(emp.id) && !hasPunch) {
+      report.rest_day_skipped.push({ employee: emp.name, date: businessDate });
       continue;
     }
 
@@ -348,13 +392,33 @@ export async function runSync(pool, {
       try {
         const text = await downloadFileText(item.file.id);
         const parsed = parseAttendanceCsv(text, item.file.name);
-        if (parsed.errors.length) throw new Error(parsed.errors.join('; '));
+
+        // A bad ROW must not lose the FILE.
+        //
+        // This threw on any parse error at all, so one line the parser could not
+        // read discarded the whole day for everybody. It happened: the device
+        // started emitting a status code 7 that predates nothing in our map, and
+        // two nights of attendance for twenty-two people failed to import over it.
+        //
+        // The parser already skips the row it cannot read and records why, so the
+        // rest of the day is good data. Only a file that yielded nothing usable is
+        // a failure — that is a structural problem, not one awkward line.
+        if (!parsed.rows.length) {
+          throw new Error(parsed.errors.length
+            ? `No usable rows. ${parsed.errors.join('; ')}`
+            : 'No usable rows in the file');
+        }
 
         const report = await importRows(pool, {
           rows: parsed.rows, businessDate: parsed.businessDate,
           syncFileId: fileId, actorId, overwriteManual,
         });
         report.warnings = parsed.warnings;
+        // Carried into the morning email so an unmapped code gets noticed and
+        // mapped, rather than silently dropping those people every day.
+        if (parsed.errors.length) {
+          report.unreadable_rows = parsed.errors;
+        }
         reports.push(report);
         filesImported++;
 

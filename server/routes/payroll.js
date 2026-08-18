@@ -152,6 +152,17 @@ router.post('/runs/generate', authorize('admin', 'hr_manager', 'accountant'), va
       // The exclusion is on ANY approved leave, not only unpaid, which closes a
       // second hole: a day of approved PAID leave that carried an 'Absent' row
       // was being deducted, and a paid day must never be.
+      //
+      // And not on a day the employee's schedule says they do not work. The
+      // fingerprint device emits a row for every registered ID every day and
+      // reports "no punches" on people's rest days, which the importer stored as
+      // an absence; six people were deducted a full day for a Saturday none of
+      // them work. The importer no longer creates those rows, but the ones already
+      // written must stop costing money, so the schedule is consulted here too.
+      //
+      // COALESCE(..., TRUE): no schedule resolved is not evidence of a rest day,
+      // so the absence still counts. Failing the other way would quietly stop
+      // deducting for anyone whose schedule was never set up.
       const [[ab]] = await conn.query(
         `SELECT COUNT(*) days FROM attendance a
           WHERE a.employee_id = ? AND a.status = 'Absent'
@@ -159,7 +170,26 @@ router.post('/runs/generate', authorize('admin', 'hr_manager', 'accountant'), va
             AND NOT EXISTS (
               SELECT 1 FROM leave_requests lr
                WHERE lr.employee_id = a.employee_id AND lr.status = 'Approved'
-                 AND a.work_date BETWEEN lr.start_date AND lr.end_date)`,
+                 AND a.work_date BETWEEN lr.start_date AND lr.end_date)
+            AND COALESCE((
+              SELECT wsd.is_working
+                FROM employee_work_schedules ews
+                JOIN work_schedule_days wsd
+                  ON wsd.schedule_id = ews.schedule_id
+                 AND wsd.weekday = DAYOFWEEK(a.work_date) - 1
+               WHERE ews.employee_id = a.employee_id
+                 AND ews.effective_from <= a.work_date
+                 AND (ews.effective_to IS NULL OR ews.effective_to >= a.work_date)
+               ORDER BY ews.effective_from DESC LIMIT 1
+            ), (
+              SELECT wsd.is_working
+                FROM work_schedules def
+                JOIN work_schedule_days wsd
+                  ON wsd.schedule_id = def.id
+                 AND wsd.weekday = DAYOFWEEK(a.work_date) - 1
+               WHERE def.company_id = a.company_id AND def.is_default = TRUE AND def.active = TRUE
+               LIMIT 1
+            ), TRUE) = TRUE`,
         [emp.id, period]);
 
       const calc = computePayrollItem({

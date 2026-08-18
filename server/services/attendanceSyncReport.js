@@ -137,6 +137,10 @@ export function buildSyncReport({ status, summary, runDate, error }) {
     ${section('Company differs from the employee record', s.company_mismatch,
     (c) => `${esc(c.employee)} — the file says ${esc(c.file_says)}, the record says company ${esc(c.record_company_id)}`)}
     ${section('Errors', s.errors, (e) => `${esc(e.employee || e.file || '')}: ${esc(e.message)}`, '#b91c1c')}
+    ${section('Lines the file could not be read from — these people have no record for the day',
+    s.unreadable_rows, (u) => esc(u), '#b45309')}
+    ${section('Skipped — a rest day on their schedule, with nothing on it', s.rest_day_skipped,
+    (m) => `${esc(m.employee)} on ${esc(m.date)}`)}
     ${evaluationSection(s.evaluation)}
     ${s.evaluation_error
     ? `<p style="font-size:11px;color:#b45309;margin-top:10px">The schedule checks did not run: ${esc(s.evaluation_error)}. The import itself is unaffected.</p>`
