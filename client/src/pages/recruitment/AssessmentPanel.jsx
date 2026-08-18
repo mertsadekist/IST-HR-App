@@ -310,16 +310,17 @@ function AnswerRow({ question, answer, onReload }) {
         {!answer?.confirmed_at && <Badge variant="inactive" className="text-[10px]">{t('assessment.not_confirmed')}</Badge>}
       </div>
       {answer?.ai_evaluation && <p className="text-[11px] text-surface-500 italic">{answer.ai_evaluation}</p>}
-      {question.type !== 'multiple_choice' && (
-        <div className="flex items-center gap-1.5 flex-wrap pt-1">
-          <input type="number" min="0" max={question.weight} value={score} onChange={(e) => setScore(e.target.value)}
-            placeholder={t('assessment.override_score_ph')} className="w-20 text-xs border border-surface-200 rounded-lg px-2 py-1" />
-          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('assessment.hr_note_ph')}
-            className="flex-1 min-w-[120px] text-xs border border-surface-200 rounded-lg px-2 py-1" />
-          <Button size="sm" variant="ghost" onClick={saveOverride} loading={busy}>{t('common.save')}</Button>
+      <div className="flex items-center gap-1.5 flex-wrap pt-1">
+        <input type="number" min="0" max={question.weight} value={score} onChange={(e) => setScore(e.target.value)}
+          placeholder={t('assessment.override_score_ph')} className="w-20 text-xs border border-surface-200 rounded-lg px-2 py-1" />
+        <input value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('assessment.hr_note_ph')}
+          className="flex-1 min-w-[120px] text-xs border border-surface-200 rounded-lg px-2 py-1" />
+        <Button size="sm" variant="ghost" onClick={saveOverride} loading={busy}>{t('common.save')}</Button>
+        {/* Re-evaluate calls the AI — meaningless for a multiple-choice answer, which is scored deterministically. */}
+        {question.type !== 'multiple_choice' && (
           <Button size="sm" variant="ghost" onClick={reevaluate} loading={busy}><RefreshCw size={12} /> {t('assessment.reevaluate')}</Button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
