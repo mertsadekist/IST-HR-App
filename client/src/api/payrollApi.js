@@ -13,5 +13,8 @@ export const wpsExport = (id, force) => api.get(`/payroll/runs/${id}/wps-export`
 // The server rebuilds the workbook and attaches it, so the file never makes a
 // round trip through the browser on its way to the bank.
 export const wpsSend = (id, data) => api.post(`/payroll/runs/${id}/wps-send`, data);
+// The salary explanation workbook: why each employee was paid what they were.
+// Available on a Draft run on purpose — it is meant to be read before approval.
+export const explanationExport = (id) => api.get(`/payroll/runs/${id}/explanation`, { responseType: 'blob' });
 export const myPayslips = (params) => api.get('/payroll/payslips/my', { params });
 export const employeePayslips = (employeeId, params) => api.get(`/payroll/payslips/${employeeId}`, { params });

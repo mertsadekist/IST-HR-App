@@ -13,9 +13,10 @@ import Select from '@components/ui/Select';
 import EmptyState from '@components/ui/EmptyState';
 import { confirmDelete } from '@utils/confirm';
 import { toast } from 'react-toastify';
-import { Plus, Edit3, Trash2, Users, FileText, Search, ChevronLeft, ChevronRight, Eye, Briefcase, Map, Globe, Copy } from 'lucide-react';
+import { Plus, Edit3, Trash2, Users, FileText, Search, ChevronLeft, ChevronRight, Eye, Briefcase, Map, Globe, Copy, ClipboardList } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
+import AssessmentTemplateEditor from './AssessmentTemplateEditor';
 
 const statusColors = {
   Draft: 'text-surface-500 bg-surface-100',
@@ -56,6 +57,7 @@ export default function Vacancies() {
   const [departments, setDepartments] = useState([]);
   const [jobTitles, setJobTitles] = useState([]);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [assessmentVacancy, setAssessmentVacancy] = useState(null);
 
   useEffect(() => { loadVacancies(); }, [currentCompanyId, page, statusFilter]);
 
@@ -330,6 +332,9 @@ export default function Vacancies() {
                               </a>
                             </>
                           )}
+                          <button onClick={() => setAssessmentVacancy(v)} title={t('assessment.template')} className="p-1.5 text-surface-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors">
+                            <ClipboardList size={14} />
+                          </button>
                           <button onClick={() => openEdit(v)} className="p-1.5 text-surface-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors">
                             <Edit3 size={14} />
                           </button>
@@ -442,6 +447,12 @@ export default function Vacancies() {
           </div>
         </form>
       </Modal>
+
+      <AssessmentTemplateEditor
+        open={!!assessmentVacancy}
+        onClose={() => setAssessmentVacancy(null)}
+        vacancy={assessmentVacancy}
+      />
     </div>
   );
 }

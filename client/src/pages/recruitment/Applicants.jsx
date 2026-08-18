@@ -3,6 +3,7 @@ import { useSelector } from 'react-redux';
 import { useTranslation } from 'react-i18next';
 import api from '@api/axios';
 import * as appApi from '@api/applicationsApi';
+import AssessmentPanel from './AssessmentPanel';
 import Card from '@components/ui/Card';
 import Button from '@components/ui/Button';
 import Badge from '@components/ui/Badge';
@@ -178,6 +179,7 @@ function Detail({ detail, reload, downloadCV }) {
 
           <InterviewForm applicationId={detail.id} reload={reload} />
           <EvalForm applicationId={detail.id} reload={reload} />
+          {detail.interviews?.length > 0 && <AssessmentPanel applicationId={detail.id} />}
         </div>
 
         {/* Interviews + evaluations + timeline */}

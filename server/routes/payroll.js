@@ -9,6 +9,8 @@ import { computePayrollItem } from '../services/payrollService.js';
 import {
   loadLeavePolicy, leaveDeductionForPeriod, annualEntitlement,
 } from '../services/leavePolicyService.js';
+import { buildPayrollExplanation } from '../services/payrollExplainerService.js';
+import { renderPayrollExplanationWorkbook } from '../services/payrollExplainerWorkbook.js';
 import { buildWpsWorkbook, wpsReadiness } from '../services/wpsService.js';
 import { notifyRole } from '../services/notificationService.js';
 import { sendEmail } from '../services/emailService.js';
@@ -293,6 +295,47 @@ router.get('/runs/:id/wps-readiness', authorize('admin', 'hr_manager', 'accounta
       offboarding_excluded: data.offboarding,
     });
   } catch (err) { console.error('GET /payroll/runs/:id/wps-readiness error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// The salary explanation workbook: for every employee, which days reduced their
+// pay, why, at what rate, and the arithmetic behind each one.
+//
+// Deliberately available on a Draft run. Its whole point is to be read BEFORE the
+// run is approved — that is when a wrong deduction can still be fixed — and it is
+// also the document HR hands to somebody asking why they were paid less.
+router.get('/runs/:id/explanation', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
+  try {
+    // Scoped like every other read of a run: the selected entity narrows it.
+    const co = companyClause(req, 'company_id');
+    const [[owned]] = await pool.query(
+      'SELECT id FROM payroll_runs WHERE id = ?' + co.clause, [req.params.id, ...co.params]);
+    if (!owned) return res.status(404).json({ error: 'Payroll run not found' });
+
+    const data = await buildPayrollExplanation(pool, Number(req.params.id));
+    if (!data) return res.status(404).json({ error: 'Payroll run not found' });
+    if (!data.employees.length) return res.status(409).json({ error: 'This payroll run has no employees' });
+
+    const buffer = await renderPayrollExplanationWorkbook(data);
+    const mismatched = data.employees.filter((e) => !e.matches);
+    const withDeductions = data.employees.filter((e) => e.lines.length);
+
+    await addAudit(pool, req.user, 'Payroll', 'Explanation Export',
+      `Salary explanation generated for run #${data.run.id} (${data.run.period}): `
+      + `${data.employees.length} employee(s), ${withDeductions.length} with deductions`
+      + (mismatched.length ? `; ${mismatched.length} do not reconcile with the stored figure` : ''));
+
+    const fileName = `Salary-Explanation-${(data.run.company_name || 'company').replace(/[^\w-]+/g, '_')}`
+      + `-${data.run.period}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    // Read by the client so it can warn before the file is even opened.
+    res.setHeader('X-Reconcile-Mismatches', String(mismatched.length));
+    res.setHeader('Access-Control-Expose-Headers', 'X-Reconcile-Mismatches, Content-Disposition');
+    res.send(buffer);
+  } catch (err) {
+    console.error('GET /payroll/runs/:id/explanation error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 // The submittable .xlsx. Blocked while mandatory identifiers are missing unless

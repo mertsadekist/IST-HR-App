@@ -181,10 +181,24 @@ function datesBetween(from, to) {
  * @returns {{deduction_days:number, unpaid_days:number, half_days:number, full_days:number}}
  */
 export function leaveDeductionForPeriod({
-  requests, tiersByType, poolByType, capByType, periodStart, periodEnd,
+  requests, tiersByType, poolByType, capByType, periodStart, periodEnd, typeNames = new Map(),
 }) {
-  const totals = { deduction_days: 0, unpaid_days: 0, half_days: 0, full_days: 0 };
-  const used = new Map();   // pool id → days consumed so far this year
+  const totals = {
+    deduction_days: 0, unpaid_days: 0, half_days: 0, full_days: 0, lines: [], overlaps: [],
+  };
+  const used = new Map();     // pool id → days consumed so far this year
+  // How much of each calendar date has already been claimed by another request.
+  //
+  // Nobody can be absent for more than one day on one day, and approving the same
+  // date twice does not make it two. It happens: one employee had a three-week
+  // block approved and then ten single-day requests filed inside the same range,
+  // and payroll charged her for both — a thousand dirhams of a three-thousand
+  // dirham salary, withheld twice over.
+  //
+  // Capping at one day rather than refusing the second request keeps a legitimate
+  // split working: a half day of annual plus a half day of unpaid on one date is
+  // a real thing and still adds to exactly one.
+  const claimedByDate = new Map();
 
   const ordered = [...(requests || [])].sort((a, b) => String(a.start_date).localeCompare(String(b.start_date)));
 
@@ -200,20 +214,52 @@ export function leaveDeductionForPeriod({
     const cap = capByType.get(pool) ?? null;
 
     for (const date of dates) {
+      const claimed = claimedByDate.get(date) || 0;
+      const room = round2(Math.max(0, 1 - claimed));
+      const charge = Math.min(perDay, room);
+      if (charge < perDay) {
+        totals.overlaps.push({
+          date,
+          request_id: r.id ?? null,
+          leave_type_name: typeNames.get(r.leave_type_id) || null,
+          requested: round2(perDay),
+          charged: round2(charge),
+          already_claimed: round2(claimed),
+        });
+      }
+      if (charge <= 0) continue;
+      claimedByDate.set(date, round2(claimed + charge));
+
       const before = used.get(pool) || 0;
-      const slice = splitAcrossTiers(tiers, before, perDay, cap);
-      used.set(pool, before + perDay);
+      const slice = splitAcrossTiers(tiers, before, charge, cap);
+      used.set(pool, before + charge);
       // Only the days inside this payroll period are charged to it.
       if (date >= periodStart && date <= periodEnd) {
         totals.deduction_days += slice.deduction_days;
         totals.unpaid_days += slice.unpaid_days;
         totals.half_days += slice.half_days;
         totals.full_days += slice.full_days;
+        // One line per charged day, so the payslip explainer can show which day
+        // cost what and at which rate — a total nobody can trace back to a date
+        // is not an explanation.
+        totals.lines.push({
+          date,
+          leave_type_id: r.leave_type_id,
+          leave_type_name: typeNames.get(r.leave_type_id) || null,
+          request_id: r.id ?? null,
+          day_share: round2(charge),
+          // The rate this day was paid at: 1 full, 0.5 half, 0 unpaid.
+          pay_factor: charge ? round2(1 - slice.deduction_days / charge) : 1,
+          deduction_days: slice.deduction_days,
+          cumulative_before: round2(before),
+        });
       }
     }
   }
 
-  for (const k of Object.keys(totals)) totals[k] = round2(totals[k]);
+  for (const k of ['deduction_days', 'unpaid_days', 'half_days', 'full_days']) {
+    totals[k] = round2(totals[k]);
+  }
   return totals;
 }
 

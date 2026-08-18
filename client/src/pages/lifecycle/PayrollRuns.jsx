@@ -10,7 +10,7 @@ import Input from '@components/ui/Input';
 import EmptyState from '@components/ui/EmptyState';
 import { toast } from 'react-toastify';
 import { confirmDelete } from '@utils/confirm';
-import { Banknote, Plus, RefreshCw, Loader2, CheckCircle2, Trash2, FileSpreadsheet, AlertTriangle, Send } from 'lucide-react';
+import { Banknote, Plus, RefreshCw, Loader2, CheckCircle2, Trash2, FileSpreadsheet, AlertTriangle, Send, FileText } from 'lucide-react';
 import { downloadBlob } from '@utils/pdf';
 import dayjs from 'dayjs';
 
@@ -69,6 +69,26 @@ export default function PayrollRuns() {
     catch (e) { toast.error(apiErr(e, t('payroll_runs.wps_check_failed'))); }
     finally { setWpsBusy(false); }
   };
+  // The salary explanation. Downloaded before approval by design: a wrong
+  // deduction can still be fixed while the run is a Draft, and this is the only
+  // view that shows which day caused it.
+  const [explainBusy, setExplainBusy] = useState(false);
+  const downloadExplanation = async () => {
+    setExplainBusy(true);
+    try {
+      const res = await payApi.explanationExport(detail.id);
+      const match = /filename="([^"]+)"/.exec(res.headers['content-disposition'] || '');
+      downloadBlob(res.data, match?.[1] || `Salary-Explanation-${detail.period}.xlsx`);
+      // The server counts rows whose stored figure does not match the day-by-day
+      // working and puts it in a header, so the warning arrives with the file
+      // rather than waiting to be noticed inside it.
+      const mismatches = Number(res.headers['x-reconcile-mismatches'] || 0);
+      if (mismatches > 0) toast.warning(t('payroll_runs.explain_mismatch', { count: mismatches }));
+      else toast.success(t('payroll_runs.explain_downloaded'));
+    } catch (e) { toast.error(apiErr(e, t('payroll_runs.explain_failed'))); }
+    finally { setExplainBusy(false); }
+  };
+
   const downloadWps = async (force) => {
     setWpsBusy(true);
     try {
@@ -157,6 +177,10 @@ export default function PayrollRuns() {
               <span className="text-sm text-surface-600">{detail.employee_count} {t('payroll_runs.employees')}</span>
               <span className="text-sm text-surface-600">{t('payroll_runs.net')}: <b className="text-brand-600">{detail.total_net}</b></span>
               <div className="ml-auto flex gap-2">
+                <Button size="sm" variant="secondary" onClick={downloadExplanation} loading={explainBusy}
+                  title={t('payroll_runs.explain_hint')}>
+                  <FileText size={14} /> {t('payroll_runs.explain_export')}
+                </Button>
                 <Button size="sm" variant="secondary" onClick={openWps} loading={wpsBusy && !wps}><FileSpreadsheet size={14} /> {t('payroll_runs.wps_export')}</Button>
                 {detail.status === 'Draft' && <Button size="sm" onClick={() => approve(detail)}><CheckCircle2 size={14} /> {t('payroll_runs.approve')}</Button>}
                 {detail.status === 'Approved' && canClosePayroll && <Button size="sm" onClick={() => pay(detail)}>{t('payroll_runs.mark_paid')}</Button>}

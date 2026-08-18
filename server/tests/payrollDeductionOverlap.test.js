@@ -286,3 +286,89 @@ describe('leave crossing a month boundary', () => {
     expect(Number(item.deductions)).toBe(0);
   });
 });
+
+describe('the salary explanation workbook', () => {
+  let explainRunId;
+
+  beforeAll(async () => {
+    const res = await request.post('/api/payroll/runs/generate').set(auth(token))
+      .send({ period: '2026-04', company_id: fx.company });
+    expect(res.status).toBe(201);
+    explainRunId = res.body.id;
+  }, 30000);
+
+  it('explains every employee, not only the ones who lost money', async () => {
+    const { buildPayrollExplanation } = await import('../services/payrollExplainerService.js');
+    const data = await buildPayrollExplanation(pool, explainRunId);
+    expect(data.employees.length).toBeGreaterThan(0);
+    // Somebody with a clean month still gets a line saying so — "why was I paid
+    // this" is a fair question even when the answer is "in full".
+    const clean = data.employees.find((e) => e.lines.length === 0);
+    expect(clean.summary).toMatch(/Full pay/);
+  });
+
+  it('carries the arithmetic on every charged day', async () => {
+    const { buildPayrollExplanation } = await import('../services/payrollExplainerService.js');
+    const data = await buildPayrollExplanation(pool, explainRunId);
+    const overlap = data.employees.find((e) => e.employee_id === fx.emps.Overlap);
+    expect(overlap.lines.length).toBeGreaterThan(0);
+    for (const l of overlap.lines) {
+      expect(l.calculation).toMatch(/\/ 30 =/);
+      expect(l.calculation).toMatch(/withheld =/);
+      expect(l.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(l.day).toBeTruthy();
+    }
+  });
+
+  it('reconciles with the figure the payslip actually stored', async () => {
+    // The document would be worse than useless if it explained a number the
+    // payslip does not carry, so every line is checked against the stored total.
+    const { buildPayrollExplanation } = await import('../services/payrollExplainerService.js');
+    const data = await buildPayrollExplanation(pool, explainRunId);
+    for (const e of data.employees) {
+      expect(e.matches, `${e.name}: explained ${e.recomputed_deduction} vs stored ${e.stored_deduction}`).toBe(true);
+    }
+  });
+
+  it('produces a workbook with all three sheets', async () => {
+    const { buildPayrollExplanation } = await import('../services/payrollExplainerService.js');
+    const { renderPayrollExplanationWorkbook } = await import('../services/payrollExplainerWorkbook.js');
+    const buffer = await renderPayrollExplanationWorkbook(await buildPayrollExplanation(pool, explainRunId));
+    expect(buffer.length).toBeGreaterThan(5000);
+
+    const ExcelJS = (await import('exceljs')).default;
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer);
+    expect(wb.worksheets.map((w) => w.name)).toEqual(['Summary', 'Deduction detail', 'Policy']);
+    // The policy sheet has to carry the tiers, or the reader cannot check the rule.
+    const policy = wb.getWorksheet('Policy');
+    const text = JSON.stringify(policy.getSheetValues());
+    expect(text).toMatch(/Sick Leave/);
+    expect(text).toMatch(/Days 16/);
+  });
+
+  it('serves it over the API on a Draft run', async () => {
+    // Deliberately available before approval: that is when a wrong deduction can
+    // still be fixed.
+    const res = await request.get(`/api/payroll/runs/${explainRunId}/explanation?company_id=${fx.company}`)
+      .set(auth(token)).buffer().parse((r, cb) => {
+        const chunks = [];
+        r.on('data', (c) => chunks.push(c));
+        r.on('end', () => cb(null, Buffer.concat(chunks)));
+      });
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toMatch(/spreadsheetml/);
+    expect(res.headers['content-disposition']).toMatch(/Salary-Explanation/);
+    expect(res.headers['x-reconcile-mismatches']).toBe('0');
+  }, 30000);
+
+  it('refuses a run belonging to another company', async () => {
+    const [other] = await pool.query('INSERT INTO companies SET ?', {
+      name: `${tag}_Other`, short_code: `${tag}O`.slice(0, 10), currency: 'AED', status: 'Active',
+    });
+    const res = await request.get(`/api/payroll/runs/${explainRunId}/explanation?company_id=${other.insertId}`)
+      .set(auth(token));
+    expect(res.status).toBe(404);
+    await pool.query('DELETE FROM companies WHERE id = ?', [other.insertId]);
+  });
+});

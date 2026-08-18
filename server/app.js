@@ -54,8 +54,10 @@ import attendanceEvaluationRoutes from './routes/attendanceEvaluation.js';
 import payrollRoutes from './routes/payroll.js';
 import notificationsRoutes from './routes/notifications.js';
 import publicRoutes from './routes/public.js';
+import publicAssessmentRoutes from './routes/publicAssessment.js';
 import applicationsRoutes from './routes/applications.js';
 import salaryReviewsRoutes from './routes/salaryReviews.js';
+import assessmentsRoutes from './routes/assessments.js';
 
 const app = express();
 
@@ -111,6 +113,7 @@ app.use('/api/email/', rateLimit({ windowMs: 60_000, max: 60 }));
 
 // Public recruitment endpoints (NO auth) — stricter per-IP rate limit
 app.use('/api/public', rateLimit({ windowMs: 60_000, max: 40, message: 'Too many requests. Please slow down.' }), publicRoutes);
+app.use('/api/public', rateLimit({ windowMs: 60_000, max: 40, message: 'Too many requests. Please slow down.' }), publicAssessmentRoutes);
 
 // API Routes
 app.use('/api/auth', authRoutes);
@@ -152,6 +155,7 @@ app.use('/api/payroll', payrollRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/applications', applicationsRoutes);
 app.use('/api/salary-reviews', salaryReviewsRoutes);
+app.use('/api/assessments', assessmentsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

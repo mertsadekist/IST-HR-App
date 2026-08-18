@@ -49,6 +49,7 @@ const Vacancies = lazy(() => import('@pages/recruitment/Vacancies'));
 const CVScorer = lazy(() => import('@pages/recruitment/CVScorer'));
 const Applicants = lazy(() => import('@pages/recruitment/Applicants'));
 const CareersJob = lazy(() => import('@pages/public/CareersJob'));
+const AssessmentTaker = lazy(() => import('@pages/public/AssessmentTaker'));
 
 // Employee Lifecycle
 const EmployeesPage = lazy(() => import('@pages/lifecycle/Employees'));
@@ -102,6 +103,9 @@ export default function App() {
 
             {/* Public recruitment landing page (no login, no app shell) */}
             <Route path="/careers/:slug" element={<CareersJob />} />
+
+            {/* Public applicant assessment flow (no login, no app shell) */}
+            <Route path="/assessment/:token" element={<AssessmentTaker />} />
 
             {/* Protected routes */}
             <Route element={<ProtectedRoute />}>

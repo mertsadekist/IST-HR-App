@@ -7,7 +7,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  completedMonths, annualEntitlement, splitAcrossTiers, tiersFromIsPaid,
+  completedMonths, annualEntitlement, splitAcrossTiers, tiersFromIsPaid, leaveDeductionForPeriod,
 } from '../services/leavePolicyService.js';
 
 // Policy: 90 days a year — 15 at full pay, 30 at half, 45 unpaid.
@@ -185,5 +185,65 @@ describe('splitAcrossTiers — degenerate input', () => {
     const s = splitAcrossTiers([{ from_day: 1, to_day: null, pay_factor: 3 }], 0, 5);
     expect(s.deduction_days).toBe(0);
     expect(s.full_days).toBe(5);
+  });
+});
+
+describe('leaveDeductionForPeriod — a date cannot be charged twice', () => {
+  const UNPAID = new Map([[1, [{ from_day: 1, to_day: null, pay_factor: 0 }]]]);
+  const pools = new Map([[1, 1]]);
+  const caps = new Map([[1, null]]);
+  const run = (requests) => leaveDeductionForPeriod({
+    requests, tiersByType: UNPAID, poolByType: pools, capByType: caps,
+    periodStart: '2026-08-01', periodEnd: '2026-08-31',
+  });
+
+  it('charges a plain block once', () => {
+    expect(run([{ id: 1, leave_type_id: 1, start_date: '2026-08-01', end_date: '2026-08-03', days: 3 }])
+      .deduction_days).toBe(3);
+  });
+
+  it('does not charge a day twice when a single-day request sits inside a block', () => {
+    // The live case: a three-week block approved, then single days filed inside
+    // the same range. Both were charged, and a 3000-dirham salary lost 1000 twice
+    // over.
+    const totals = run([
+      { id: 1, leave_type_id: 1, start_date: '2026-08-01', end_date: '2026-08-05', days: 5 },
+      { id: 2, leave_type_id: 1, start_date: '2026-08-02', end_date: '2026-08-02', days: 1 },
+      { id: 3, leave_type_id: 1, start_date: '2026-08-03', end_date: '2026-08-03', days: 1 },
+    ]);
+    expect(totals.deduction_days).toBe(5);
+    expect(totals.overlaps).toHaveLength(2);
+    expect(totals.overlaps[0]).toMatchObject({ date: '2026-08-02', requested: 1, charged: 0 });
+  });
+
+  it('reports the overlap rather than swallowing it', () => {
+    // Silently discarding the duplicate would fix the money and hide the data
+    // problem that caused it.
+    const totals = run([
+      { id: 1, leave_type_id: 1, start_date: '2026-08-10', end_date: '2026-08-10', days: 1 },
+      { id: 2, leave_type_id: 1, start_date: '2026-08-10', end_date: '2026-08-10', days: 1 },
+    ]);
+    expect(totals.deduction_days).toBe(1);
+    expect(totals.overlaps).toHaveLength(1);
+    expect(totals.overlaps[0].request_id).toBe(2);
+  });
+
+  it('still allows two halves of the same day to add to one', () => {
+    // A legitimate split must survive the cap.
+    const totals = run([
+      { id: 1, leave_type_id: 1, start_date: '2026-08-12', end_date: '2026-08-12', days: 0.5 },
+      { id: 2, leave_type_id: 1, start_date: '2026-08-12', end_date: '2026-08-12', days: 0.5 },
+    ]);
+    expect(totals.deduction_days).toBe(1);
+    expect(totals.overlaps).toHaveLength(0);
+  });
+
+  it('charges only the room left when a partial overruns a claimed day', () => {
+    const totals = run([
+      { id: 1, leave_type_id: 1, start_date: '2026-08-14', end_date: '2026-08-14', days: 0.75 },
+      { id: 2, leave_type_id: 1, start_date: '2026-08-14', end_date: '2026-08-14', days: 0.5 },
+    ]);
+    expect(totals.deduction_days).toBe(1);
+    expect(totals.overlaps[0]).toMatchObject({ requested: 0.5, charged: 0.25 });
   });
 });
