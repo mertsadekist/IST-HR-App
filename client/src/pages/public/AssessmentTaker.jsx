@@ -77,6 +77,10 @@ export default function AssessmentTaker() {
       : { answer_text: answers[q.id]?.answer_text };
     const hasContent = q.type === 'multiple_choice' ? !!patch.selected_option_key : !!(patch.answer_text && patch.answer_text.trim());
     if (!hasContent) { setConfirmError(t('assessment.confirm_needs_answer')); return; }
+    // A confirm sends this same content immediately, so any autosave still
+    // waiting on its debounce must be cancelled — otherwise it fires afterward
+    // with the pre-confirm content and clears confirmed_at right back out.
+    clearTimeout(saveTimers.current[q.id]);
     setConfirming(true);
     setConfirmError(null);
     try {

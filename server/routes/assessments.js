@@ -201,6 +201,26 @@ router.post('/templates/:id/versions', authorize(...HR), async (req, res) => {
   finally { conn.release(); }
 });
 
+// Which applicants are attached to this exact version, and how far they got —
+// what a locked (has-live-sessions) version actually means in practice, so HR
+// can tell "everyone finished, safe to ignore" from "someone is still mid-stage."
+router.get('/versions/:id/sessions', authorize(...HR), async (req, res) => {
+  try {
+    const [[version]] = await pool.query('SELECT * FROM assessment_template_versions WHERE id = ?', [req.params.id]);
+    if (!version) return res.status(404).json({ error: 'Version not found' });
+    const t = await getTemplate(req, version.template_id);
+    if (!t) return res.status(404).json({ error: 'Version not found' });
+    const [rows] = await pool.query(
+      `SELECT s.id, s.application_id, s.status, s.final_status, s.current_stage, s.overall_score, s.created_at,
+              c.first_name, c.last_name
+       FROM assessment_sessions s
+       JOIN job_applications a ON a.id = s.application_id
+       JOIN candidates c ON c.id = a.candidate_id
+       WHERE s.template_version_id = ? ORDER BY s.created_at DESC`, [version.id]);
+    res.json(rows);
+  } catch (err) { console.error('GET /assessments/versions/:id/sessions error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
 // ── Stages ───────────────────────────────────────────────────────────────────
 router.put('/stages/:stageId', authorize(...HR), async (req, res) => {
   try {
@@ -503,15 +523,30 @@ router.put('/answers/:id/override', authorize(...HR), validate({ hr_override_sco
   try {
     const co = companyClause(req, 'a.company_id');
     const [[answer]] = await pool.query(
-      `SELECT a.*, q.weight FROM assessment_answers a JOIN assessment_questions q ON q.id = a.question_id WHERE a.id = ?` + co.clause,
+      `SELECT a.*, q.weight, q.stage_id FROM assessment_answers a JOIN assessment_questions q ON q.id = a.question_id WHERE a.id = ?` + co.clause,
       [req.params.id, ...co.params]);
     if (!answer) return res.status(404).json({ error: 'Answer not found' });
     const score = req.body.hr_override_score === '' || req.body.hr_override_score == null ? null : Math.max(0, Math.min(answer.weight, Number(req.body.hr_override_score)));
     await pool.query('UPDATE assessment_answers SET hr_override_score = ?, hr_note = ?, reviewed_by = ?, reviewed_at = NOW() WHERE id = ?',
       [score, req.body.hr_note || null, req.user.id, answer.id]);
+
+    // An override must show up in the stage/overall totals immediately — HR
+    // reviews a Completed/Failed session too, not only ones held for advance.
+    const [[stageRow]] = await pool.query('SELECT * FROM assessment_stages WHERE id = ?', [answer.stage_id]);
+    const [stageQuestions] = await pool.query('SELECT * FROM assessment_questions WHERE stage_id = ?', [answer.stage_id]);
+    const [stageAnswers] = await pool.query('SELECT * FROM assessment_answers WHERE session_id = ? AND question_id IN (?)',
+      [answer.session_id, stageQuestions.map((q) => q.id)]);
+    const newStageScore = scoreStage(stageQuestions, new Map(stageAnswers.map((a) => [a.question_id, a])));
+    const scoreColumn = { 1: 'stage1_score', 2: 'stage2_score', 3: 'stage3_score' }[stageRow.stage_order];
+    await pool.query(`UPDATE assessment_sessions SET ${scoreColumn} = ? WHERE id = ?`, [newStageScore, answer.session_id]);
+    const [[{ total }]] = await pool.query(
+      `SELECT COALESCE(stage1_score,0) + COALESCE(stage2_score,0) + COALESCE(stage3_score,0) AS total FROM assessment_sessions WHERE id = ?`,
+      [answer.session_id]);
+    await pool.query('UPDATE assessment_sessions SET overall_score = ? WHERE id = ?', [total, answer.session_id]);
+
     await logSessionEvent(answer.session_id, answer.company_id, req.user, 'hr_reviewed', `Answer #${answer.id} score set to ${score ?? '(cleared)'}`);
     await addAudit(pool, req.user, 'Recruitment', 'Assessment Answer Reviewed', `Answer #${answer.id} score set to ${score ?? '(cleared)'}`, answer.company_id);
-    res.json({ success: true });
+    res.json({ success: true, stage_score: newStageScore, overall_score: total });
   } catch (err) { console.error('PUT /assessments/answers/:id/override error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 

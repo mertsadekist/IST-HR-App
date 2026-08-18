@@ -7,6 +7,7 @@ export const createTemplate = (data) => api.post('/assessments/templates', data)
 export const updateTemplate = (id, data) => api.put(`/assessments/templates/${id}`, data);
 export const deleteTemplate = (id) => api.delete(`/assessments/templates/${id}`);
 export const publishVersion = (id, data) => api.post(`/assessments/templates/${id}/versions`, data);
+export const getVersionSessions = (versionId) => api.get(`/assessments/versions/${versionId}/sessions`);
 
 // Stages
 export const updateStage = (stageId, data) => api.put(`/assessments/stages/${stageId}`, data);

@@ -10,9 +10,10 @@ import Select from '@components/ui/Select';
 import EmptyState from '@components/ui/EmptyState';
 import { confirmDelete } from '@utils/confirm';
 import { toast } from 'react-toastify';
-import { Plus, Edit3, Trash2, ClipboardList, Lock, GitBranch, CheckCircle2 } from 'lucide-react';
+import { Plus, Edit3, Trash2, ClipboardList, Lock, GitBranch, CheckCircle2, ChevronDown, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+const SESSION_STATUS_VARIANT = { Pending: 'pending', InProgress: 'info', Paused: 'warning', Stopped: 'danger', Completed: 'success' };
 const QUESTION_TYPES = ['multiple_choice', 'short_answer', 'open_ended', 'scenario'];
 const EMPTY_QUESTION = {
   type: 'short_answer', question_text: '', weight: 10, options: [{ key: 'A', text: '' }, { key: 'B', text: '' }],
@@ -150,8 +151,16 @@ export default function AssessmentTemplateEditor({ open, onClose, vacancy }) {
   const [activating, setActivating] = useState(false);
   const [activeStageIdx, setActiveStageIdx] = useState(0);
   const [questionModal, setQuestionModal] = useState({ open: false, stage: null, editing: null });
+  const [versionSessions, setVersionSessions] = useState([]);
+  const [sessionsOpen, setSessionsOpen] = useState(false);
 
   useEffect(() => { if (open && vacancy) load(); }, [open, vacancy?.id]);
+
+  useEffect(() => {
+    const versionId = template?.version?.id;
+    if (!versionId) { setVersionSessions([]); return; }
+    assessmentsApi.getVersionSessions(versionId).then(({ data }) => setVersionSessions(data)).catch(() => setVersionSessions([]));
+  }, [template?.version?.id]);
 
   const load = async (versionId) => {
     setLoading(true);
@@ -295,6 +304,33 @@ export default function AssessmentTemplateEditor({ open, onClose, vacancy }) {
               )}
             </div>
           </div>
+
+          {template.locked && (
+            <p className="text-xs text-surface-400 -mt-2">{t('assessment.locked_explainer')}</p>
+          )}
+
+          {versionSessions.length > 0 && (
+            <div className="border border-surface-100 rounded-lg">
+              <button onClick={() => setSessionsOpen((o) => !o)} className="w-full flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-surface-700">
+                {sessionsOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                {t('assessment.sessions_on_version', { count: versionSessions.length })}
+              </button>
+              {sessionsOpen && (
+                <div className="px-3 pb-2 space-y-1.5">
+                  {versionSessions.map((s) => (
+                    <div key={s.id} className="flex items-center justify-between gap-2 text-xs py-1 border-t border-surface-50 first:border-t-0 pt-1.5">
+                      <span className="text-surface-700">{s.first_name} {s.last_name}</span>
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant={SESSION_STATUS_VARIANT[s.status] || 'info'} className="text-[10px]">{s.status}</Badge>
+                        {s.final_status && <Badge variant="inactive" className="text-[10px]">{s.final_status}</Badge>}
+                        {s.status === 'InProgress' && <span className="text-surface-400">{t('assessment.current_stage_n', { n: s.current_stage })}</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Stage tabs */}
           <div className="flex gap-1 border-b border-surface-100">

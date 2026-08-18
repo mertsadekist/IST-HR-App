@@ -1912,6 +1912,8 @@
     "stage_not_balanced": "\"{{name}}\" doesn't add up to 100 points yet — adjust the question weights before activating.",
     "current_version": "current",
     "viewing_history": "Viewing past version — read only",
+    "locked_explainer": "This version can't be edited because applicants have already started it. Publish New Version to make changes — existing sessions stay on this version.",
+    "sessions_on_version": "{{count}} applicant(s) on this version",
     "publish_new_version": "Publish New Version",
     "stage_name": "Stage name",
     "duration_minutes": "Duration (minutes)",
