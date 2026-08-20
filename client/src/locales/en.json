@@ -2169,7 +2169,13 @@
       "completed": "Completed",
       "rejected": "Rejected",
       "cancelled": "Cancelled"
-    }
+    },
+    "edit_offer": "Edit",
+    "edit_offer_hint": "Change the terms before this offer goes to the candidate. Only possible while it is a Draft.",
+    "editing_draft": "Editing draft {{num}} — the candidate has not seen this offer yet.",
+    "save_offer_changes": "Save changes",
+    "offer_updated": "Offer updated",
+    "update_offer_failed": "Could not update the offer"
   },
   "toasts": {
     "t_category_name_is_required": "Category name is required",

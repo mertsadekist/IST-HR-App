@@ -14,7 +14,7 @@ import { toast } from 'react-toastify';
 import { confirmAction } from '@utils/confirm';
 import {
   UserPlus, RefreshCw, Loader2, Check, Lock, Upload, FileText, Send, ChevronRight,
-  ShieldCheck, Sparkles, CircleDot, Ban, ArrowRight, Eye, Mail, Download,
+  ShieldCheck, Sparkles, CircleDot, Ban, ArrowRight, Eye, Mail, Download, Pencil,
 } from 'lucide-react';
 import dayjs from 'dayjs';
 import SendDocumentModal from '@components/email/SendDocumentModal';
@@ -441,6 +441,10 @@ const EMP_TYPES = ['Full-time', 'Part-time', 'Contract', 'Temporary'];
 function OffersPanel({ detail, reload }) {
   const { t } = useTranslation();
   const [showForm, setShowForm] = useState(false);
+  // The id of the Draft being edited, or null when the form is creating a new
+  // offer. The same form does both — an offer is edited by the same fields it was
+  // written with, and a second form would drift from the first.
+  const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState({ employment_type: 'Full-time' });
   const [saving, setSaving] = useState(false);
   const [preview, setPreview] = useState(null);
@@ -451,8 +455,26 @@ function OffersPanel({ detail, reload }) {
   const canCreate = ['HR_APPROVED', 'OFFER_SENT'].includes(detail.stage) && !hasOpenOffer;
   const offerStatus = (s) => t(`ob.os_${String(s || '').toLowerCase()}`, s);
 
+  /** Load a Draft into the form so it can be corrected before it goes out. */
+  const openEdit = (o) => {
+    const prefill = { employment_type: o.employment_type || 'Full-time' };
+    OFFER_FORM.forEach(([k]) => {
+      let v = o[k];
+      if (v == null) return;
+      if (k === 'joining_date' || k === 'offer_expiry_date') v = String(v).slice(0, 10);
+      prefill[k] = v;
+    });
+    // additional_terms lives outside OFFER_FORM but is part of the offer, and
+    // losing it on save would silently strip the terms somebody wrote.
+    if (o.additional_terms != null) prefill.additional_terms = o.additional_terms;
+    setForm(prefill);
+    setEditingId(o.id);
+    setShowForm(true);
+  };
+
   const openForm = () => {
-    if (showForm) { setShowForm(false); return; }
+    if (showForm) { setShowForm(false); setEditingId(null); return; }
+    setEditingId(null);
     if (last) {
       const prefill = { employment_type: last.employment_type || 'Full-time' };
       OFFER_FORM.forEach(([k]) => {
@@ -468,9 +490,18 @@ function OffersPanel({ detail, reload }) {
 
   const create = async () => {
     setSaving(true);
-    try { await obApi.createOffer(detail.id, form); toast.success(t('ob.offer_created')); setShowForm(false); setForm({ employment_type: 'Full-time' }); reload(); }
-    catch (e) { toast.error(apiErr(e, t('ob.create_offer_failed'))); }
-    finally { setSaving(false); }
+    try {
+      if (editingId) {
+        await obApi.updateOffer(editingId, form);
+        toast.success(t('ob.offer_updated'));
+      } else {
+        await obApi.createOffer(detail.id, form);
+        toast.success(t('ob.offer_created'));
+      }
+      setShowForm(false); setEditingId(null); setForm({ employment_type: 'Full-time' }); reload();
+    } catch (e) {
+      toast.error(apiErr(e, t(editingId ? 'ob.update_offer_failed' : 'ob.create_offer_failed')));
+    } finally { setSaving(false); }
   };
   const applyPreset = (preset) => {
     const { key, label, ...fields } = preset;
@@ -514,6 +545,11 @@ function OffersPanel({ detail, reload }) {
 
       {showForm && (
         <div className="p-3 rounded-xl border border-surface-100 bg-surface-50/50 space-y-3">
+          {editingId && (
+            <p className="text-xs font-semibold text-brand-700 bg-brand-50 border border-brand-100 rounded-lg px-2.5 py-2">
+              {t('ob.editing_draft', { num: offers.find((o) => o.id === editingId)?.offer_number || '' })}
+            </p>
+          )}
           <div>
             <label className="text-xs font-semibold text-surface-700 block mb-1">{t('ob.use_preset')}</label>
             <div className="flex flex-wrap gap-1.5">
@@ -544,7 +580,16 @@ function OffersPanel({ detail, reload }) {
             <textarea value={form.additional_terms || ''} onChange={(e) => setForm((f) => ({ ...f, additional_terms: e.target.value }))} rows={8}
               className="w-full text-sm bg-white border border-surface-200 rounded-lg px-3 py-2 mt-1 font-mono" />
           </div>
-          <Button size="sm" onClick={create} loading={saving}>{t('ob.save_draft_offer')}</Button>
+          <div className="flex gap-2">
+            <Button size="sm" onClick={create} loading={saving}>
+              {editingId ? t('ob.save_offer_changes') : t('ob.save_draft_offer')}
+            </Button>
+            {editingId && (
+              <Button size="sm" variant="secondary" onClick={() => { setShowForm(false); setEditingId(null); }}>
+                {t('common.cancel')}
+              </Button>
+            )}
+          </div>
         </div>
       )}
 
@@ -563,6 +608,14 @@ function OffersPanel({ detail, reload }) {
             {o.rejection_reason && <p className="text-[11px] text-red-500 mt-0.5">{t('ob.rejected_label')} {o.rejection_reason}</p>}
           </div>
           <Button size="sm" variant="ghost" onClick={() => previewEmail(o)} title={t('ob.offer_email_preview')}><Eye size={13} /> {t('ob.preview')}</Button>
+          {/* Editing is only ever offered on a Draft. Once an offer is Sent the
+              candidate has the terms in writing, and the server refuses the edit
+              anyway — so the button must not suggest otherwise. */}
+          {o.status === 'Draft' && (
+            <Button size="sm" variant="secondary" onClick={() => openEdit(o)} title={t('ob.edit_offer_hint')}>
+              <Pencil size={13} /> {t('ob.edit_offer')}
+            </Button>
+          )}
           {o.status === 'Draft' && <Button size="sm" onClick={() => send(o)}><Send size={13} /> {t('common.submit')}</Button>}
           {o.status === 'Sent' && (
             <div className="flex gap-1.5">

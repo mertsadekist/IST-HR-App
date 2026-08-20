@@ -101,6 +101,82 @@ describe('Onboarding v2 — full gated lifecycle', () => {
     expect(o2.body.blocking_offer_id).toBe(f.ids.offer);
   });
 
+  // These three build their own onboarding and offer rather than riding the
+  // chain above. The chain currently fails at its first step — those tests were
+  // written before hr_manager became a cross-company role and no longer pass the
+  // entity, so the server correctly answers 400 "Company is required". That is a
+  // stale fixture, not a defect, but a test of the edit flow must not inherit it.
+  describe('editing a Draft offer', () => {
+    let onbId;
+    let offerId;
+
+    beforeAll(async () => {
+      const [rec] = await pool.query('INSERT INTO onboarding_records SET ?', {
+        company_id: f.companyA, stage: 'HR_APPROVED', status: 'In Progress',
+        assigned_to: f.ids.uHrA, created_by: f.ids.uHrA,
+      });
+      onbId = rec.insertId;
+      await pool.query('INSERT INTO onboarding_profiles SET ?', {
+        onboarding_id: onbId, company_id: f.companyA,
+        first_name: 'Edit', last_name: 'Fixture', email: `${tag}.edit@example.test`,
+      });
+      const res = await request.post(`/api/onboarding/v2/${onbId}/offers?company_id=${f.companyA}`)
+        .set(auth(tokHrA))
+        .send({
+          company_id: f.companyA, job_title: 'Engineer', work_location: 'Dubai',
+          joining_date: '2026-10-01', basic_salary: 9000, offer_expiry_date: '2026-09-15',
+          candidate_name: 'Edit Fixture', additional_terms: 'Original terms paragraph.',
+        });
+      expect(res.status).toBe(201);
+      offerId = res.body.id;
+    }, 30000);
+
+    afterAll(async () => {
+      if (onbId) await pool.query('DELETE FROM onboarding_records WHERE id = ?', [onbId]);
+    });
+
+    it('changes only the fields sent, leaving the rest of the offer alone', async () => {
+      // A partial edit must not blank the terms somebody already wrote.
+      const edit = await request.put(`/api/onboarding/v2/offers/${offerId}?company_id=${f.companyA}`)
+        .set(auth(tokHrA)).send({ basic_salary: 9750, work_location: 'Business Bay, Dubai' });
+      expect(edit.status).toBe(200);
+
+      const [[o]] = await pool.query('SELECT * FROM onboarding_offers WHERE id = ?', [offerId]);
+      expect(Number(o.basic_salary)).toBe(9750);
+      expect(o.work_location).toBe('Business Bay, Dubai');
+      expect(o.job_title).toBe('Engineer');
+      expect(o.candidate_name).toBe('Edit Fixture');
+      expect(o.additional_terms).toBe('Original terms paragraph.');
+    });
+
+    it('is a correction, not a new offer — the number and version hold', async () => {
+      const [[o]] = await pool.query('SELECT offer_number, version, status FROM onboarding_offers WHERE id = ?', [offerId]);
+      expect(o.version).toBe(1);
+      expect(o.status).toBe('Draft');
+      expect(o.offer_number).toMatch(/^OFR-/);
+    });
+
+    it('refuses once the offer is no longer a Draft', async () => {
+      // After it is Sent the candidate holds the terms in writing. Changing them
+      // underneath would mean the offer on file is not the offer they received.
+      await pool.query("UPDATE onboarding_offers SET status = 'Sent' WHERE id = ?", [offerId]);
+      const res = await request.put(`/api/onboarding/v2/offers/${offerId}?company_id=${f.companyA}`)
+        .set(auth(tokHrA)).send({ basic_salary: 99999 });
+      expect(res.status).toBe(409);
+      expect(res.body.error).toMatch(/only a draft/i);
+
+      const [[o]] = await pool.query('SELECT basic_salary FROM onboarding_offers WHERE id = ?', [offerId]);
+      expect(Number(o.basic_salary)).toBe(9750);
+      await pool.query("UPDATE onboarding_offers SET status = 'Draft' WHERE id = ?", [offerId]);
+    });
+
+    it('will not let another company edit it', async () => {
+      const res = await request.put(`/api/onboarding/v2/offers/${offerId}?company_id=${f.companyB}`)
+        .set(auth(tokHrB)).send({ basic_salary: 1 });
+      expect(res.status).toBe(404);
+    });
+  });
+
   it('sends the offer (email failure is non-blocking) then records acceptance', async () => {
     const send = await request.post(`/api/onboarding/v2/offers/${f.ids.offer}/send`).set(auth(tokHrA)).send({});
     expect(send.status).toBe(200);

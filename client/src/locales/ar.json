@@ -2169,7 +2169,13 @@
       "completed": "مكتمل",
       "rejected": "مرفوض",
       "cancelled": "ملغى"
-    }
+    },
+    "edit_offer": "تعديل",
+    "edit_offer_hint": "غيّر الشروط قبل وصول العرض للمرشّح. متاح ما دام مسودة فقط.",
+    "editing_draft": "تعديل المسودة {{num}} — لم يرَ المرشّح هذا العرض بعد.",
+    "save_offer_changes": "حفظ التعديلات",
+    "offer_updated": "تم تحديث العرض",
+    "update_offer_failed": "تعذّر تحديث العرض"
   },
   "toasts": {
     "t_category_name_is_required": "اسم الفئة مطلوب",
