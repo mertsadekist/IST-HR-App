@@ -1993,7 +1993,9 @@
     "success_body": "Thank you for applying for {{title}} at {{company}}. Our recruitment team will review your application and contact you about the next steps.",
     "powered_by": "Powered by IST HR System",
     "required_fields": "Please complete the required fields.",
-    "submit_error": "Could not submit your application."
+    "submit_error": "Could not submit your application.",
+    "closed_title": "Applications are closed for this role",
+    "closed_on": "The deadline was {{date}}. Please check our other openings."
   },
   "ob": {
     "title": "Employee Onboarding",

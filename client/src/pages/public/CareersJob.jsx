@@ -12,7 +12,7 @@ const HEARD_ABOUT_US_OPTIONS = ['Social Media', 'LinkedIn', 'Referral', 'Job Boa
 const hauKey = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '_');
 
 export default function CareersJob() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { slug } = useParams();
   const [sp] = useSearchParams();
   const [job, setJob] = useState(null);
@@ -95,10 +95,30 @@ export default function CareersJob() {
             <div className="flex flex-wrap gap-3 text-sm text-slate-600">
               {job.experience_required && <Chip>{t('careers.experience')}: {job.experience_required}</Chip>}
               {job.working_hours && <Chip>{t('careers.hours')}: {job.working_hours}</Chip>}
-              {job.show_salary && (job.salary_min || job.salary_max) && <Chip>{t('careers.salary')}: {job.salary_min || '—'} – {job.salary_max || '—'}</Chip>}
-              {job.application_deadline && <Chip>{t('careers.apply_by')}: {job.application_deadline}</Chip>}
+              {/* Boolean(), not a bare &&. show_salary arrives from MySQL as 0,
+                  and JSX renders a literal 0 for a falsy left-hand side — which
+                  is exactly the stray "0" that was sitting next to the deadline
+                  on every job page that hides its salary. */}
+              {Boolean(job.show_salary) && (job.salary_min || job.salary_max) && (
+                <Chip>{t('careers.salary')}: {job.salary_min || '—'} – {job.salary_max || '—'}</Chip>
+              )}
+              {job.application_deadline && (
+                <Chip>{t('careers.apply_by')}: {formatDate(job.application_deadline, i18n.language)}</Chip>
+              )}
             </div>
-            {!job.is_closed && (
+            {job.is_closed ? (
+              /* The banner explaining this sits at the top of the page. Somebody
+                 who has read the whole posting and scrolled to the bottom looking
+                 for the button needs the reason here, not five screens up. */
+              <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+                <p className="font-semibold">{t('careers.closed_title')}</p>
+                <p className="mt-0.5">
+                  {job.application_deadline
+                    ? t('careers.closed_on', { date: formatDate(job.application_deadline, i18n.language) })
+                    : t('careers.deadline_passed')}
+                </p>
+              </div>
+            ) : (
               <button onClick={() => setStep(2)} className="w-full sm:w-auto px-6 py-3 rounded-xl text-white font-semibold shadow-sm" style={{ background: brand }}>
                 {t('careers.start_application')}
               </button>
@@ -188,6 +208,24 @@ export default function CareersJob() {
       <footer className="max-w-3xl mx-auto px-5 py-6 text-center text-xs text-slate-400">{t('careers.powered_by')}</footer>
     </div>
   );
+}
+
+/**
+ * 'YYYY-MM-DD' as a candidate would read it.
+ *
+ * Parsed by hand rather than through `new Date(str)`, which reads a bare date as
+ * UTC midnight and then prints the day before anywhere west of Greenwich. This
+ * date is a deadline, so being a day out is the difference between applying and
+ * being told you are too late.
+ */
+function formatDate(iso, lang) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+  if (!m) return iso || '';
+  const d = new Date(+m[1], +m[2] - 1, +m[3]);
+  try {
+    return d.toLocaleDateString(lang === 'ar' ? 'ar-AE' : 'en-GB',
+      { day: 'numeric', month: 'long', year: 'numeric' });
+  } catch { return `${m[3]}/${m[2]}/${m[1]}`; }
 }
 
 const Center = ({ children }) => <div className="min-h-screen flex items-center justify-center bg-slate-50">{children}</div>;

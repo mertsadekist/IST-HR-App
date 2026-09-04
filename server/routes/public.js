@@ -48,7 +48,12 @@ router.get('/:slug', async (req, res) => {
       `SELECT v.id, v.company_id, v.title, v.work_location, v.employment_type, v.workplace_type,
               v.description, v.responsibilities, v.qualifications, v.experience_required,
               v.required_skills, v.preferred_skills, v.languages, v.benefits, v.working_hours,
-              v.salary_min, v.salary_max, v.show_salary, v.application_deadline, v.additional_questions, v.status,
+              v.salary_min, v.salary_max, v.show_salary, v.additional_questions, v.status,
+              -- DATE_FORMAT, not the raw column. A DATE read through the driver
+              -- becomes a JS Date and serialises to UTC, so a deadline of the
+              -- 31st reached the candidate as "2026-08-30T20:00:00.000Z" — a day
+              -- early, and in a format nobody can read.
+              DATE_FORMAT(v.application_deadline, '%Y-%m-%d') AS application_deadline,
               d.name AS department_name,
               c.name AS company_name, c.logo AS company_logo, c.industry AS company_industry,
               c.website AS company_website, c.color_primary, c.color_secondary, c.address AS company_address
@@ -58,7 +63,11 @@ router.get('/:slug', async (req, res) => {
        WHERE v.public_slug = ? AND v.status = 'Published'`, [req.params.slug]);
     if (!v) return res.status(404).json({ error: 'This job posting is not available' });
 
-    const closed = v.application_deadline && new Date(v.application_deadline) < new Date(new Date().toISOString().slice(0, 10));
+    // Both sides are 'YYYY-MM-DD' strings, so this is a plain lexical comparison
+    // with no timezone in it. The deadline is inclusive: applications close at the
+    // end of the day named, not at the start of it.
+    const today = new Date().toISOString().slice(0, 10);
+    const closed = !!(v.application_deadline && v.application_deadline < today);
     res.json({
       ...v,
       additional_questions: parseJSON(v.additional_questions, []),
@@ -77,10 +86,15 @@ router.post('/:slug/apply', upload.single('cv'), async (req, res) => {
     if (req.body.company_url) return res.status(400).json({ error: 'Rejected' });
 
     const [[v]] = await pool.query(
-      "SELECT id, company_id, title, recruitment_owner, application_deadline FROM vacancies WHERE public_slug = ? AND status = 'Published'",
+      "SELECT id, company_id, title, recruitment_owner, "
+      + "DATE_FORMAT(application_deadline, '%Y-%m-%d') AS application_deadline "
+      + "FROM vacancies WHERE public_slug = ? AND status = 'Published'",
       [req.params.slug]);
     if (!v) return res.status(404).json({ error: 'This job posting is not available' });
-    if (v.application_deadline && new Date(v.application_deadline) < new Date(new Date().toISOString().slice(0, 10))) {
+    // Read and compared exactly as the job page does, so the gate and the page can
+    // never disagree about whether a vacancy is still open. Through the driver
+    // these dates shift into UTC and a deadline closes a day early.
+    if (v.application_deadline && v.application_deadline < new Date().toISOString().slice(0, 10)) {
       return res.status(410).json({ error: 'The application deadline for this job has passed' });
     }
 

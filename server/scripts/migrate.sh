@@ -46,6 +46,7 @@ node apply_monfri_schedule.mjs
 node apply_exception_leave_link.mjs
 node apply_leave_policy.mjs
 node apply_remap_legacy_leave.mjs
+node apply_backfill_vacancy_slugs.mjs
 node seed_asset_catalog.mjs
 node seed_social_accounts.mjs
 node apply_assessment_module.mjs

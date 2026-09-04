@@ -63,6 +63,137 @@ describe('Vacancy publishing', () => {
     expect(res.body.public_slug).toBeTruthy();
     f.slug = res.body.public_slug;
   });
+
+  // Publishing used to happen only through POST /:id/publish, which validated the
+  // vacancy and generated its slug. But `status` is an ordinary field on create
+  // and update too, so saving the edit form with the status set to Published
+  // produced a vacancy that read Published everywhere and had no public URL at
+  // all — nothing to send a candidate. Three of five live vacancies were in that
+  // state.
+  it('gives a slug to a vacancy published through an ordinary update', async () => {
+    const [v] = await pool.query('INSERT INTO vacancies SET ?', {
+      company_id: f.companyA, title: `${tag} Updated Into Published`, status: 'Draft',
+      work_location: 'Dubai', employment_type: 'Full-time', workplace_type: 'Onsite',
+      description: 'A role somebody could actually read.', created_by: f.ids.uHrA,
+    });
+    const res = await request.put(`/api/vacancies/${v.insertId}?company_id=${f.companyA}`)
+      .set(auth(tokHrA)).send({ status: 'Published' });
+    expect(res.status).toBe(200);
+    expect(res.body.public_slug).toBeTruthy();
+
+    const [[row]] = await pool.query('SELECT public_slug, published_at FROM vacancies WHERE id = ?', [v.insertId]);
+    expect(row.public_slug).toContain('updated-into-published');
+    expect(row.published_at).toBeTruthy();
+    // And it is genuinely reachable, which is the whole point.
+    const pub = await request.get(`/api/public/jobs/${row.public_slug}`);
+    expect(pub.status).toBe(200);
+    await pool.query('DELETE FROM vacancies WHERE id = ?', [v.insertId]);
+  });
+
+  it('gives a slug to a vacancy created straight into Published', async () => {
+    const res = await request.post('/api/vacancies').set(auth(tokHrA)).send({
+      company_id: f.companyA, title: `${tag} Born Published`, status: 'Published',
+      work_location: 'Dubai', employment_type: 'Full-time', workplace_type: 'Onsite',
+      description: 'Readable.',
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.public_slug).toBeTruthy();
+    await pool.query('DELETE FROM vacancies WHERE id = ?', [res.body.id]);
+  });
+
+  it('refuses to publish an incomplete vacancy through an update, not only through publish', async () => {
+    // The bar has to be the same whichever route sets the status, or the edit
+    // form becomes a way round it.
+    const [v] = await pool.query('INSERT INTO vacancies SET ?', {
+      company_id: f.companyA, title: `${tag} Incomplete`, status: 'Draft', created_by: f.ids.uHrA,
+    });
+    const res = await request.put(`/api/vacancies/${v.insertId}?company_id=${f.companyA}`)
+      .set(auth(tokHrA)).send({ status: 'Published' });
+    expect(res.status).toBe(422);
+    expect(res.body.missing).toEqual(expect.arrayContaining(['Work location', 'Job description']));
+
+    const [[row]] = await pool.query('SELECT status, public_slug FROM vacancies WHERE id = ?', [v.insertId]);
+    expect(row.status).toBe('Draft');       // nothing was changed
+    expect(row.public_slug).toBeNull();
+    await pool.query('DELETE FROM vacancies WHERE id = ?', [v.insertId]);
+  });
+
+  it('never moves an address somebody may already have shared', async () => {
+    // On its own vacancy: renaming the shared fixture would break the tests below
+    // that assert on its title.
+    const [v] = await pool.query('INSERT INTO vacancies SET ?', {
+      company_id: f.companyA, title: `${tag} Original Name`, status: 'Draft',
+      work_location: 'Dubai', employment_type: 'Full-time', workplace_type: 'Onsite',
+      description: 'Readable.', created_by: f.ids.uHrA,
+    });
+    const pub = await request.post(`/api/vacancies/${v.insertId}/publish?company_id=${f.companyA}`)
+      .set(auth(tokHrA)).send({});
+    const original = pub.body.public_slug;
+    expect(original).toContain('original-name');
+
+    await request.put(`/api/vacancies/${v.insertId}?company_id=${f.companyA}`)
+      .set(auth(tokHrA)).send({ title: `${tag} Renamed After Publishing` });
+    const [[row]] = await pool.query('SELECT public_slug FROM vacancies WHERE id = ?', [v.insertId]);
+    expect(row.public_slug).toBe(original);
+    await pool.query('DELETE FROM vacancies WHERE id = ?', [v.insertId]);
+  });
+});
+
+describe('The application deadline a candidate is shown', () => {
+  it('is a plain date, not a shifted timestamp', async () => {
+    // A DATE read through the driver becomes a JS Date and serialises to UTC, so
+    // a deadline of the 31st reached the candidate as "2026-08-30T20:00:00.000Z" —
+    // a day early, and unreadable.
+    await pool.query('UPDATE vacancies SET application_deadline = ? WHERE id = ?', ['2099-08-31', f.ids.vacancy]);
+    const res = await request.get(`/api/public/jobs/${f.slug}`);
+    expect(res.body.application_deadline).toBe('2099-08-31');
+    expect(res.body.is_closed).toBe(false);
+  });
+
+  it('stays open on the deadline day itself, and still accepts an application', async () => {
+    // Inclusive: applications close at the end of the day named, not the start.
+    // On its own vacancy, so the duplicate-application guard on the shared one
+    // cannot mask the result.
+    const today = new Date().toISOString().slice(0, 10);
+    const [v] = await pool.query('INSERT INTO vacancies SET ?', {
+      company_id: f.companyA, title: `${tag} Closes Today`, status: 'Draft',
+      work_location: 'Dubai', employment_type: 'Full-time', workplace_type: 'Onsite',
+      description: 'Readable.', application_deadline: today, created_by: f.ids.uHrA,
+    });
+    const pub = await request.post(`/api/vacancies/${v.insertId}/publish?company_id=${f.companyA}`)
+      .set(auth(tokHrA)).send({});
+    const slug = pub.body.public_slug;
+
+    const page = await request.get(`/api/public/jobs/${slug}`);
+    expect(page.body.application_deadline).toBe(today);
+    expect(page.body.is_closed).toBe(false);
+
+    const apply = await request.post(`/api/public/jobs/${slug}/apply`)
+      .field('first_name', 'Deadline').field('last_name', 'Day')
+      .field('email', `${tag}.deadline@example.test`).field('phone', '+971500000001')
+      .field('consent', 'true')
+      .attach('cv', Buffer.from('%PDF-1.4 cv'), 'deadline-cv.pdf');
+    expect(apply.status).toBe(201);
+
+    await pool.query('DELETE ja FROM job_applications ja JOIN candidates c ON c.id = ja.candidate_id WHERE c.email = ?',
+      [`${tag}.deadline@example.test`]);
+    await pool.query('DELETE FROM candidates WHERE email = ?', [`${tag}.deadline@example.test`]);
+    await pool.query('DELETE FROM vacancies WHERE id = ?', [v.insertId]);
+  });
+
+  it('closes the day after, and the page and the gate agree', async () => {
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    await pool.query('UPDATE vacancies SET application_deadline = ? WHERE id = ?', [yesterday, f.ids.vacancy]);
+
+    const page = await request.get(`/api/public/jobs/${f.slug}`);
+    expect(page.body.is_closed).toBe(true);
+
+    const apply = await request.post(`/api/public/jobs/${f.slug}/apply`)
+      .field('first_name', 'Too').field('last_name', 'Late').field('email', `${tag}.late@example.test`);
+    expect(apply.status).toBe(410);
+
+    await pool.query('UPDATE vacancies SET application_deadline = NULL WHERE id = ?', [f.ids.vacancy]);
+  });
 });
 
 describe('Public application', () => {
