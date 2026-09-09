@@ -5,6 +5,7 @@ import { requireModule, MODULES } from '../config/permissions.js';
 import { authorize } from '../middleware/rbac.js';
 import { addAudit } from '../services/auditService.js';
 import { generateLetterContent } from '../services/deepseekService.js';
+import { formatLetterDate, todayIso } from '../services/letterWriting.js';
 import { tenantScope, companyClause, resolveWriteCompanyId } from '../middleware/tenant.js';
 
 const router = Router();
@@ -112,11 +113,22 @@ router.post('/letters', authorize('admin', 'hr_manager', 'accountant'), async (r
       if (co?.name) letterCompanyName = co.name;
     }
 
+    // The date the letter is issued on. Chosen on the form, because a certificate
+    // is not always raised on the day it is asked for, and a letter that dates
+    // itself is a letter nobody can back-date by accident. Today only when the
+    // form sent nothing at all — an undated certificate is the bug this replaced.
+    const ISO = /^\d{4}-\d{2}-\d{2}$/;
+    const issueDate = ISO.test(String(req.body.issue_date || '')) ? req.body.issue_date
+      : ISO.test(String(fields_data?.issue_date || '')) ? fields_data.issue_date
+        : todayIso();
+    const issueDateText = formatLetterDate(issueDate);
+
     // Generate content via DeepSeek AI
     let content = '';
     try {
       const aiResult = await generateLetterContent(template.name, {
         ...fields_data,
+        issue_date: issueDate,
         employee_name: recipientName,
         job_title: employee?.job_title_name || fields_data?.job_title,
         department: employee?.department_name || fields_data?.department,
@@ -127,14 +139,14 @@ router.post('/letters', authorize('admin', 'hr_manager', 'accountant'), async (r
       content = aiResult;
     } catch (aiErr) {
       console.error('AI generation failed, using fallback:', aiErr.message);
-      content = `[Letter: ${template.name}]\n\nTo Whom It May Concern,\n\nThis letter is generated for ${recipientName}.\n\nFields: ${JSON.stringify(fields_data, null, 2)}\n\n[Auto-generated — AI service unavailable]`;
+      content = `[Letter: ${template.name}]\n\nDate: ${issueDateText}\n\nTo Whom It May Concern,\n\nThis letter is generated for ${recipientName}.\n\nFields: ${JSON.stringify(fields_data, null, 2)}\n\n[Auto-generated — AI service unavailable]`;
     }
 
     const [result] = await pool.query('INSERT INTO generated_letters SET ?', {
       template_id, company_id: companyId,
       letter_type: template.type || template.name,
       recipient_name: recipientName,
-      field_values: JSON.stringify({ ...fields_data, employee_id }),
+      field_values: JSON.stringify({ ...fields_data, employee_id, issue_date: issueDate }),
       rendered_html: content,
       generated_by: req.user.id,
     });

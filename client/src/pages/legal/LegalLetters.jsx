@@ -102,7 +102,7 @@ export default function LegalLetters() {
 
   // Generate modal
   const [genModal, setGenModal] = useState(false);
-  const [genForm, setGenForm] = useState({ template_id: '', employee_id: '', company_id: '', fields_data: {} });
+  const [genForm, setGenForm] = useState({ template_id: '', employee_id: '', company_id: '', issue_date: dayjs().format('YYYY-MM-DD'), fields_data: {} });
   const [generating, setGenerating] = useState(false);
 
   // View modal
@@ -144,7 +144,8 @@ export default function LegalLetters() {
       template_id: template ? String(template.id) : '', 
       employee_id: '', 
       company_id: currentCompanyId ? String(currentCompanyId) : '',
-      fields_data: {} 
+      issue_date: dayjs().format('YYYY-MM-DD'),
+      fields_data: {}
     });
     setInlineEmp({ first_name: '', last_name: '', email: '', phone: '', company_id: currentCompanyId ? String(currentCompanyId) : '' });
     setGenModal(true);
@@ -171,12 +172,17 @@ export default function LegalLetters() {
   const handleGenerate = async (e) => {
     e.preventDefault();
     if (!genForm.template_id || !genForm.employee_id) { toast.error(t('toasts.t_template_and_employee_required')); return; }
+    // An official letter has to carry a date, and the server will fall back to
+    // today rather than issue one without — but silently dating a document the
+    // user just blanked is not the server's call to make.
+    if (!genForm.issue_date) { toast.error(t('legal.issue_date_required', 'Choose the date the letter is issued on')); return; }
     setGenerating(true);
     try {
       const { data } = await legalApi.generateLetter({
         template_id: parseInt(genForm.template_id),
         employee_id: parseInt(genForm.employee_id),
         company_id: genForm.company_id ? parseInt(genForm.company_id) : null,
+        issue_date: genForm.issue_date,
         fields_data: genForm.fields_data,
       });
       toast.success(t('toasts.t_letter_generated_with_ai'));
@@ -346,7 +352,15 @@ export default function LegalLetters() {
 
           <Select label={t('common.company', 'Company')} value={genForm.company_id} onChange={(e) => setGenForm(p => ({ ...p, company_id: e.target.value }))}
             options={companies.map(c => ({ value: String(c.id), label: c.name }))} placeholder={t('common.select', 'Select...')} />
-          
+
+          <div>
+            <Input label={t('legal.issue_date', 'Letter Date')} type="date" required value={genForm.issue_date}
+              onChange={(e) => setGenForm(p => ({ ...p, issue_date: e.target.value }))} />
+            <p className="mt-1 text-xs text-surface-500">
+              {t('legal.issue_date_hint', 'The date printed on the letter. Defaults to today — change it if the letter is dated differently.')}
+            </p>
+          </div>
+
           {activeFields.length > 0 && (
             <div className="bg-surface-50 p-4 rounded-xl border border-surface-200 space-y-3 mt-4">
               <h4 className="font-semibold text-surface-800 text-sm">{t('legal.template_fields', 'Template Fields')}</h4>

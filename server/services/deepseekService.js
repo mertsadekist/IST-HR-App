@@ -1,5 +1,6 @@
 import axios from 'axios';
 import https from 'https';
+import { formatLetterDate, finalizeLetter } from './letterWriting.js';
 
 // TLS verification stays ON. Only allow it to be disabled with an explicit
 // opt-in env flag in non-production environments (never silently).
@@ -92,20 +93,49 @@ Return a JSON object with these exact fields:
 
 /**
  * Generate professional letter content.
+ *
+ * The two rules in the prompt that are not stylistic — the date, and never
+ * assuming the employee's gender — are enforced again on the way out by
+ * `finalizeLetter`. See `letterWriting.js` for why guessing either is a defect
+ * rather than a matter of taste.
  */
 export async function generateLetterContent(type, fields, companyInfo) {
-  const systemPrompt = `You are a professional HR letter writer. Generate formal, legally appropriate letters for UAE-based companies. Write in clear, professional English.`;
+  const issueDate = formatLetterDate(fields?.issue_date);
+  const employeeName = fields?.employee_name || '';
+
+  const systemPrompt = `You are a professional HR letter writer. Generate formal, legally appropriate letters for UAE-based companies. Write in clear, professional English.
+
+Two rules are absolute, because breaking either puts a factual error into an official document:
+
+1. NEVER assume or state the gender of the employee the letter is about. Their gender is not supplied and must not be inferred from their name. Do not use he, she, his, her, him, himself, herself, Mr., Mrs., Ms. or Miss anywhere in reference to them. Write around it — name the person, say "the employee", or recast the sentence in the impersonal:
+   ✗ "She has been employed with us since 2012. Her current basic salary is AED 25,000."
+   ✓ "The employee has been employed with us since 2012. The current monthly basic salary is AED 25,000."
+   ✓ "This certificate is issued at the employee's request."
+   ("Dear Sir/Madam" addressed to the recipient of the letter is correct and should be kept.)
+
+2. NEVER leave a placeholder in square brackets — no [Insert Date], [Company Name], [Position]. Every value you need is supplied below. If something genuinely was not supplied, leave the sentence out rather than marking a blank.`;
 
   const userPrompt = `Generate a ${type} letter with the following details:
 
 Company: ${companyInfo.name}
+Date of issue: ${issueDate}
 Fields: ${JSON.stringify(fields, null, 2)}
 
-Write the letter body only (no header/footer — those are added by the system).
+Begin the letter with the recipient line (if one is given) and then "Date: ${issueDate}".
+Write the letter body only (no letterhead, logo or footer — those are added by the system).
 Make it professional, concise, and appropriate for UAE labour law context.
+Refer to ${employeeName || 'the employee'} by name or as "the employee" — never by a gendered pronoun.
 Return as plain text with proper paragraph breaks.`;
 
-  return await chat(systemPrompt, userPrompt, false);
+  const draft = await chat(systemPrompt, userPrompt, false);
+
+  return finalizeLetter(draft, {
+    date: issueDate,
+    employee_name: employeeName,
+    company_name: companyInfo?.name,
+    job_title: fields?.job_title,
+    department: fields?.department,
+  });
 }
 
 /**
