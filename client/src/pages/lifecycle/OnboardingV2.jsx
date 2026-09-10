@@ -181,7 +181,33 @@ function DetailView({ detail, reload }) {
   const terminal = ['REJECTED', 'CANCELLED', 'COMPLETED'].includes(stage);
   const completeness = detail.profile?.profile_completeness || 0;
   const [exporting, setExporting] = useState(false);
+  const [ending, setEnding] = useState(false);
+  const [endForm, setEndForm] = useState(null); // null = closed
   const reportRef = useRef(null);
+
+  // Accepting an offer creates the Employees-section profile straight away, so
+  // by the time somebody withdraws they may already be on the staff list. The
+  // dialog says so, and asks for the last day they actually worked.
+  const hasEmployeeRecord = !!detail.employee_id;
+
+  const openEnd = () => setEndForm({ reason: '', last_working_day: dayjs().format('YYYY-MM-DD') });
+
+  const endJourney = async () => {
+    if (!endForm?.reason.trim()) { toast.error(t('ob.end_reason_required')); return; }
+    setEnding(true);
+    try {
+      const { data } = await obApi.cancel(detail.id, {
+        reason: endForm.reason.trim(),
+        last_working_day: hasEmployeeRecord ? endForm.last_working_day : undefined,
+      });
+      toast.success(data?.employee_exited
+        ? t('ob.ended_with_employee', { date: data.employee_exited.end_date })
+        : t('ob.ended'));
+      setEndForm(null);
+      reload();
+    } catch (e) { toast.error(apiErr(e, t('ob.end_failed'))); }
+    finally { setEnding(false); }
+  };
 
   const advance = async () => {
     try {
@@ -256,6 +282,11 @@ function DetailView({ detail, reload }) {
             <Download size={14} /> {t('ob.export_record')}
           </Button>
           {!terminal && (
+            <Button size="sm" variant="danger" onClick={openEnd}>
+              <Ban size={14} /> {t('ob.end_journey')}
+            </Button>
+          )}
+          {!terminal && (
             <Button size="sm" onClick={advance} disabled={!detail.can_advance}>
               <ArrowRight size={14} /> {t('ob.advance')}
             </Button>
@@ -315,6 +346,51 @@ function DetailView({ detail, reload }) {
           <EventsTimeline events={detail.events} />
         </div>
       </div>
+
+      <Modal open={!!endForm} onClose={() => setEndForm(null)} title={t('ob.end_journey_title')} size="md">
+        {endForm && (
+          <div className="space-y-4">
+            <p className="text-sm text-surface-600">{t('ob.end_journey_desc')}</p>
+
+            {hasEmployeeRecord && (
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800 space-y-2">
+                <p className="font-semibold">{t('ob.end_has_employee')}</p>
+                <p>{t('ob.end_has_employee_desc')}</p>
+              </div>
+            )}
+
+            <div>
+              <label className="text-xs font-semibold text-surface-700 block mb-1">
+                {t('ob.end_reason')} <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                className="w-full px-3 py-2 text-sm bg-white border border-surface-200 rounded-xl"
+                rows={4}
+                autoFocus
+                placeholder={t('ob.end_reason_ph')}
+                value={endForm.reason}
+                onChange={(e) => setEndForm((f) => ({ ...f, reason: e.target.value }))}
+              />
+              <p className="mt-1 text-[11px] text-surface-500">{t('ob.end_reason_hint')}</p>
+            </div>
+
+            {hasEmployeeRecord && (
+              <div>
+                <Input label={t('ob.end_last_day')} type="date" value={endForm.last_working_day}
+                  onChange={(e) => setEndForm((f) => ({ ...f, last_working_day: e.target.value }))} />
+                <p className="mt-1 text-[11px] text-surface-500">{t('ob.end_last_day_hint')}</p>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="secondary" onClick={() => setEndForm(null)}>{t('common.cancel')}</Button>
+              <Button variant="danger" onClick={endJourney} loading={ending} disabled={!endForm.reason.trim()}>
+                <Ban size={14} /> {t('ob.end_journey_confirm')}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
@@ -452,7 +528,13 @@ function OffersPanel({ detail, reload }) {
   const offers = detail.offers || [];
   const last = offers[offers.length - 1];
   const hasOpenOffer = offers.some((o) => ['Draft', 'Sent', 'Accepted'].includes(o.status));
-  const canCreate = ['HR_APPROVED', 'OFFER_SENT'].includes(detail.stage) && !hasOpenOffer;
+  // OFFER_ACCEPTED belongs here too. A record could reach that stage with the
+  // offer still unanswered, and if it was then rejected the button for a
+  // replacement vanished — the stage had moved past the only place it appeared,
+  // so a rejection became a dead end and the only way on was to start the whole
+  // onboarding again. The server now rewinds the stage on rejection; this keeps
+  // the panel usable for records that drifted before it did.
+  const canCreate = ['HR_APPROVED', 'OFFER_SENT', 'OFFER_ACCEPTED'].includes(detail.stage) && !hasOpenOffer;
   const offerStatus = (s) => t(`ob.os_${String(s || '').toLowerCase()}`, s);
 
   /** Load a Draft into the form so it can be corrected before it goes out. */

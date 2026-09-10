@@ -52,4 +52,5 @@ node seed_social_accounts.mjs
 node apply_assessment_module.mjs
 node seed_assessment_bdmanager.mjs
 node apply_assessment_confirm.mjs
+node apply_fix_offer_stage_drift.mjs
 echo "✅ All migrations applied."

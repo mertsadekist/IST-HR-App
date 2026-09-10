@@ -92,8 +92,18 @@ export function validateStage(stage, ctx) {
       break;
     }
     case 'OFFER_SENT': {
-      const sent = offers.filter((o) => ['Sent', 'Accepted', 'Rejected', 'Expired', 'Withdrawn'].includes(o.status));
-      if (!sent.length) missing.push('Create and send an employment offer');
+      // The next stage is called "Offer Accepted", so leaving this one requires
+      // an offer the candidate actually accepted. It used to be enough that an
+      // offer had merely been *sent* — or even rejected — which let a record
+      // advance to a stage asserting a fact that was not true, and then the
+      // offers panel refused to open a replacement because the stage had moved
+      // past it. A rejected offer means the work is to write another one.
+      if (!offers.some((o) => o.status === 'Accepted')) {
+        const pending = offers.some((o) => o.status === 'Sent');
+        missing.push(pending
+          ? 'Record the candidate’s response to the offer that was sent'
+          : 'Create and send an employment offer the candidate accepts');
+      }
       break;
     }
     case 'OFFER_ACCEPTED': {

@@ -442,6 +442,14 @@ router.post('/offers/:offerId/respond', authorize('admin', 'hr_manager', 'hr_spe
     } else {
       await pool.query("UPDATE onboarding_records SET offer_state = 'rejected' WHERE id = ?", [offer.onboarding_id]);
       await logEvent(record, req.user, 'offer_rejected', `Offer ${offer.offer_number} rejected: ${req.body.rejection_reason}`);
+      // Put the record back where a replacement offer can be written.
+      //
+      // The stage is a claim about the hire, and once the only live offer is
+      // rejected "Offer Sent" and "Offer Accepted" are both false. Worse, the
+      // offers panel keys off the stage: left at OFFER_ACCEPTED there was no
+      // way to raise a new offer at all, so a rejection became a dead end
+      // instead of the ordinary "send them a revised one" it should be.
+      await rewindAfterOfferRejection(record, offer, req.user);
     }
     await addAudit(pool, req.user, 'Onboarding', `Offer ${response}`, `${offer.offer_number}`);
     if (record?.assigned_to) {
@@ -451,6 +459,27 @@ router.post('/offers/:offerId/respond', authorize('admin', 'hr_manager', 'hr_spe
     res.json({ success: true, response });
   } catch (err) { console.error('POST /onboarding/v2/offers/:offerId/respond error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
+
+/**
+ * After an offer is rejected, step the record back to the last stage from which
+ * a new offer can be raised — but only when nothing else is live.
+ *
+ * A second offer sitting in Draft or Sent means the process has already moved
+ * on and the stage is still honest, so it is left alone. Nothing beyond the
+ * signed offer is touched either: past that point there are documents and visa
+ * steps hanging off the record, and quietly rewinding it would strand them.
+ */
+async function rewindAfterOfferRejection(record, offer, user) {
+  if (!record) return;
+  if (!['OFFER_SENT', 'OFFER_ACCEPTED'].includes(record.stage)) return;
+  const [[{ live }]] = await pool.query(
+    `SELECT COUNT(*) AS live FROM onboarding_offers
+      WHERE onboarding_id = ? AND id <> ? AND status IN ('Draft', 'Sent', 'Accepted')`,
+    [record.id, offer.id]);
+  if (live) return;
+  await setStage(record, 'HR_APPROVED', user,
+    `Offer ${offer.offer_number} was rejected — returned to ${STAGE_LABELS.HR_APPROVED} so a revised offer can be raised`);
+}
 
 // ── Signed offer ─────────────────────────────────────────────────────────────
 router.post('/:id/signed-offer', authorize('admin', 'hr_manager', 'hr_specialist'), upload.single('file'), async (req, res) => {
@@ -767,14 +796,77 @@ async function finalizeEmployee(record, agg, user, { probationary = false } = {}
 }
 
 // ── Cancel ───────────────────────────────────────────────────────────────────
-router.post('/:id/cancel', authorize('admin'), validate({ reason: { required: true, type: 'string', minLen: 1 } }), async (req, res) => {
+//
+// Ending the journey when the hire falls through — most often when someone has
+// already started, worked a week or two while the paperwork was still being
+// collected, and then withdrew.
+//
+// The part that matters is the employee record. Accepting an offer creates a
+// probationary profile in the Employees section straight away, so by the time
+// somebody withdraws they are already on the staff list: they would keep
+// appearing in payroll, in attendance, and in the WPS file, and be marked
+// absent every day for a job they left. Closing the onboarding without closing
+// that profile leaves a person on the books who does not work here.
+//
+// So a cancellation carries a last working day. Days actually worked stay
+// payable — the profile is exited, not deleted — and the reason is recorded on
+// the record where the next person to open it will read it.
+//
+// A COMPLETED onboarding is not cancellable. That person is a full employee and
+// leaving is an offboarding, which has its own process, its own final
+// settlement and its own paperwork.
+router.post('/:id/cancel', authorize('admin', 'hr_manager'), validate({
+  reason: { required: true, type: 'string', minLen: 1 },
+  last_working_day: { type: 'string' },
+}), async (req, res) => {
   try {
     const record = await getRecord(req, req.params.id);
     if (!record) return res.status(404).json({ error: 'Onboarding not found' });
-    await pool.query('UPDATE onboarding_records SET stage = ?, status = ?, rejection_reason = ? WHERE id = ?', ['CANCELLED', 'Cancelled', req.body.reason, record.id]);
+    if (record.stage === 'COMPLETED') {
+      return res.status(409).json({
+        error: 'This onboarding is complete and the person is a full employee. End their employment through Offboarding instead.',
+      });
+    }
+    if (['CANCELLED', 'REJECTED'].includes(record.stage)) {
+      return res.status(409).json({ error: `Onboarding is already ${STAGE_LABELS[record.stage] || record.stage}` });
+    }
+
+    const lwd = /^\d{4}-\d{2}-\d{2}$/.test(String(req.body.last_working_day || ''))
+      ? req.body.last_working_day
+      : null;
+
+    await pool.query('UPDATE onboarding_records SET stage = ?, status = ?, rejection_reason = ? WHERE id = ?',
+      ['CANCELLED', 'Cancelled', req.body.reason, record.id]);
     await logEvent(record, req.user, 'cancelled', `Onboarding cancelled: ${req.body.reason}`, record.stage, 'CANCELLED');
-    await addAudit(pool, req.user, 'Onboarding', 'Cancelled', `Onboarding #${record.id} cancelled`);
-    res.json({ success: true });
+
+    // Close the probationary profile the accepted offer created, if there is one.
+    let employeeExited = null;
+    if (record.employee_id) {
+      const [[emp]] = await pool.query(
+        "SELECT id, status, DATE_FORMAT(end_date, '%Y-%m-%d') AS end_date FROM employees WHERE id = ?",
+        [record.employee_id]);
+      if (emp && emp.status !== 'Exited') {
+        const [[{ today }]] = await pool.query("SELECT DATE_FORMAT(CURDATE(), '%Y-%m-%d') AS today");
+        const endDate = lwd || emp.end_date || today;
+        await pool.query("UPDATE employees SET status = 'Exited', end_date = ? WHERE id = ?", [endDate, emp.id]);
+        employeeExited = { id: emp.id, end_date: endDate };
+        await logEvent(record, req.user, 'employee_exited',
+          `Employee #${emp.id} marked Exited with a last working day of ${endDate} — days worked up to then remain payable`);
+      }
+    }
+
+    await addAudit(pool, req.user, 'Onboarding', 'Cancelled',
+      `Onboarding #${record.id} cancelled: ${req.body.reason}`
+      + (employeeExited ? ` (employee #${employeeExited.id} exited ${employeeExited.end_date})` : ''));
+
+    if (record.assigned_to && record.assigned_to !== req.user.id) {
+      await notify(pool, {
+        userId: record.assigned_to, companyId: record.company_id, type: 'onboarding',
+        title: 'Onboarding cancelled', body: req.body.reason, link: '/onboarding',
+      }).catch(() => {});
+    }
+
+    res.json({ success: true, stage: 'CANCELLED', employee_exited: employeeExited });
   } catch (err) { console.error('cancel error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 

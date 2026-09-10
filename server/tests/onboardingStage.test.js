@@ -32,6 +32,21 @@ describe('Onboarding stage engine', () => {
     expect(validateStage('HR_APPROVED', { approval: { decision: 'Approved' } })).toEqual([]);
   });
 
+  it('OFFER_SENT cannot be left until the candidate actually accepts', () => {
+    // The next stage is literally called "Offer Accepted". It used to be enough
+    // that an offer had been sent, so a record could advance while the candidate
+    // had said nothing — and then, if they rejected it, the stage kept asserting
+    // an acceptance that never happened and the offers panel refused to raise a
+    // replacement.
+    expect(validateStage('OFFER_SENT', { offers: [] }))
+      .toContain('Create and send an employment offer the candidate accepts');
+    expect(validateStage('OFFER_SENT', { offers: [{ status: 'Sent' }] }))
+      .toContain('Record the candidate’s response to the offer that was sent');
+    expect(validateStage('OFFER_SENT', { offers: [{ status: 'Rejected' }] }))
+      .toContain('Create and send an employment offer the candidate accepts');
+    expect(validateStage('OFFER_SENT', { offers: [{ status: 'Rejected' }, { status: 'Accepted' }] })).toEqual([]);
+  });
+
   it('OFFER_ACCEPTED requires an accepted offer', () => {
     expect(validateStage('OFFER_ACCEPTED', { offers: [{ status: 'Sent' }] })).toContain('An accepted offer is required to continue');
     expect(validateStage('OFFER_ACCEPTED', { offers: [{ status: 'Accepted' }] })).toEqual([]);
