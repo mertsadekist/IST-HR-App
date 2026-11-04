@@ -4,6 +4,20 @@ All notable changes to the IST HR System. Dates are ISO (YYYY‑MM‑DD). The ap
 
 ---
 
+## [Unreleased]
+
+### Changed
+- **Attendance now syncs live from Hik Central** (PostgreSQL, read‑only) instead of the daily Google Drive CSV. First door punch of the day = check‑in, last = check‑out; a live pass every few minutes keeps today current and a daily close records absences and approved leave. See `docs/attendance_hik_sync.md`.
+- Attendance → *Hik Central Sync* page replaces *Drive Sync* (test connection, table discovery, sync now, close days, admin backfill, unmatched person IDs).
+
+### Removed
+- Google Drive attendance sync, its CSV parser, `GOOGLE_DRIVE_SA_*` / `ATTENDANCE_DRIVE_FOLDER_ID` variables and the `google-auth-library` dependency. Existing `Drive Sync` attendance rows and the `attendance_sync_*` ledger tables are kept as history.
+
+### Added
+- `HIK_*` environment variables, `server/apply_attendance_hik_sync.mjs`, `server/check_hik_sync.mjs` (read‑only connection check / table discovery / preview), and `hik*.sql` in `.gitignore`.
+
+---
+
 ## [2.5.0] — 2026‑06‑22
 
 The consolidation release: full bilingual coverage, document/letterhead emailing, the single‑organization model, the in‑app Knowledge Base, and a security/quality hardening pass on top of the v2.0 feature base.

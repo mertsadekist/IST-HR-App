@@ -34,3 +34,8 @@ docs/New Documents/
 .worktrees/
 .security-key
 logs/security/
+
+# Hik Central database dumps - they carry the access-control server address and
+# the structure of a system we do not own. Never commit them.
+hik*.sql
+*.hik.sql

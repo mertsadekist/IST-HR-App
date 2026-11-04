@@ -10,6 +10,7 @@ import bcrypt from 'bcryptjs';
 import { parseEmployeeDocument } from '../services/deepseekService.js';
 import multer from 'multer';
 import path from 'path';
+import { randomBytes } from 'crypto';
 import fs from 'fs';
 import crypto from 'crypto';
 import { extractTextFromFile } from '../services/cvParserService.js';
@@ -32,7 +33,7 @@ const PHOTO_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp
 const photoUpload = multer({
   storage: multer.diskStorage({
     destination: (req, file, cb) => cb(null, ensureUploadDir('employee_photos')),
-    filename: (req, file, cb) => cb(null, `emp_${req.params.id}_${Date.now()}.${PHOTO_EXT[file.mimetype] || 'bin'}`),
+    filename: (req, file, cb) => cb(null, `emp_${Number.parseInt(req.params.id, 10) || 0}_${Date.now()}.${PHOTO_EXT[file.mimetype] || 'bin'}`),
   }),
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
@@ -99,6 +100,18 @@ router.post('/onboard', authorize('admin', 'hr_manager'), async (req, res) => {
       return res.status(400).json({ error: 'Company is required' });
     }
 
+    // A stored file name is later read, served and deleted from the uploads
+    // volume, so it may only ever be a bare name — never a path. The photo is set
+    // through its own upload route, not through this body.
+    for (const doc of documents || []) {
+      if (typeof doc?.file_path !== 'string' || !doc.file_path || path.basename(doc.file_path) !== doc.file_path) {
+        await connection.rollback();
+        return res.status(400).json({ error: 'Invalid document file name' });
+      }
+    }
+    delete employee_data.photo_path;
+    delete employee_data.photo_type;
+
     // 1. Create Employee
     const [empResult] = await connection.query('INSERT INTO employees SET ?', [employee_data]);
     const employeeId = empResult.insertId;
@@ -117,7 +130,7 @@ router.post('/onboard', authorize('admin', 'hr_manager'), async (req, res) => {
     let userId = null;
     let tempPassword = null;
     if (create_user && employee_data.email) {
-      tempPassword = Math.random().toString(36).slice(-8); // Generate random 8 char password
+      tempPassword = randomBytes(9).toString('base64url'); // 12 chars from a CSPRNG
       const passwordHash = await bcrypt.hash(tempPassword, 10);
       
       const username = employee_data.email.split('@')[0] + Math.floor(Math.random() * 100);
@@ -205,7 +218,7 @@ router.post('/:id/create-login', authorize('admin', 'hr_manager'), async (req, r
     let username, userId, tempPassword;
     for (let attempt = 0; attempt < 5 && !userId; attempt++) {
       username = `${base}${Math.floor(Math.random() * 900) + 100}`;
-      tempPassword = Math.random().toString(36).slice(-8);
+      tempPassword = randomBytes(9).toString('base64url');
       const passwordHash = await bcrypt.hash(tempPassword, 10);
       try {
         const [r] = await pool.query(

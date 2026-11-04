@@ -102,6 +102,11 @@ router.post('/:slug/apply', upload.single('cv'), async (req, res) => {
     const errors = [];
     if (!b.first_name) errors.push('First name is required');
     if (!b.last_name) errors.push('Last name is required');
+    // These names are put into HTML emails (to HR, and a confirmation to the address
+    // given), and this endpoint is unauthenticated: no markup, no essays.
+    for (const f of ['first_name', 'last_name']) {
+      if (b[f] && (typeof b[f] !== 'string' || b[f].length > 100 || /[<>]/.test(b[f]))) errors.push('Name contains invalid characters');
+    }
     if (!b.email || !EMAIL_RE.test(b.email)) errors.push('A valid email is required');
     if (!b.phone) errors.push('Phone number is required');
     if (!(b.consent === 'true' || b.consent === true || b.consent === '1')) errors.push('You must accept the privacy & data-protection consent');

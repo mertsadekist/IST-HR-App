@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import pool from '../config/db.js';
-import { auth } from '../middleware/auth.js';
+import { auth, denyImpersonated } from '../middleware/auth.js';
 import { requireModule, MODULES } from '../config/permissions.js';
 import { authorize } from '../middleware/rbac.js';
 import { validate } from '../middleware/validate.js';
@@ -317,7 +317,7 @@ router.post('/:id/submit', authorize('admin', 'hr_manager'), async (req, res) =>
 // No role-based authorize(): the identity check below (designated approver, or
 // any admin when none is configured) IS the authorization, and is stricter than
 // a role gate. Segregation of duties: the preparer can never approve their own review.
-router.put('/:id/decision', async (req, res) => {
+router.put('/:id/decision', denyImpersonated, async (req, res) => {
   try {
     const co = companyClause(req, 'sr.company_id');
     const [[review]] = await pool.query(

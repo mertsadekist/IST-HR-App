@@ -18,7 +18,7 @@ const LH_EXT = { 'application/pdf': 'pdf', 'image/png': 'png', 'image/jpeg': 'jp
 const letterheadUpload = multer({
   storage: multer.diskStorage({
     destination: (req, file, cb) => cb(null, ensureUploadDir('letterheads')),
-    filename: (req, file, cb) => cb(null, `lh_${req.params.id}_${Date.now()}.${LH_EXT[file.mimetype] || 'bin'}`),
+    filename: (req, file, cb) => cb(null, `lh_${Number.parseInt(req.params.id, 10) || 0}_${Date.now()}.${LH_EXT[file.mimetype] || 'bin'}`),
   }),
   limits: { fileSize: 15 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {

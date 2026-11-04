@@ -48,7 +48,7 @@ export async function shadowProgress(today = new Date().toISOString().slice(0, 1
  * Assignments, company defaults and schedules, arranged so that resolving one
  * employee-day is a Map lookup.
  */
-async function loadScheduleIndex(employees, db) {
+export async function loadScheduleIndex(employees, db) {
   const companyIds = [...new Set(employees.map((e) => e.company_id))];
   const schedules = await listSchedules(companyIds, db);
   const byId = new Map(schedules.map((s) => [s.id, s]));
@@ -86,7 +86,7 @@ async function loadScheduleIndex(employees, db) {
 }
 
 /** Holidays keyed by date, with group-wide ones (company_id NULL) applying to all. */
-async function loadHolidays(from, to, db) {
+export async function loadHolidays(from, to, db) {
   const [rows] = await db.query(
     `SELECT company_id, DATE_FORMAT(holiday_date, '%Y-%m-%d') holiday_date, name_en, name_ar, is_half_day
        FROM holidays WHERE holiday_date BETWEEN ? AND ?`, [from, to]);
@@ -107,7 +107,7 @@ async function loadHolidays(from, to, db) {
  * request from the 11th to the 11th carrying 0.11 covers a tenth of one day,
  * not the day.
  */
-async function loadLeave(employees, from, to, db) {
+export async function loadLeave(employees, from, to, db) {
   const index = new Map();
   if (!employees.length) return () => null;
   const ids = employees.map((e) => e.id);

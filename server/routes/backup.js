@@ -2,6 +2,7 @@ import { Router } from 'express';
 import pool from '../config/db.js';
 import { auth } from '../middleware/auth.js';
 import { authorize } from '../middleware/rbac.js';
+import { isPlatformAdmin } from '../middleware/tenant.js';
 
 const router = Router();
 
@@ -50,6 +51,7 @@ router.get('/export', auth, authorize('admin'), async (req, res) => {
 router.post('/import', auth, authorize('admin'), async (req, res) => {
   try {
     const { tables } = req.body;
+    const platform = isPlatformAdmin(req.user);
     if (!tables) return res.status(400).json({ error: 'No backup data provided' });
 
     const imported = [];
@@ -64,6 +66,9 @@ router.post('/import', auth, authorize('admin'), async (req, res) => {
         // Insert rows one by one, skip duplicates
         let count = 0;
         for (const row of rows) {
+          // users.js stops a company-bound admin from creating a platform admin; a
+          // restore must not be a way around that.
+          if (table === 'users' && !platform && (row.role === 'admin' || row.company_id == null)) continue;
           try {
             await pool.query(`INSERT IGNORE INTO ${table} SET ?`, row);
             count++;

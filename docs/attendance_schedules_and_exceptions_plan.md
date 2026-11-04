@@ -3,7 +3,7 @@
 Supersedes the 90-section draft. The revision follows two answers that changed the
 design materially, plus what the live database actually contains.
 
-Companion document: [`attendance_drive_sync_plan.md`](attendance_drive_sync_plan.md)
+Companion document: [`attendance_hik_sync.md`](attendance_hik_sync.md) (supersedes the Google Drive sync plan this was written against)
 (the acquisition layer, already built and running). **Nothing here changes that
 layer.** The sync stays a dumb, unconditional importer; everything below happens
 *after* a row lands.
@@ -154,7 +154,7 @@ re-evaluation reproducible a year later.
 `server/services/attendanceEvaluator.js`, a **pure** function
 `evaluateDay({ employee, date, row, schedule, holidays, approvedLeave })` →
 `{ status, late_minutes, early_leave_minutes, worked_minutes_net, exceptions[] }`.
-Pure means it is unit-testable without a database, like `attendanceFileParser.js`.
+Pure means it is unit-testable without a database, like `hikRules.js`.
 
 Order is the design. It runs top to bottom and **stops at the first terminal step**:
 

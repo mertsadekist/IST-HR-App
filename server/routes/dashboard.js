@@ -71,6 +71,10 @@ router.get('/pipeline', async (req, res) => {
 // GET /api/dashboard/recent-activity?limit=10 — scoped to caller's company
 router.get('/recent-activity', async (req, res) => {
   try {
+    // The audit trail carries payroll, salary decisions and credential events. Roles
+    // without the analytics module (recruiter, accountant) see the dashboard but
+    // not this feed, same as /api/audit.
+    if (!['admin', 'hr_manager'].includes(req.user.role)) return res.json([]);
     const limit = Math.min(parseInt(req.query.limit) || 10, 50);
     const co = companyClause(req, 'company_id');
     const [rows] = await pool.query(

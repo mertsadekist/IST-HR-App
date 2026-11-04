@@ -86,6 +86,9 @@ const COLUMN_GUARDS = [
   { table: 'asset_inventory', column: 'inspected_by', ddl: 'ALTER TABLE asset_inventory ADD COLUMN inspected_by INT NULL' },
   { table: 'asset_inventory', column: 'inspected_at', ddl: 'ALTER TABLE asset_inventory ADD COLUMN inspected_at TIMESTAMP NULL' },
   { table: 'asset_inventory', column: 'inspection_note', ddl: 'ALTER TABLE asset_inventory ADD COLUMN inspection_note VARCHAR(500) NULL' },
+  // How many door punches a Hik Central day was built from — see
+  // server/apply_attendance_hik_sync.mjs. NULL for rows that predate it.
+  { table: 'attendance', column: 'punch_count', ddl: 'ALTER TABLE attendance ADD COLUMN punch_count SMALLINT NULL' },
 ];
 
 // Tiny key/value store for global app settings (e.g. timezone).
@@ -415,6 +418,28 @@ const TABLE_GUARDS = [
      FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
      FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE SET NULL
    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  // One row per Hik Central sync pass worth remembering — see
+  // server/apply_attendance_hik_sync.mjs for why each column exists.
+  `CREATE TABLE IF NOT EXISTS hik_sync_runs (
+     id             INT AUTO_INCREMENT PRIMARY KEY,
+     trigger_type   ENUM('Live','Scheduled','Manual','Backfill') NOT NULL DEFAULT 'Live',
+     status         ENUM('Running','Completed','Failed') NOT NULL DEFAULT 'Running',
+     date_from      DATE NULL,
+     date_to        DATE NULL,
+     events_read    INT NOT NULL DEFAULT 0,
+     rows_inserted  SMALLINT NOT NULL DEFAULT 0,
+     rows_updated   SMALLINT NOT NULL DEFAULT 0,
+     rows_unchanged SMALLINT NOT NULL DEFAULT 0,
+     absences       SMALLINT NOT NULL DEFAULT 0,
+     summary        JSON NULL,
+     error          VARCHAR(1000) NULL,
+     started_by     INT NULL,
+     started_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     finished_at    TIMESTAMP NULL,
+     claim_key      VARCHAR(32) NULL,
+     UNIQUE KEY uq_hik_run_claim (claim_key),
+     INDEX idx_hik_run_started (started_at)
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 ];
 
 // Enum values that must exist, widened in place. COLUMN_GUARDS only covers
@@ -423,6 +448,9 @@ const TABLE_GUARDS = [
 // attempt to create that user with a silent truncation error.
 const ENUM_GUARDS = [
   { table: 'users', column: 'role', values: ['accountant'], suffix: " DEFAULT 'employee'" },
+  // Rows written by the Hik Central sync. 'Drive Sync' stays in the list: those
+  // rows are history and must not be orphaned by widening the column.
+  { table: 'attendance', column: 'source', values: ['Hik Central', 'Self Service'], suffix: " NOT NULL DEFAULT 'Manual'" },
 ];
 
 export async function ensureSchema() {

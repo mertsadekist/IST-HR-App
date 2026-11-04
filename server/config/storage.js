@@ -24,7 +24,15 @@ try { fs.mkdirSync(UPLOADS_DIR, { recursive: true }); } catch { /* created lazil
 
 /** Absolute path for a file/sub-folder under the uploads base. */
 export function uploadPath(...segments) {
-  return path.join(UPLOADS_DIR, ...segments);
+  const root = path.resolve(UPLOADS_DIR);
+  const full = path.resolve(root, ...segments);
+  // A stored file name can come from a client (it is saved with the record and
+  // read back later). path.join would happily normalise `../../etc/passwd` into
+  // a path outside the uploads volume, so refuse anything that leaves it.
+  if (full !== root && !full.startsWith(root + path.sep)) {
+    throw new Error('Path escapes the uploads directory');
+  }
+  return full;
 }
 
 /** Like uploadPath() but also creates the (sub)directory. Returns the path. */

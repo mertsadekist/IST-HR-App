@@ -7,9 +7,10 @@ import { tenantScope, companyClause, resolveWriteCompanyId, ownRecordsClause } f
 import { validate } from '../middleware/validate.js';
 import { upload } from '../middleware/upload.js';
 import * as XLSX from 'xlsx';
-import { runSync } from '../services/attendanceSyncService.js';
-import { sendSyncReport } from '../services/attendanceSyncReport.js';
-import { testConnection, configProblems } from '../services/googleDriveClient.js';
+import { runHikSync } from '../services/hikSyncService.js';
+import { hikConfig, configProblems as hikConfigProblems } from '../services/hikConfig.js';
+import { testConnection as testHikConnection, discoverSchema as discoverHikSchema } from '../services/hikClient.js';
+import { getAppSetting } from '../services/appSettings.js';
 
 const router = Router();
 // Deliberately NOT module-gated: this is a self-service router. Every read
@@ -128,7 +129,7 @@ router.post('/', authorize('admin', 'hr_manager', 'hr_specialist'), validate({
       `INSERT INTO attendance (company_id, employee_id, work_date, check_in, check_out, work_hours, status, notes, created_by)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE check_in=VALUES(check_in), check_out=VALUES(check_out),
-         work_hours=VALUES(work_hours), status=VALUES(status), notes=VALUES(notes)`,
+         work_hours=VALUES(work_hours), status=VALUES(status), notes=VALUES(notes), source='Manual'`,
       [companyId, employee_id, work_date, check_in || null, check_out || null, workHours, status || 'Present', notes || null, req.user.id]
     );
     await addAudit(pool, req.user, 'Attendance', 'Recorded', `Attendance for employee #${employee_id} on ${work_date} (${status || 'Present'})`);
@@ -152,10 +153,10 @@ router.post('/check-in', async (req, res) => {
     if (existing?.check_in) return res.status(409).json({ error: 'Already checked in today' });
 
     if (existing) {
-      await pool.query('UPDATE attendance SET check_in = ?, status = ? WHERE id = ?', [now, status, existing.id]);
+      await pool.query("UPDATE attendance SET check_in = ?, status = ?, source = 'Self Service' WHERE id = ?", [now, status, existing.id]);
     } else {
       await pool.query(
-        'INSERT INTO attendance (company_id, employee_id, work_date, check_in, status, created_by) VALUES (?, ?, ?, ?, ?, ?)',
+        "INSERT INTO attendance (company_id, employee_id, work_date, check_in, status, source, created_by) VALUES (?, ?, ?, ?, ?, 'Self Service', ?)",
         [companyId, empId, date, now, status, req.user.id]
       );
     }
@@ -227,6 +228,9 @@ router.put('/:id', authorize('admin', 'hr_manager', 'hr_specialist'), validate({
       data.work_hours = Math.round(((new Date(co2) - new Date(ci)) / 3600000) * 100) / 100;
     }
     if (!Object.keys(data).length) return res.status(400).json({ error: 'No updatable fields provided' });
+    // A person changed this row, so it is theirs: the Hik sync must not put the door
+    // punches back over it on its next pass.
+    data.source = 'Manual';
 
     const co = companyClause(req, 'company_id');
     // Capture the current values first so the audit log can describe what changed.
@@ -410,98 +414,146 @@ router.get('/export', authorize('admin', 'hr_manager', 'hr_specialist'), async (
   }
 });
 
-// ─── Drive sync ──────────────────────────────────────────────────────────────
-// The daily import from the Google Drive folder the attendance software writes
-// to. See docs/attendance_drive_sync_plan.md. HR-only: these read and write
-// everyone's attendance, unlike the self-service routes above.
+// ─── Hik Central sync ────────────────────────────────────────────────────────
+// Door punches read live from the Hik Central database; see
+// docs/attendance_hik_sync.md. HR-only: these read and write everyone's
+// attendance, unlike the self-service routes above. The scheduled passes live in
+// server.js — these are the same code, started by a person.
 const SYNC_ROLES = ['admin', 'hr_manager'];
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-// GET /api/attendance/drive-sync/status — the page's whole payload
-router.get('/drive-sync/status', authorize(...SYNC_ROLES), async (req, res) => {
+// GET /api/attendance/hik-sync/status — the page's whole payload
+router.get('/hik-sync/status', authorize(...SYNC_ROLES), async (req, res) => {
   try {
+    const cfg = hikConfig();
+    const problems = hikConfigProblems(cfg);
     const [runs] = await pool.query(
-      `SELECT id, DATE_FORMAT(run_date, '%Y-%m-%d') AS run_date, trigger_type, status,
-              files_seen, files_imported, files_failed, rows_written, summary, error,
-              started_at, finished_at
-         FROM attendance_sync_runs ORDER BY started_at DESC LIMIT 30`);
-    const [files] = await pool.query(
-      `SELECT id, drive_file_id, file_name, DATE_FORMAT(business_date, '%Y-%m-%d') AS business_date,
-              status, skip_reason, rows_total, rows_matched, rows_unmatched,
-              inserted, updated, skipped, error, attempts, imported_at
-         FROM attendance_sync_files ORDER BY business_date DESC, id DESC LIMIT 60`);
+      `SELECT id, trigger_type, status, DATE_FORMAT(date_from, '%Y-%m-%d') AS date_from,
+              DATE_FORMAT(date_to, '%Y-%m-%d') AS date_to, events_read, rows_inserted,
+              rows_updated, rows_unchanged, absences, summary, error, started_at, finished_at
+         FROM hik_sync_runs ORDER BY started_at DESC, id DESC LIMIT 30`);
     const [ignored] = await pool.query(
       'SELECT id, device_id, device_name, reason, created_at FROM attendance_ignored_devices ORDER BY device_id');
 
+    // The latest run that carries a summary names the people the feed knows about
+    // and the system does not — that list is what needs a human.
+    let unmatched = [];
+    for (const r of runs) {
+      const s = typeof r.summary === 'string' ? JSON.parse(r.summary) : r.summary;
+      if (s && Array.isArray(s.unmatched)) { unmatched = s.unmatched; break; }
+    }
+
     res.json({
-      configured: configProblems().length === 0,
-      config_problems: configProblems(),
-      runs, files, ignored,
-      // Where the scheduler will fire; the page states it so nobody wonders.
-      scheduled_hour: Number(process.env.ATTENDANCE_SYNC_HOUR || 5),
-      start_date: process.env.ATTENDANCE_SYNC_START_DATE || null,
+      configured: problems.length === 0,
+      config_problems: problems,
+      runs, ignored, unmatched,
+      last_sync_at: await getAppSetting('hik_last_sync_at', null),
+      last_event_at: await getAppSetting('hik_last_event_at', null),
+      last_error: (await getAppSetting('hik_last_error', '')) || null,
+      interval_minutes: cfg.schedule.intervalMinutes,
+      lookback_days: cfg.schedule.lookbackDays,
+      finalize_hour: cfg.schedule.finalizeHour,
+      min_stay_minutes: cfg.rules.minStayMinutes,
+      time_zone: cfg.tz,
+      start_date: cfg.schedule.startDate || await getAppSetting('hik_sync_start_date', null),
     });
   } catch (err) {
-    console.error('GET /attendance/drive-sync/status error:', err);
+    console.error('GET /attendance/hik-sync/status error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// GET /api/attendance/drive-sync/test — prove the credentials and the sharing
-router.get('/drive-sync/test', authorize(...SYNC_ROLES), async (req, res) => {
+// GET /api/attendance/hik-sync/test — prove the connection and the column mapping
+router.get('/hik-sync/test', authorize(...SYNC_ROLES), async (req, res) => {
   try {
-    res.json(await testConnection());
+    const result = await testHikConnection();
+    // Where the Hik server lives is infrastructure detail; HR managers get the
+    // verdict and the counts, admins get the address too.
+    if (result.diagnostics && req.user.role !== 'admin') {
+      delete result.diagnostics.host;
+      delete result.diagnostics.port;
+    }
+    res.json(result);
   } catch (err) {
-    res.status(500).json({ ok: false, problems: [err.message] });
+    console.error('GET /attendance/hik-sync/test error:', err);
+    res.status(500).json({ ok: false, problems: ['The test could not run'] });
   }
 });
 
-// POST /api/attendance/drive-sync/run — the same pass the scheduler makes
-router.post('/drive-sync/run', authorize(...SYNC_ROLES), async (req, res) => {
+// GET /api/attendance/hik-sync/schema — tables and columns the Hik user can see,
+// for filling in the HIK_* mapping. Admin only: it describes another system.
+router.get('/hik-sync/schema', authorize('admin'), async (req, res) => {
+  try {
+    const problems = hikConfigProblems().filter((p) => /HIK_DB_|SSL/.test(p));
+    if (problems.length) return res.status(422).json({ error: problems[0] });
+    res.json({ tables: await discoverHikSchema() });
+  } catch (err) {
+    console.error('GET /attendance/hik-sync/schema error:', err.message);
+    res.status(502).json({ error: 'Could not read the Hik database schema' });
+  }
+});
+
+// POST /api/attendance/hik-sync/run — the live pass, on demand
+router.post('/hik-sync/run', authorize(...SYNC_ROLES), async (req, res) => {
   try {
     const overwriteManual = req.body?.overwrite_manual === true;
-    // A manual run is its own trigger type, so it never collides with the
-    // morning's scheduled claim for the same date.
-    const result = await runSync(pool, {
-      trigger: 'Manual', actorId: req.user.id, overwriteManual,
-    });
-    if (result.run_id && !result.skipped) {
-      await sendSyncReport(pool, {
-        status: result.status, summary: result.summary,
-        runDate: new Date().toISOString().slice(0, 10), error: result.error,
-      }).catch(() => {});
-    }
+    const result = await runHikSync(pool, { trigger: 'Manual', actorId: req.user.id, overwriteManual });
     if (overwriteManual) {
-      await addAudit(pool, req.user, 'Attendance', 'Drive Sync Override',
+      await addAudit(pool, req.user, 'Attendance', 'Hik Sync Override',
         'Manual sync run WITH overwrite of hand-corrected rows');
     }
     res.json(result);
   } catch (err) {
-    console.error('POST /attendance/drive-sync/run error:', err);
-    res.status(500).json({ error: err.message || 'Sync failed' });
+    console.error('POST /attendance/hik-sync/run error:', err);
+    res.status(500).json({ error: 'Sync failed' });
   }
 });
 
-// POST /api/attendance/drive-sync/retry/:driveFileId — one failed file again
-router.post('/drive-sync/retry/:driveFileId', authorize(...SYNC_ROLES), async (req, res) => {
+// POST /api/attendance/hik-sync/finalize — close the finished days now: absences,
+// leave and the schedule checks, exactly as the 05:00 pass does.
+router.post('/hik-sync/finalize', authorize(...SYNC_ROLES), async (req, res) => {
   try {
-    const result = await runSync(pool, {
-      trigger: 'Retry', actorId: req.user.id,
-      onlyFileIds: [req.params.driveFileId],
+    const result = await runHikSync(pool, {
+      trigger: 'Manual', actorId: req.user.id, finalize: true,
       overwriteManual: req.body?.overwrite_manual === true,
-      // Retries are keyed by the moment so several in a day do not collide on
-      // the run-claim, which exists to stop *scheduled* duplicates.
-      runDate: new Date().toISOString().slice(0, 10),
     });
     res.json(result);
   } catch (err) {
-    console.error('POST /attendance/drive-sync/retry error:', err);
-    res.status(500).json({ error: err.message || 'Retry failed' });
+    console.error('POST /attendance/hik-sync/finalize error:', err);
+    res.status(500).json({ error: 'Sync failed' });
   }
 });
 
-// POST /api/attendance/drive-sync/ignore — stop reporting a device id
-router.post('/drive-sync/ignore', authorize(...SYNC_ROLES), validate({
+// POST /api/attendance/hik-sync/backfill — recompute an explicit range. Admin
+// only: with `finalize` it writes absences, which payroll deducts on.
+router.post('/hik-sync/backfill', authorize('admin'), async (req, res) => {
+  try {
+    const { from, to } = req.body || {};
+    if (!ISO_DATE.test(String(from || '')) || (to && !ISO_DATE.test(String(to)))) {
+      return res.status(422).json({ error: 'from and to must be YYYY-MM-DD dates' });
+    }
+    const overwriteManual = req.body?.overwrite_manual === true;
+    const result = await runHikSync(pool, {
+      trigger: 'Backfill', actorId: req.user.id, from, to: to || null,
+      finalize: req.body?.finalize === true, overwriteManual,
+    });
+    if (result.error && !result.run_id) return res.status(422).json({ error: result.error });
+    if (overwriteManual) {
+      await addAudit(pool, req.user, 'Attendance', 'Hik Sync Override',
+        `Backfill ${from}..${to || 'today'} WITH overwrite of hand-corrected rows`);
+    }
+    res.json(result);
+  } catch (err) {
+    console.error('POST /attendance/hik-sync/backfill error:', err);
+    res.status(500).json({ error: 'Backfill failed' });
+  }
+});
+
+// POST /api/attendance/hik-sync/ignore — stop reporting a person id
+router.post('/hik-sync/ignore', authorize(...SYNC_ROLES), validate({
   device_id: { required: true, type: 'string', minLen: 1, maxLen: 64 },
+  device_name: { type: 'string', maxLen: 200 },
+  reason: { type: 'string', maxLen: 300 },
 }), async (req, res) => {
   try {
     const { device_id, device_name, reason } = req.body;
@@ -511,23 +563,23 @@ router.post('/drive-sync/ignore', authorize(...SYNC_ROLES), validate({
        ON DUPLICATE KEY UPDATE device_name = VALUES(device_name), reason = VALUES(reason)`,
       [String(device_id).trim(), device_name || null, reason || null, req.user.id]);
     await addAudit(pool, req.user, 'Attendance', 'Device Ignored',
-      `Device "${device_id}" (${device_name || 'unnamed'}) will no longer be reported as unmatched`);
+      `Person id "${device_id}" (${device_name || 'unnamed'}) will no longer be reported as unmatched`);
     res.status(201).json({ success: true });
   } catch (err) {
-    console.error('POST /attendance/drive-sync/ignore error:', err);
+    console.error('POST /attendance/hik-sync/ignore error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// DELETE /api/attendance/drive-sync/ignore/:deviceId — start reporting it again
-router.delete('/drive-sync/ignore/:deviceId', authorize('admin'), async (req, res) => {
+// DELETE /api/attendance/hik-sync/ignore/:deviceId — start reporting it again
+router.delete('/hik-sync/ignore/:deviceId', authorize('admin'), async (req, res) => {
   try {
     await pool.query('DELETE FROM attendance_ignored_devices WHERE device_id = ?', [req.params.deviceId]);
     await addAudit(pool, req.user, 'Attendance', 'Device Un-ignored',
-      `Device "${req.params.deviceId}" will be reported again`);
+      `Person id "${req.params.deviceId}" will be reported again`);
     res.json({ success: true });
   } catch (err) {
-    console.error('DELETE /attendance/drive-sync/ignore error:', err);
+    console.error('DELETE /attendance/hik-sync/ignore error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

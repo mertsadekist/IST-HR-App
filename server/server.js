@@ -6,12 +6,20 @@ import { getAppSetting } from './services/appSettings.js';
 import { applyDueSalaryChanges } from './services/salaryReviewService.js';
 import { checkDomainRenewals } from './services/domainRenewalService.js';
 import { checkDocumentExpiry } from './services/documentExpiryService.js';
-import { runSync } from './services/attendanceSyncService.js';
+import { liveTick, finalizeTick } from './services/hikSyncService.js';
 import { sendSyncReport } from './services/attendanceSyncReport.js';
-import { isConfigured as driveConfigured } from './services/googleDriveClient.js';
+import { hikConfig, configProblems as hikConfigProblems } from './services/hikConfig.js';
+import { closeHikPool } from './services/hikClient.js';
 import { scheduleDailyAt } from './services/dailySchedule.js';
 
 const PORT = process.env.PORT || 3001;
+
+// A rejected promise nobody awaited (a route that took a connection outside its
+// try block while the database was down) would otherwise terminate the process
+// and put the container in a restart loop. Log it and keep serving.
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled promise rejection:', reason instanceof Error ? reason.message : reason);
+});
 
 // Validate the crypto secrets before binding a port: in production a weak or
 // duplicated key must stop the deploy, not be discovered after credentials have
@@ -56,29 +64,35 @@ async function runDocumentExpiryCheck() {
   }
 }
 
-// Pull yesterday's attendance from the Drive folder, once a day at 05:00 local.
-// A time-of-day job rather than the 6-hourly interval the others use: the file
-// lands overnight and HR wants it waiting for them, not "some time today".
+// Attendance from Hik Central, two cadences (see services/hikSyncService.js):
 //
-// The run claim lives in the database (see claimRun), so a redeploy at 05:30
+//  - every few minutes: recompute today's check-in / last-seen from the door
+//    punches, so HR sees who is in as it happens. Never decides an absence.
+//  - once a day (05:00 local): close the days that are over — absences, approved
+//    leave, the schedule checks — and email the report.
+//
+// The daily claim lives in the database (see claimRun), so a redeploy at 05:30
 // neither repeats the morning's work nor skips the day.
-async function runAttendanceDriveSync() {
-  if (!driveConfigured()) return;   // not set up yet; say nothing every morning
-  const runDate = new Date().toISOString().slice(0, 10);
+async function runHikLive() {
   try {
-    const result = await runSync(pool, { trigger: 'Scheduled', runDate });
+    await liveTick(pool);
+  } catch (err) {
+    console.error('Hik live sync failed:', err.message);
+  }
+}
+
+async function runHikFinalize() {
+  try {
+    const result = await finalizeTick(pool, { sendReport: sendSyncReport });
     if (result.skipped) {
-      if (result.reason) console.log(`📥 Attendance sync: ${result.reason}`);
+      if (result.reason) console.log(`🚪 Hik daily close: ${result.reason}`);
       return;
     }
-    console.log(`📥 Attendance sync (${result.status}): `
-      + `${result.summary?.files_imported || 0} file(s), `
-      + `${result.summary?.inserted || 0} new / ${result.summary?.updated || 0} updated row(s)`);
-    await sendSyncReport(pool, {
-      status: result.status, summary: result.summary, runDate, error: result.error,
-    });
+    console.log(`🚪 Hik daily close (${result.status}): `
+      + `${result.summary?.inserted || 0} new / ${result.summary?.updated || 0} updated row(s), `
+      + `${(result.summary?.absences || []).length} absent`);
   } catch (err) {
-    console.error('Attendance Drive sync failed:', err.message);
+    console.error('Hik daily close failed:', err.message);
   }
 }
 
@@ -100,14 +114,27 @@ app.listen(PORT, async () => {
   await runDocumentExpiryCheck();
   setInterval(runDocumentExpiryCheck, 6 * 60 * 60 * 1000); // every 6 hours
 
-  if (driveConfigured()) {
+  const hik = hikConfig();
+  const hikProblems = hikConfigProblems(hik);
+  if (!hikProblems.length) {
+    if (hik.db.ssl === 'disable' && process.env.NODE_ENV === 'production') {
+      console.warn('⚠️  HIK_DB_SSL=disable: the Hik database password and the punches cross the network unencrypted');
+    }
+    await runHikLive();
+    setInterval(runHikLive, hik.schedule.intervalMinutes * 60 * 1000);
     scheduleDailyAt({
-      hour: Number(process.env.ATTENDANCE_SYNC_HOUR || 5),
-      minute: Number(process.env.ATTENDANCE_SYNC_MINUTE || 0),
-      name: 'Attendance Drive sync',
-      onTick: runAttendanceDriveSync,
+      hour: hik.schedule.finalizeHour,
+      minute: hik.schedule.finalizeMinute,
+      name: 'Hik Central daily close',
+      onTick: runHikFinalize,
     });
   } else {
-    console.log('📥 Attendance Drive sync: not configured (GOOGLE_DRIVE_SA_* unset) — skipped');
+    console.log(`🚪 Hik Central sync: not configured (${hikProblems[0]}) — skipped`);
   }
 });
+
+// Release the Hik connection pool on shutdown so a redeploy does not leave
+// sessions open on the access-control database.
+for (const sig of ['SIGTERM', 'SIGINT']) {
+  process.on(sig, () => { closeHikPool().finally(() => process.exit(0)); });
+}

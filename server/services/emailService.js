@@ -231,7 +231,12 @@ export async function testSMTPWithConfig(config) {
     let { smtp_host, smtp_user, smtp_password, smtp_port } = config;
     if (!smtp_password) {
       const stored = await loadSMTPConfig(config.company_id || null);
-      if (stored) {
+      // Only for the server and account it was stored for. Otherwise "test" with a
+      // different host would log in to that host with the saved password.
+      const sameTarget = stored
+        && (!smtp_host || smtp_host === stored.smtp_host)
+        && (!smtp_user || smtp_user === stored.smtp_user);
+      if (sameTarget) {
         smtp_password = stored.smtp_password;
         smtp_host = smtp_host || stored.smtp_host;
         smtp_user = smtp_user || stored.smtp_user;
@@ -301,6 +306,15 @@ export async function saveEmailConfig(config, companyId = null) {
   );
 
   if (existing) {
+    if (!config.smtp_password) {
+      // Keeping the stored password while pointing at a different server would hand it
+      // to whoever runs that server.
+      const [[cur]] = await pool.query('SELECT smtp_host, smtp_user FROM email_config WHERE id = ?', [existing.id]);
+      if ((cur?.smtp_host && config.smtp_host && cur.smtp_host !== config.smtp_host)
+        || (cur?.smtp_user && config.smtp_user && cur.smtp_user !== config.smtp_user)) {
+        throw new Error('Enter the password again when changing the SMTP server or account');
+      }
+    }
     await pool.query('UPDATE email_config SET ? WHERE id = ?', [data, existing.id]);
   } else {
     await pool.query('INSERT INTO email_config SET ?', data);

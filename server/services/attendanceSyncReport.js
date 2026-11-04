@@ -75,7 +75,7 @@ function evaluationSection(evaluation) {
     : ''}
       ${(e.days_not_observed || []).length
     ? `<p style="font-size:11px;color:#b45309;margin:8px 0 0">
-             No file covered ${esc(e.days_not_observed.join(', '))} — nobody was marked absent for those days.
+             The Hik feed had no punches at all for ${esc(e.days_not_observed.join(', '))} — nobody was marked absent for those days.
            </p>` : ''}
       <p style="font-size:11px;color:#999;margin:10px 0 0">
         Attendance → Attendance Checks shows the full comparison.
@@ -86,13 +86,15 @@ function evaluationSection(evaluation) {
 /** @returns {{subject: string, html: string, text: string}} */
 export function buildSyncReport({ status, summary, runDate, error }) {
   const s = summary || {};
-  const days = (s.files || []).join(', ') || '—';
+  const span = s.from && s.to ? (s.from === s.to ? s.from : `${s.from} → ${s.to}`) : '—';
+  const absent = (s.absences || []).length;
+  const onLeave = (s.on_leave || []).length;
+  const unmatched = (s.unmatched || []).length;
+  const noPunchDays = (s.not_observed_days || []).length;
 
   const headline = status === 'Failed'
     ? 'Attendance sync failed'
-    : status === 'No File'
-      ? 'Attendance sync: no new file'
-      : `Attendance sync: ${s.files_imported || 0} file(s) imported`;
+    : `Attendance closed for ${span}`;
 
   const stat = (label, value, tone = '#111') =>
     `<td style="padding:8px 14px;border:1px solid #eee;text-align:center">
@@ -100,63 +102,65 @@ export function buildSyncReport({ status, summary, runDate, error }) {
        <div style="font-size:10px;color:#888;text-transform:uppercase">${esc(label)}</div>
      </td>`;
 
-  const body = status === 'No File'
-    ? `<p style="font-size:13px;color:#b45309;background:#fffbeb;border:1px solid #fde68a;padding:10px;border-radius:8px">
-         No new attendance file was found in the Drive folder for ${esc(runDate)}.
-         If the attendance software should have produced one by now, check that it ran.
+  const body = status === 'Failed'
+    ? `<p style="font-size:13px;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;padding:10px;border-radius:8px">
+         ${esc(error || 'The run did not complete.')} The live sync keeps retrying; you can also run it from Attendance → Hik Central Sync.
        </p>`
-    : status === 'Failed'
-      ? `<p style="font-size:13px;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;padding:10px;border-radius:8px">
-           ${esc(error || 'The run did not complete.')} It will be retried on the next run, or you can retry it from Attendance → Drive Sync.
+    : (noPunchDays
+      ? `<p style="font-size:13px;color:#b45309;background:#fffbeb;border:1px solid #fde68a;padding:10px;border-radius:8px">
+           Hik Central had no door punches at all for ${esc(s.not_observed_days.join(', '))}.
+           Nobody was marked absent for ${noPunchDays > 1 ? 'those days' : 'that day'}. If the office was open, check that the
+           access-control system and its database sync were running.
          </p>`
-      : '';
+      : '');
 
   const counts = status === 'Completed' ? `
     <table style="border-collapse:collapse;margin:12px 0"><tr>
-      ${stat('days', (s.files || []).length)}
+      ${stat('punches read', s.events_read || 0)}
+      ${stat('people', s.people_seen || 0)}
       ${stat('new rows', s.inserted || 0, '#047857')}
       ${stat('updated', s.updated || 0)}
-      ${stat('unmatched', (s.unmatched || []).length, (s.unmatched || []).length ? '#b45309' : '#111')}
-      ${stat('left alone', (s.skipped_manual || []).length)}
+      ${stat('absent', absent, absent ? '#b91c1c' : '#111')}
+      ${stat('unmatched', unmatched, unmatched ? '#b45309' : '#111')}
     </tr></table>` : '';
 
   const html = `
   <div style="font-family:Arial,sans-serif;max-width:680px;color:#1a1a1a">
     <h2 style="color:#5B21B6;font-size:18px;margin:0 0 4px">${esc(headline)}</h2>
-    <p style="color:#666;font-size:12px;margin:0 0 12px">Run of ${esc(runDate)} · day(s) covered: ${esc(days)}</p>
+    <p style="color:#666;font-size:12px;margin:0 0 12px">Run of ${esc(runDate)} · first punch of the day = check-in, last punch = check-out</p>
     ${body}
     ${counts}
-    ${section('Unknown device IDs — not employees in the system', s.unmatched,
-    (u) => `<b>${esc(u.device_id)}</b> — ${esc(u.name || 'no name in the file')}${u.status ? ` (${esc(u.status)})` : ''}`, '#b45309')}
-    ${section('Recorded as leave instead of absence', s.reclassified_leave,
+    ${section('Marked absent — a working day with no door punches and no approved leave', s.absences,
+    (a) => `${esc(a.employee)} on ${esc(a.date)}`, '#b91c1c')}
+    ${section('Recorded as leave', s.on_leave,
     (r) => `${esc(r.employee)} on ${esc(r.date)} — approved ${esc(r.leave_type)}`)}
-    ${section('Checked in but never out', s.missing_punch,
-    (m) => `${esc(m.employee)} on ${esc(m.date)} — in at ${esc(m.check_in)}, no check-out`, '#b45309')}
+    ${section('Unknown person IDs — not employees in the system', s.unmatched,
+    (u) => `<b>${esc(u.person_id)}</b> — ${esc(u.name || 'no name in Hik Central')} (${esc(u.punches)} punch(es) on ${esc(u.days)} day(s))`, '#b45309')}
+    ${section('Same person ID on more than one employee — their punches were not recorded', s.ambiguous_ids,
+    (id) => esc(id), '#b91c1c')}
+    ${section('One punch only — no check-out', s.missing_checkout,
+    (m) => `${esc(m.employee)} on ${esc(m.date)} — in at ${esc(m.check_in)}`, '#b45309')}
     ${section('Left alone — corrected by hand', s.skipped_manual,
     (m) => `${esc(m.employee)} on ${esc(m.date)}`)}
-    ${section('Company differs from the employee record', s.company_mismatch,
-    (c) => `${esc(c.employee)} — the file says ${esc(c.file_says)}, the record says company ${esc(c.record_company_id)}`)}
-    ${section('Errors', s.errors, (e) => `${esc(e.employee || e.file || '')}: ${esc(e.message)}`, '#b91c1c')}
-    ${section('Lines the file could not be read from — these people have no record for the day',
-    s.unreadable_rows, (u) => esc(u), '#b45309')}
-    ${section('Skipped — a rest day on their schedule, with nothing on it', s.rest_day_skipped,
-    (m) => `${esc(m.employee)} on ${esc(m.date)}`)}
+    ${section('No work schedule — absence could not be judged', s.no_schedule, (n) => esc(n), '#b45309')}
+    ${section('Errors', s.errors, (e) => `${esc(e.employee || '')}${e.date ? ` on ${esc(e.date)}` : ''}: ${esc(e.message)}`, '#b91c1c')}
     ${evaluationSection(s.evaluation)}
     ${s.evaluation_error
-    ? `<p style="font-size:11px;color:#b45309;margin-top:10px">The schedule checks did not run: ${esc(s.evaluation_error)}. The import itself is unaffected.</p>`
+    ? `<p style="font-size:11px;color:#b45309;margin-top:10px">The schedule checks did not run: ${esc(s.evaluation_error)}. The sync itself is unaffected.</p>`
     : ''}
     <p style="margin-top:20px;font-size:11px;color:#999">
-      Attendance → Drive Sync in the HR system shows the full history and lets you retry a file.
+      Attendance → Hik Central Sync in the HR system shows the full history and lets you run a pass by hand.
     </p>
   </div>`;
 
   const textLines = [
     headline,
-    `Run of ${runDate} · day(s): ${days}`,
+    `Run of ${runDate} · ${span}`,
     status === 'Completed'
-      ? `new ${s.inserted || 0}, updated ${s.updated || 0}, unmatched ${(s.unmatched || []).length}, left alone ${(s.skipped_manual || []).length}`
+      ? `punches ${s.events_read || 0}, new ${s.inserted || 0}, updated ${s.updated || 0}, absent ${absent}, unmatched ${unmatched}`
       : (error || ''),
-    (s.unmatched || []).length ? `Unknown devices: ${s.unmatched.map((u) => `${u.device_id} ${u.name}`).join('; ')}` : '',
+    noPunchDays ? `No punches at all for: ${s.not_observed_days.join(', ')} — nobody marked absent` : '',
+    unmatched ? `Unknown person IDs: ${s.unmatched.map((u) => `${u.person_id} ${u.name || ''}`.trim()).join('; ')}` : '',
     s.evaluation
       ? `Schedule checks (shadow mode, nothing applied): ${s.evaluation.exceptions_opened || 0} new case(s), `
         + `${s.evaluation.disagreements || 0} disagreement(s)`
@@ -194,7 +198,7 @@ export async function sendSyncReport(pool, { status, summary, runDate, error }) 
 
   // The in-app notice goes to the same audience, per company, and only says
   // something when there is something to act on or something went wrong.
-  const needsAttention = (summary?.unmatched || []).length
+  const needsAttention = (summary?.unmatched || []).length || (summary?.not_observed_days || []).length
     || (summary?.errors || []).length || status !== 'Completed';
   if (needsAttention) {
     const [companies] = await pool.query("SELECT id FROM companies WHERE status = 'Active'");
@@ -203,8 +207,8 @@ export async function sendSyncReport(pool, { status, summary, runDate, error }) 
         type: status === 'Completed' ? 'warning' : 'error',
         title: subject,
         body: status === 'Completed'
-          ? `${(summary.unmatched || []).length} unknown device id(s) need attention`
-          : (error || 'No new attendance file was found'),
+          ? `${(summary.unmatched || []).length} unknown person id(s) need attention`
+          : (error || 'The attendance sync did not complete'),
         link: '/attendance',
       }).catch(() => {});
     }
