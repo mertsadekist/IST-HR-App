@@ -39,3 +39,6 @@ logs/security/
 # the structure of a system we do not own. Never commit them.
 hik*.sql
 *.hik.sql
+
+# MCP server config (Coolify) - holds an access token. Never commit.
+.mcp.json
