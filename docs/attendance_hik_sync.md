@@ -128,7 +128,7 @@ HIK_EVENTS_TABLE=public.<table>          # a VIEW is fine — see below
 HIK_COL_PERSON_ID=<column>               # the person's number on the device
 HIK_COL_PERSON_NAME=<column>             # optional, names unknown people
 HIK_COL_EVENT_TIME=<column>
-HIK_EVENT_TIME_TYPE=timestamptz          # | timestamp_local | timestamp_utc | epoch_s | epoch_ms
+HIK_EVENT_TIME_TYPE=timestamptz          # | timestamp_local | timestamp_utc | epoch_s | epoch_ms | text_local | text_utc
 HIK_EVENT_TZ=Asia/Dubai                  # how "today" and the day boundary are read
 ```
 
@@ -138,6 +138,8 @@ HIK_EVENT_TZ=Asia/Dubai                  # how "today" and the day boundary are 
 - `timestamp_local` — no zone, already in office time.
 - `timestamp_utc` — no zone, holds UTC.
 - `epoch_s` / `epoch_ms` — an integer.
+- `text_local` / `text_utc` — a text column such as `2026-11-04T13:38:48`, in office
+  time or in UTC. Rows whose text is not a date-time are skipped, not fatal.
 
 If the table also holds events that are *not* door entries (alarms, failed
 authentications, other doors), filter with `HIK_COL_EVENT_TYPE` +

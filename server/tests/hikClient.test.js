@@ -107,7 +107,7 @@ describe('the events query', () => {
   });
 
   it('always references $1 so Postgres can type it, whatever the time type', () => {
-    for (const t of ['timestamptz', 'timestamp_local', 'timestamp_utc', 'epoch_s', 'epoch_ms']) {
+    for (const t of ['timestamptz', 'timestamp_local', 'timestamp_utc', 'epoch_s', 'epoch_ms', 'text_local', 'text_utc']) {
       const { text } = buildEventsQuery(cfgOf({ HIK_EVENT_TIME_TYPE: t }), range);
       expect(text).toContain('$1');
     }
@@ -159,5 +159,15 @@ describe('time conversion', () => {
       expect(p.startsWith('"t" >=')).toBe(true);
       expect(p).not.toContain('to_char');
     }
+  });
+
+  it('reads a text column only when it looks like a date-time, so one bad row cannot fail the read', () => {
+    for (const t of ['text_local', 'text_utc']) {
+      for (const sql of [wallClockExpr('"t"', t), rangePredicate('"t"', t)]) {
+        expect(sql).toContain('CASE WHEN "t"::text ~');
+        expect(sql).toContain('::timestamp END');
+      }
+    }
+    expect(wallClockExpr('"t"', 'text_utc')).toContain("AT TIME ZONE 'UTC'");
   });
 });

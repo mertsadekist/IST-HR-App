@@ -21,6 +21,8 @@ export const TIME_TYPES = Object.freeze([
   'timestamp_utc',    // timestamp without tz, holding UTC
   'epoch_s',          // integer seconds since 1970
   'epoch_ms',         // integer milliseconds since 1970
+  'text_local',       // text such as 2026-11-04T13:38:48, in office local time
+  'text_utc',         // the same text shape, holding UTC
 ]);
 
 const SSL_MODES = Object.freeze(['require', 'verify', 'disable']);

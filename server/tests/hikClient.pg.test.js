@@ -35,6 +35,10 @@ const TABLES = {
   timestamp_local: { col: 'timestamp', value: (iso) => new Date(Date.parse(iso) + 4 * 3600_000).toISOString().replace('Z', '') },
   epoch_s: { col: 'bigint', value: (iso) => Math.floor(Date.parse(iso) / 1000) },
   epoch_ms: { col: 'bigint', value: (iso) => Date.parse(iso) },
+  // The shape the real hikcentral_attendance table uses: '2026-11-04T13:38:48' in a
+  // text column, office time.
+  text_local: { col: 'text', value: (iso) => new Date(Date.parse(iso) + 4 * 3600_000).toISOString().slice(0, 19), text: true },
+  text_utc: { col: 'text', value: (iso) => iso.slice(0, 19), text: true },
 };
 const tableName = (type) => `public.hikt_${tag}_${type}`;
 
@@ -57,6 +61,13 @@ suite('Hik reader against PostgreSQL', () => {
         await admin.query(
           `INSERT INTO ${tableName(type)} (person_id, person_name, door, event_code, event_time) VALUES ($1,$2,$3,$4,$5)`,
           [pid, name, door, code, t.value(iso)]);
+      }
+      // A text column can hold anything. A malformed row must be skipped, not
+      // fail the whole read.
+      if (t.text) {
+        for (const junk of ['', 'not a date', '2026-08-17']) {
+          await admin.query(`INSERT INTO ${tableName(type)} (person_id, event_time) VALUES ('2006', $1)`, [junk]);
+        }
       }
     }
   });
@@ -158,6 +169,11 @@ suite('Hik reader against PostgreSQL', () => {
       expect(r.problems[0]).toMatch(/refused the user name or password/);
       expect(JSON.stringify(r)).not.toContain('wrong-pass-123');
       await closeHikPool();
+    });
+
+    it('explains a text time column configured as a timestamp', async () => {
+      await expect(fetchPunches({ from: '2026-08-17', to: '2026-08-17' }, cfgFor('text_local', { HIK_EVENT_TIME_TYPE: 'timestamptz' })))
+        .rejects.toThrow(/text_local or text_utc/);
     });
 
     it('explains an unreachable server', async () => {

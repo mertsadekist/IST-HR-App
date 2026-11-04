@@ -20,9 +20,21 @@ import { addDays } from './hikRules.js';
 
 const WALL = "'YYYY-MM-DD HH24:MI:SS'";
 
+/**
+ * A text column holding an ISO-like date-time, as a timestamp — or NULL when the
+ * text is not one. CASE guarantees the pattern is checked before the cast, so one
+ * malformed row is skipped instead of failing the whole read. Any trailing
+ * fraction or offset is ignored; the time type says which zone the text is in.
+ */
+const textAsTimestamp = (col) =>
+  `(CASE WHEN ${col}::text ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9]{2}:[0-9]{2}:[0-9]{2}' `
+  + `THEN substr(${col}::text, 1, 19)::timestamp END)`;
+
 /** SQL for "this column as office wall-clock text", given $1 = the time zone. */
 export function wallClockExpr(col, timeType) {
   switch (timeType) {
+    case 'text_local': return `to_char(${textAsTimestamp(col)}, ${WALL})`;
+    case 'text_utc': return `to_char((${textAsTimestamp(col)} AT TIME ZONE 'UTC') AT TIME ZONE $1, ${WALL})`;
     case 'timestamptz': return `to_char(${col} AT TIME ZONE $1, ${WALL})`;
     case 'timestamp_local': return `to_char(${col}, ${WALL})`;
     case 'timestamp_utc': return `to_char((${col} AT TIME ZONE 'UTC') AT TIME ZONE $1, ${WALL})`;
@@ -50,6 +62,12 @@ export function rangePredicate(col, timeType) {
       return `${col} >= extract(epoch from (${lo} AT TIME ZONE $1)) AND ${col} < extract(epoch from (${hi} AT TIME ZONE $1))`;
     case 'epoch_ms':
       return `${col} >= extract(epoch from (${lo} AT TIME ZONE $1)) * 1000 AND ${col} < extract(epoch from (${hi} AT TIME ZONE $1)) * 1000`;
+    // Text cannot use an index on the raw column the way the types above do; the
+    // tables this serves are small enough that a scan every few minutes is fine.
+    case 'text_local':
+      return `${textAsTimestamp(col)} >= ${lo} AND ${textAsTimestamp(col)} < ${hi}`;
+    case 'text_utc':
+      return `${textAsTimestamp(col)} >= ((${lo} AT TIME ZONE $1) AT TIME ZONE 'UTC') AND ${textAsTimestamp(col)} < ((${hi} AT TIME ZONE $1) AT TIME ZONE 'UTC')`;
     default: throw new Error(`Unsupported time type "${timeType}"`);
   }
 }
@@ -208,6 +226,11 @@ function classify(err) {
   if (err?.code === '3D000') return 'That database does not exist on the server';
   if (err?.code === '42P01') return 'The events table was not found — check HIK_EVENTS_TABLE';
   if (err?.code === '42703') return 'A configured column does not exist — check the HIK_COL_* variables';
+  // e.g. "operator does not exist: text >= timestamp" — the column is stored
+  // differently from what HIK_EVENT_TIME_TYPE says.
+  if (err?.code === '42883' || err?.code === '22007' || err?.code === '22008') {
+    return 'The time column is not stored the way HIK_EVENT_TIME_TYPE says — check its type (text columns use text_local or text_utc)';
+  }
   if (err?.code === '42501') return 'The database user is not allowed to read that table';
   if (err?.code === '57014') return 'The query timed out — is the time column indexed?';
   if (/ECONNREFUSED|ETIMEDOUT|ENOTFOUND|EHOSTUNREACH/.test(m + (err?.code || ''))) return `Cannot reach the Hik database (${err.code || m})`;
