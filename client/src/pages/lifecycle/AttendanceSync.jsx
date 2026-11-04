@@ -34,7 +34,7 @@ export default function AttendanceSync() {
   const [schema, setSchema] = useState(null);
   const [ignoreFor, setIgnoreFor] = useState(null);
   const [ignoreReason, setIgnoreReason] = useState('');
-  const [range, setRange] = useState({ from: '', to: '', finalize: false });
+  const [range, setRange] = useState({ from: '', to: '', finalize: false, fill_only: true });
 
   // State is written only once the response is back, so neither the effect nor
   // the refreshes after an action set state synchronously.
@@ -94,9 +94,9 @@ export default function AttendanceSync() {
     setBusy('backfill');
     try {
       const { data: r } = await attendanceApi.syncBackfill({
-        from: range.from, to: range.to || undefined, finalize: range.finalize,
+        from: range.from, to: range.to || undefined, finalize: range.finalize, fill_only: range.fill_only,
       });
-      if (r.ok) toast.success(t('sync.backfill_done', { rows: written(r) }));
+      if (r.ok) toast.success(t('sync.backfill_done', { rows: written(r), kept: r.summary?.kept_existing || 0 }));
       else toast.error(r.error || t('sync.run_failed'));
       load();
     } catch (err) { toast.error(apiErr(err, t('sync.run_failed'))); }
@@ -315,6 +315,14 @@ export default function AttendanceSync() {
                   onChange={(e) => setRange({ ...range, to: e.target.value })} />
               </div>
               <label className="flex items-start gap-2 text-xs text-surface-700">
+                <input type="checkbox" className="mt-0.5" checked={range.fill_only}
+                  onChange={(e) => setRange({ ...range, fill_only: e.target.checked })} />
+                <span>
+                  {t('sync.backfill_fill_only')}
+                  <span className="block text-[11px] text-surface-500">{t('sync.backfill_fill_only_hint')}</span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2 text-xs text-surface-700">
                 <input type="checkbox" className="mt-0.5" checked={range.finalize}
                   onChange={(e) => setRange({ ...range, finalize: e.target.checked })} />
                 <span>
@@ -362,7 +370,7 @@ export default function AttendanceSync() {
                   const gap = s?.not_observed_days?.length;
                   return (
                     <tr key={r.id} className={`hover:bg-surface-50/60 ${r.status === 'Failed' ? 'bg-red-50/40' : ''}`}>
-                      <td className="px-5 py-2.5 text-xs text-surface-600 whitespace-nowrap">{dayjs(r.started_at).format('DD MMM HH:mm')}</td>
+                      <td className="px-5 py-2.5 text-xs text-surface-600 whitespace-nowrap">{dayjs.unix(r.started_ts).format('DD MMM HH:mm')}</td>
                       <td className="px-5 py-2.5 text-surface-700">{t(`sync.trigger_${r.trigger_type}`)}</td>
                       <td className="px-5 py-2.5 text-xs text-surface-600 whitespace-nowrap">
                         {r.date_from ? (r.date_from === r.date_to ? r.date_from : `${r.date_from} → ${r.date_to}`) : '—'}

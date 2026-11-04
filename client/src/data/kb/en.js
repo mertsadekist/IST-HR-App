@@ -352,7 +352,7 @@ const articles = [
   {
     id: 'attendance', route: '/attendance', group: 'lifecycle', roles: ['admin', 'hr_manager'], icon: 'Clock',
     title: 'Attendance',
-    overview: 'Daily check-in/check-out and a monthly summary by status (Present, Late, Absent, On Leave, etc.). HR can add or correct records and filter by employee, date range and status. Absence days flow into payroll deductions.',
+    overview: 'Attendance read from the office door (Hik Central): the first punch of the day is the check-in and the last punch is the check-out. It updates every few minutes, and a monthly summary shows totals by status (Present, Late, Absent, On Leave, etc.). HR can correct records and filter by employee, date range and status. Absence days flow into payroll deductions.',
     whenToUse: 'To record working time and review monthly attendance per employee.',
     images: [
       { src: 'attendance.jpg', caption: 'Attendance: a month picker with summary badges by status, filters (employee, date range, status), and a records table with hours.' },
@@ -360,13 +360,19 @@ const articles = [
       { src: 'attendance-record-attendance-1.jpg', caption: 'The status (e.g. Late) is derived automatically from the check-in time against working hours.' },
     ],
     steps: [
-      { title: 'Check in / out', detail: 'Employees record their own time; the status (e.g. Late) is derived automatically.' },
+      { title: 'Walk through the door', detail: 'Employees are recorded by the office door reader — there is nothing to press in the system. Late is worked out from the first punch against the employee’s work schedule.' },
       { title: 'Review the month', detail: 'Pick a month to see totals by status and total hours.' },
-      { title: 'Add / correct records (HR)', detail: 'HR can add a record for an employee with the correct date, times and status.' },
+      { title: 'Add / correct records (HR)', detail: 'HR can add or edit a record. A corrected day is marked Manual and the door feed never overwrites it.' },
+      { title: 'Days close at 05:00', detail: 'Each morning the previous day is closed: a working day with no punches becomes Absent, or On Leave if approved leave covers it. Holidays and rest days are never absences.' },
     ],
-    tips: ['Absence days flow into payroll deductions, so keep attendance accurate before generating a run.'],
+    tips: [
+      'Absence days flow into payroll deductions, so keep attendance accurate before generating a run.',
+      'Today’s check-out is only the last punch so far — early departure is judged once the day is over.',
+      'If someone’s punches never appear, check the Attendance ID on their employee record matches their number in Hik Central.',
+    ],
     faq: [
-      { q: 'How is “Late” determined?', a: 'It is derived from the check-in time against the working hours.' },
+      { q: 'How is “Late” determined?', a: 'From the first door punch against the start time and grace period of the employee’s work schedule (or the company default).' },
+      { q: 'Why is there no Check in button?', a: 'Once the door feed is connected the door is the record, so self check-in is switched off.' },
       { q: 'Can HR fix a wrong record?', a: 'Yes — add or edit a record with the correct times and status.' },
     ],
     related: ['leave', 'payroll-runs', 'employees'],

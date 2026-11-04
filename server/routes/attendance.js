@@ -8,7 +8,7 @@ import { validate } from '../middleware/validate.js';
 import { upload } from '../middleware/upload.js';
 import * as XLSX from 'xlsx';
 import { runHikSync } from '../services/hikSyncService.js';
-import { hikConfig, configProblems as hikConfigProblems } from '../services/hikConfig.js';
+import { hikConfig, configProblems as hikConfigProblems, isConfigured as hikIsConfigured } from '../services/hikConfig.js';
 import { testConnection as testHikConnection, discoverSchema as discoverHikSchema } from '../services/hikClient.js';
 import { getAppSetting } from '../services/appSettings.js';
 
@@ -86,6 +86,9 @@ router.get('/', async (req, res) => {
                       DATE_FORMAT(a.work_date, '%Y-%m-%d') AS work_date,
                       DATE_FORMAT(a.check_in, '%H:%i') AS check_in,
                       DATE_FORMAT(a.check_out, '%H:%i') AS check_out,
+                      a.source, a.punch_count, a.late_minutes, a.early_leave_minutes,
+                      TIME_FORMAT(a.scheduled_in, '%H:%i') AS scheduled_in,
+                      TIME_FORMAT(a.scheduled_out, '%H:%i') AS scheduled_out,
                       e.first_name, e.last_name${evalCols}
                FROM attendance a JOIN employees e ON a.employee_id = e.id
                ${self ? '' : 'LEFT JOIN work_schedules ws ON ws.id = a.schedule_id'}
@@ -138,8 +141,14 @@ router.post('/', authorize('admin', 'hr_manager', 'hr_specialist'), validate({
 });
 
 // ─── Self-service check-in / check-out ───────────────────────────────────────
+// Once Hik Central is connected the office door is the attendance record. A
+// button anyone can press from home would compete with it, and a self-made row
+// was protected from the door feed — so both routes stand down.
+const doorOnly = (res) => res.status(409).json({ error: 'Attendance is recorded by the office door (Hik Central)' });
+
 router.post('/check-in', async (req, res) => {
   try {
+    if (hikIsConfigured()) return doorOnly(res);
     const empId = await myEmployeeId(req.user.id);
     if (!empId) return res.status(400).json({ error: 'No employee profile linked to your account' });
     const companyId = await employeeCompany(req, empId);
@@ -167,6 +176,7 @@ router.post('/check-in', async (req, res) => {
 
 router.post('/check-out', async (req, res) => {
   try {
+    if (hikIsConfigured()) return doorOnly(res);
     const empId = await myEmployeeId(req.user.id);
     if (!empId) return res.status(400).json({ error: 'No employee profile linked to your account' });
 
@@ -199,7 +209,7 @@ router.get('/summary', async (req, res) => {
 
     if (self) {
       const empId = await myEmployeeId(req.user.id);
-      if (!empId) return res.json({ month, by_status: [], total_hours: 0 });
+      if (!empId) return res.json({ month, by_status: [], total_hours: 0, door_sync: hikIsConfigured() });
       sql += ' AND employee_id = ?'; params.push(empId);
     } else if (req.query.employee_id) {
       sql += ' AND employee_id = ?'; params.push(req.query.employee_id);
@@ -207,7 +217,7 @@ router.get('/summary', async (req, res) => {
     sql += ' GROUP BY status';
     const [rows] = await pool.query(sql, params);
     const total_hours = rows.reduce((s, r) => s + Number(r.hours || 0), 0);
-    res.json({ month, by_status: rows, total_hours: Math.round(total_hours * 100) / 100 });
+    res.json({ month, by_status: rows, total_hours: Math.round(total_hours * 100) / 100, door_sync: hikIsConfigured() });
   } catch (err) { console.error('GET /attendance/summary error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
@@ -430,7 +440,8 @@ router.get('/hik-sync/status', authorize(...SYNC_ROLES), async (req, res) => {
     const [runs] = await pool.query(
       `SELECT id, trigger_type, status, DATE_FORMAT(date_from, '%Y-%m-%d') AS date_from,
               DATE_FORMAT(date_to, '%Y-%m-%d') AS date_to, events_read, rows_inserted,
-              rows_updated, rows_unchanged, absences, summary, error, started_at, finished_at
+              rows_updated, rows_unchanged, absences, summary, error,
+              UNIX_TIMESTAMP(started_at) AS started_ts, UNIX_TIMESTAMP(finished_at) AS finished_ts
          FROM hik_sync_runs ORDER BY started_at DESC, id DESC LIMIT 30`);
     const [ignored] = await pool.query(
       'SELECT id, device_id, device_name, reason, created_at FROM attendance_ignored_devices ORDER BY device_id');
@@ -536,6 +547,9 @@ router.post('/hik-sync/backfill', authorize('admin'), async (req, res) => {
     const result = await runHikSync(pool, {
       trigger: 'Backfill', actorId: req.user.id, from, to: to || null,
       finalize: req.body?.finalize === true, overwriteManual,
+      // Default on: a backfill fills gaps and refreshes earlier door days, but
+      // leaves days that came from Drive, a time-card file or a person alone.
+      fillOnly: req.body?.fill_only !== false,
     });
     if (result.error && !result.run_id) return res.status(422).json({ error: result.error });
     if (overwriteManual) {

@@ -311,6 +311,26 @@ suite('Hik sync service (real HR schema, faked Hik feed)', () => {
       expect(await rowOf(fx.D, TUE)).toMatchObject({ status: 'Half Day', source: 'Manual' });
     });
 
+    it('a "keep existing" backfill fills empty days but leaves Drive and file days alone', async () => {
+      const OLD = '2026-08-11';   // a Tuesday in the past
+      await pool.query('INSERT INTO attendance SET ?', {
+        company_id: fx.company, employee_id: fx.B, work_date: OLD, check_in: `${OLD} 09:55:00`,
+        check_out: `${OLD} 19:00:00`, status: 'Present', source: 'Drive Sync',
+      });
+      const feed = feedOf([
+        ev(dev(1), OLD, '10:05:00'), ev(dev(1), OLD, '19:00:00'),   // Alpha: no row yet
+        ev(dev(2), OLD, '11:30:00'), ev(dev(2), OLD, '19:00:00'),   // Bravo: has a Drive row
+      ]);
+      const r = await run({ trigger: 'Backfill', from: OLD, to: OLD, fillOnly: true, fetch: feed });
+      expect(r.summary.kept_existing).toBe(1);
+      expect(await rowOf(fx.A, OLD)).toMatchObject({ source: 'Hik Central', ci: '10:05:00' });
+      expect(await rowOf(fx.B, OLD)).toMatchObject({ source: 'Drive Sync', ci: '09:55:00' });
+
+      // Without the flag the door wins, as before.
+      await run({ trigger: 'Backfill', from: OLD, to: OLD, fetch: feed });
+      expect(await rowOf(fx.B, OLD)).toMatchObject({ source: 'Hik Central', ci: '11:30:00' });
+    });
+
     it('door punches replace a self-service check-in, but a hand correction is untouched', async () => {
       // Somebody checked in from home through the app: not door evidence.
       const THU = '2026-08-12';   // a Wednesday in the past

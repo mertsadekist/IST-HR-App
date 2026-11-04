@@ -26,6 +26,10 @@ const fmtHM = (h) => {
   if (mm === 60) { hh += 1; mm = 0; }
   return `${hh}h ${String(mm).padStart(2, '0')}m`;
 };
+// Where a day came from. 'Hik Central' is the office door; everything else is a
+// person, a file or the retired Drive feed.
+const SOURCE_KEY = { 'Hik Central': 'src_hik', Manual: 'src_manual', 'Self Service': 'src_self', 'CSV Import': 'src_csv', 'Drive Sync': 'src_drive' };
+const mins = (n) => (n < 60 ? `${n}m` : `${Math.floor(n / 60)}h${n % 60 ? ` ${n % 60}m` : ''}`);
 
 export default function Attendance() {
   const { t } = useTranslation();
@@ -42,6 +46,7 @@ export default function Attendance() {
   const [exportOpen, setExportOpen] = useState(false);
   const [employees, setEmployees] = useState([]);
   const [editRow, setEditRow] = useState(null);
+  const today = dayjs().format('YYYY-MM-DD');
 
   useEffect(() => {
     if (!isHR) return;
@@ -84,8 +89,14 @@ export default function Attendance() {
           <p className="text-surface-500 mt-0.5 text-sm">{t('attendance.subtitle')}</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="secondary" onClick={checkIn}><LogIn size={15} /> {t('attendance.check_in')}</Button>
-          <Button variant="secondary" onClick={checkOut}><LogOut size={15} /> {t('attendance.check_out')}</Button>
+          {/* With the door feed connected the door is the record; a button pressed
+              from anywhere would compete with it. */}
+          {summary && !summary.door_sync && (
+            <>
+              <Button variant="secondary" onClick={checkIn}><LogIn size={15} /> {t('attendance.check_in')}</Button>
+              <Button variant="secondary" onClick={checkOut}><LogOut size={15} /> {t('attendance.check_out')}</Button>
+            </>
+          )}
           {isHR && (
             <>
               <Button variant="secondary" onClick={() => setImportModal(true)}><Upload size={15} /> {t('attendance.import')}</Button>
@@ -139,7 +150,12 @@ export default function Attendance() {
       ) : rows.length === 0 ? (
         <Card><EmptyState icon={<Clock className="w-6 h-6 text-surface-400" />} title={t('attendance.no_records')} /></Card>
       ) : (
-        <Card className="!p-0 overflow-hidden">
+        <Card className="!p-0 overflow-x-auto">
+          {summary?.door_sync && (
+            <p className="px-3 py-2 text-[11px] text-surface-600 bg-surface-50 border-b border-surface-100">
+              {t('attendance.door_note')}
+            </p>
+          )}
           {isHR && (
             <p className="px-3 py-2 text-[11px] text-indigo-800 bg-indigo-50 border-b border-indigo-100">
               {t('attendance.engine_note')}
@@ -147,8 +163,10 @@ export default function Attendance() {
           )}
           <table className="w-full text-sm">
             <thead className="bg-surface-50 text-surface-500 text-xs"><tr>
-              <th className="text-left p-3">{t('attendance.th_date')}</th><th className="text-left p-3">{t('attendance.th_employee')}</th>
-              <th className="p-3">{t('attendance.th_check_in')}</th><th className="p-3">{t('attendance.th_check_out')}</th><th className="p-3">{t('attendance.th_hours')}</th><th className="p-3">{t('attendance.th_status')}</th>
+              <th className="text-start p-3">{t('attendance.th_date')}</th><th className="text-start p-3">{t('attendance.th_employee')}</th>
+              <th className="p-3">{t('attendance.th_check_in')}</th><th className="p-3">{t('attendance.th_check_out')}</th><th className="p-3">{t('attendance.th_hours')}</th>
+              <th className="p-3">{t('attendance.th_late_early')}</th><th className="p-3">{t('attendance.th_status')}</th>
+              <th className="p-3">{t('attendance.th_source')}</th>
               {isHR && (
                 <th className="p-3 border-l border-surface-200 bg-indigo-50/60 text-indigo-700" title={t('attendance.th_engine_hint')}>
                   {t('attendance.th_engine')}
@@ -156,14 +174,31 @@ export default function Attendance() {
               )}
               {isHR && <th className="p-3"></th>}</tr></thead>
             <tbody>
-              {rows.map((r) => (
+              {rows.map((r) => {
+                // Today's door day is still being written: its check-out is only
+                // the latest punch so far.
+                const live = r.source === 'Hik Central' && r.work_date === today;
+                const lateEarly = [
+                  r.late_minutes > 0 ? t('attendance.late_short', { time: mins(r.late_minutes) }) : null,
+                  r.early_leave_minutes > 0 ? t('attendance.early_short', { time: mins(r.early_leave_minutes) }) : null,
+                ].filter(Boolean).join(' · ');
+                return (
                 <tr key={r.id} className="border-t border-surface-50">
-                  <td className="p-3">{dayjs(r.work_date).format('MMM D, YYYY')}</td>
+                  <td className="p-3 whitespace-nowrap">{dayjs(r.work_date).format('MMM D, YYYY')}</td>
                   <td className="p-3">{r.first_name} {r.last_name}</td>
                   <td className="p-3 text-center">{r.check_in || '—'}</td>
-                  <td className="p-3 text-center">{r.check_out || '—'}</td>
+                  <td className="p-3 text-center whitespace-nowrap">
+                    {r.check_out || '—'}
+                    {live && <span className="block text-[10px] text-surface-400">{t('attendance.so_far')}</span>}
+                  </td>
                   <td className="p-3 text-center">{fmtHM(r.work_hours)}</td>
+                  <td className="p-3 text-center text-[11px] text-amber-700 whitespace-nowrap"
+                    title={r.scheduled_in ? `${r.scheduled_in}–${r.scheduled_out}` : undefined}>{lateEarly || '—'}</td>
                   <td className="p-3 text-center"><Badge variant={statusVariant(r.status)} className="text-[10px]">{stLabel(t, r.status)}</Badge></td>
+                  <td className="p-3 text-center text-[11px] text-surface-500 whitespace-nowrap">
+                    {t(`attendance.${SOURCE_KEY[r.source] || 'src_manual'}`)}
+                    {r.punch_count > 0 && <span className="text-surface-400"> · {t('attendance.punches_n', { count: r.punch_count })}</span>}
+                  </td>
                   {isHR && <EngineCell row={r} t={t} />}
                   {isHR && (
                     <td className="p-3 text-center">
@@ -172,7 +207,8 @@ export default function Attendance() {
                     </td>
                   )}
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </Card>
@@ -205,8 +241,6 @@ function EngineCell({ row, t }) {
 
   const late = row.eval_late_minutes;
   const early = row.eval_early_leave_minutes;
-  const mins = (n) => (n < 60 ? `${n}m` : `${Math.floor(n / 60)}h${n % 60 ? ` ${n % 60}m` : ''}`);
-
   const detail = [
     late > 0 ? t('attendance.engine_late', { time: mins(late) }) : null,
     early > 0 ? t('attendance.engine_early', { time: mins(early) }) : null,

@@ -116,7 +116,7 @@ function emptySummary(from, to) {
     from, to, finalized: false,
     events_read: 0, people_seen: 0,
     inserted: 0, updated: 0, unchanged: 0, in_progress: 0,
-    skipped_manual: [], unmatched: [], ambiguous_ids: [], ignored: [],
+    skipped_manual: [], kept_existing: 0, unmatched: [], ambiguous_ids: [], ignored: [],
     missing_checkout: [], absences: [], on_leave: [],
     not_observed_days: [], no_schedule: [], errors: [],
     newest_event: null,
@@ -133,12 +133,14 @@ function emptySummary(from, to) {
  * @param {string|null} opts.from        explicit window (manual / backfill)
  * @param {string|null} opts.to
  * @param {boolean} opts.overwriteManual  replace hand-corrected rows
+ * @param {boolean} opts.fillOnly        never replace a day that came from anywhere
+ *                                       but Hik Central (Drive, a file, a person)
  * @param {Function} opts.fetch          injected for tests; defaults to the real reader
  * @param {Date} opts.now                injected for tests
  */
 export async function runHikSync(pool, {
   trigger = 'Live', actorId = null, finalize = false, from = null, to = null,
-  overwriteManual = false, fetch = fetchPunches, now = new Date(), cfg = hikConfig(),
+  overwriteManual = false, fillOnly = false, fetch = fetchPunches, now = new Date(), cfg = hikConfig(),
   runId: claimedRunId = null,
 } = {}) {
   const problems = configProblems(cfg);
@@ -277,6 +279,7 @@ export async function runHikSync(pool, {
         summary.skipped_manual.push({ employee: nameOf(emp), date });
         continue;
       }
+      if (fillOnly && prev && prev.source !== SOURCE) { summary.kept_existing++; continue; }
       if (sameAsStored(prev, d)) { summary.unchanged++; continue; }
 
       try {
