@@ -30,6 +30,7 @@ import {
   addDays, daysBetween, localDate, groupPunches, deriveDay, deriveAbsence, describeDay,
 } from './hikRules.js';
 import { resolveDayRule } from './workScheduleService.js';
+import { effectiveEndDateSql } from './employmentWindow.js';
 import { eachDate } from './attendanceEvaluator.js';
 import {
   loadScheduleIndex, loadHolidays, loadLeave,
@@ -196,10 +197,10 @@ export async function runHikSync(pool, {
 
     // ── Who they are ────────────────────────────────────────────────────────
     const [emps] = await pool.query(
-      `SELECT id, company_id, attendance_id, first_name, last_name, status,
-              DATE_FORMAT(start_date, '%Y-%m-%d') AS start_date,
-              DATE_FORMAT(end_date,   '%Y-%m-%d') AS end_date
-         FROM employees WHERE attendance_id IS NOT NULL AND attendance_id <> ''`);
+      `SELECT e.id, e.company_id, e.attendance_id, e.first_name, e.last_name, e.status,
+              DATE_FORMAT(e.start_date, '%Y-%m-%d') AS start_date,
+              ${effectiveEndDateSql('e')} AS end_date
+         FROM employees e WHERE e.attendance_id IS NOT NULL AND e.attendance_id <> ''`);
     const byDevice = new Map();
     const ambiguous = new Set();
     for (const e of emps) {

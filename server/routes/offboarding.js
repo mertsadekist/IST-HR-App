@@ -169,8 +169,17 @@ router.put('/steps/:stepId/complete', authorize('admin', 'hr_manager'), async (r
     const [[remaining]] = await conn.query('SELECT COUNT(*) as cnt FROM offboarding_steps WHERE offboarding_id = ? AND status != ?', [step.offboarding_id, 'Complete']);
     if (remaining.cnt === 0) {
       await conn.query('UPDATE offboarding_records SET status = ?, completed_at = ? WHERE id = ?', ['Completed', new Date(), step.offboarding_id]);
-      const [[ob]] = await conn.query('SELECT employee_id FROM offboarding_records WHERE id = ?', [step.offboarding_id]);
-      if (ob) await conn.query('UPDATE employees SET status = ?, end_date = ? WHERE id = ?', ['Exited', new Date(), ob.employee_id]);
+      // The end date is the last working day HR recorded, not the day the last
+      // checklist step happened to be ticked — those can be weeks apart, and the
+      // attendance checks treat every working day before the end date as one the
+      // person should have been in.
+      const [[ob]] = await conn.query(
+        "SELECT employee_id, DATE_FORMAT(last_working_day, '%Y-%m-%d') AS lwd FROM offboarding_records WHERE id = ?",
+        [step.offboarding_id]);
+      if (ob) {
+        await conn.query('UPDATE employees SET status = ?, end_date = COALESCE(?, CURDATE()) WHERE id = ?',
+          ['Exited', ob.lwd, ob.employee_id]);
+      }
     }
 
     await conn.commit();

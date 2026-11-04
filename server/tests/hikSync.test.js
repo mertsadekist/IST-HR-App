@@ -331,6 +331,42 @@ suite('Hik sync service (real HR schema, faked Hik feed)', () => {
       expect(await rowOf(fx.B, OLD)).toMatchObject({ source: 'Hik Central', ci: '11:30:00' });
     });
 
+    it('never marks absent after the last working day of an offboarding under way', async () => {
+      // The end date is not on the employee record — exactly the state a newly
+      // started offboarding leaves it in.
+      const [g] = await pool.query('INSERT INTO employees SET ?', {
+        company_id: fx.company, first_name: 'Leaving', last_name: tag, email: `${tag}.leaving@example.test`,
+        status: 'Offboarding', start_date: '2026-01-01', attendance_id: dev(7),
+      });
+      await pool.query('INSERT INTO offboarding_records SET ?', {
+        employee_id: g.insertId, company_id: fx.company, departure_type: 'Termination',
+        last_working_day: '2026-08-07', status: 'In Progress',
+      });
+      const r = await run({
+        trigger: 'Backfill', from: '2026-08-06', to: '2026-08-10', finalize: true,
+        fetch: feedOf([ev(dev(2), '2026-08-06', '10:00:00'), ev(dev(2), '2026-08-10', '10:00:00')]),
+      });
+      expect(r.ok).toBe(true);
+      expect((await rowOf(g.insertId, '2026-08-06')).status).toBe('Absent');   // before the LWD: still employed
+      expect(await rowOf(g.insertId, '2026-08-10')).toBeNull();                // after it: gone
+    });
+
+    it('ignores a cancelled offboarding', async () => {
+      const [g] = await pool.query('INSERT INTO employees SET ?', {
+        company_id: fx.company, first_name: 'Stayed', last_name: tag, email: `${tag}.stayed@example.test`,
+        status: 'Active', start_date: '2026-01-01', attendance_id: dev(8),
+      });
+      await pool.query('INSERT INTO offboarding_records SET ?', {
+        employee_id: g.insertId, company_id: fx.company, departure_type: 'Resignation',
+        last_working_day: '2026-08-07', status: 'Cancelled',
+      });
+      await run({
+        trigger: 'Backfill', from: '2026-08-10', to: '2026-08-10', finalize: true,
+        fetch: feedOf([ev(dev(2), '2026-08-10', '10:00:00')]),
+      });
+      expect((await rowOf(g.insertId, '2026-08-10')).status).toBe('Absent');
+    });
+
     it('door punches replace a self-service check-in, but a hand correction is untouched', async () => {
       // Somebody checked in from home through the app: not door evidence.
       const THU = '2026-08-12';   // a Wednesday in the past

@@ -113,10 +113,31 @@ suite('clear and re-check', () => {
     expect(mon).toMatchObject({ status: 'Present', eval_status: 'Late', eval_late_minutes: 60 });  // record untouched
   });
 
+  it('raises no absence after the last working day of an offboarding under way', async () => {
+    const [g] = await pool.query('INSERT INTO employees SET ?', {
+      company_id: fx.company, first_name: 'Leaving', last_name: tag, email: `${tag}.l@x.test`,
+      status: 'Offboarding', start_date: '2026-01-01', attendance_id: `ZZR-${tag}-L`,
+    });
+    // One punch so the person is not "dormant" in the range, then nothing.
+    await pool.query('INSERT INTO attendance SET ?', {
+      company_id: fx.company, employee_id: g.insertId, work_date: MON,
+      check_in: `${MON} 10:00:00`, check_out: `${MON} 19:00:00`, status: 'Present', source: 'Hik Central',
+    });
+    await pool.query('INSERT INTO offboarding_records SET ?', {
+      employee_id: g.insertId, company_id: fx.company, departure_type: 'Termination',
+      last_working_day: MON, status: 'In Progress',
+    });
+    await runEvaluation({ from: MON, to: '2026-08-21', companyId: fx.company, userId: fx.admin });
+    const [rows] = await pool.query(
+      "SELECT COUNT(*) n FROM attendance_exceptions WHERE employee_id = ? AND type = 'ABSENT_NO_RECORD'", [g.insertId]);
+    expect(rows[0].n).toBe(0);
+  });
+
   it('never judges a day that is still in progress', async () => {
     // "Today" is Tuesday: only Monday may be evaluated.
     const r = await runEvaluation({ from: MON, to: TUE, companyId: fx.company, userId: fx.admin, today: TUE });
-    expect(r.days_evaluated).toBe(1);
+    const mondayOnly = await runEvaluation({ from: MON, to: MON, companyId: fx.company, userId: fx.admin, today: TUE });
+    expect(r.days_evaluated).toBe(mondayOnly.days_evaluated);
     const only = await runEvaluation({ from: TUE, to: TUE, companyId: fx.company, userId: fx.admin, today: TUE });
     expect(only).toMatchObject({ days_evaluated: 0, not_finished: true });
   });

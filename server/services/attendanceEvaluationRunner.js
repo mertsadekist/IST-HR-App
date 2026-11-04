@@ -18,6 +18,7 @@ import { evaluateDay, eachDate, diffAgainstStored } from './attendanceEvaluator.
 import { OPEN_STATUSES, EVALUATION_VERSION } from '../config/attendanceExceptions.js';
 import { getAppSetting, setAppSetting } from './appSettings.js';
 import { localDate, addDays } from './hikRules.js';
+import { effectiveEndDateSql } from './employmentWindow.js';
 
 const isDateStr = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''));
 
@@ -197,12 +198,12 @@ export async function runEvaluation({
 
   try {
     const [allEmployees] = await db.query(
-      `SELECT id, company_id, first_name, last_name, attendance_id,
-              DATE_FORMAT(start_date, '%Y-%m-%d') start_date,
-              DATE_FORMAT(end_date,   '%Y-%m-%d') end_date, status
-         FROM employees
-        WHERE status IN ('Active','Onboarding','Offboarding')
-          ${companyId ? 'AND company_id = ?' : ''}`, companyId ? [companyId] : []);
+      `SELECT e.id, e.company_id, e.first_name, e.last_name, e.attendance_id,
+              DATE_FORMAT(e.start_date, '%Y-%m-%d') start_date,
+              ${effectiveEndDateSql('e')} end_date, e.status
+         FROM employees e
+        WHERE e.status IN ('Active','Onboarding','Offboarding')
+          ${companyId ? 'AND e.company_id = ?' : ''}`, companyId ? [companyId] : []);
 
     // Somebody with no device id is not in the fingerprint system at all. Marking
     // them absent every working day says nothing true about them and buries the
