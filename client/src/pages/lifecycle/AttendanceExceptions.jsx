@@ -21,7 +21,8 @@ import EmptyState from '@components/ui/EmptyState';
 import { toast } from 'react-toastify';
 import Modal from '@components/ui/Modal';
 import Input from '@components/ui/Input';
-import { Eye, Play, AlertTriangle, Scale, Users, History, CheckCircle2, FileSignature, BarChart3, Ban } from 'lucide-react';
+import { Eye, Play, AlertTriangle, Scale, Users, History, CheckCircle2, FileSignature, BarChart3, Ban, RotateCcw } from 'lucide-react';
+import { confirmAction } from '@utils/confirm';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 
@@ -41,7 +42,9 @@ const mins = (n) => (n == null ? '—' : (n < 60 ? `${n}m` : `${Math.floor(n / 6
 export default function AttendanceExceptions() {
   const { t } = useTranslation();
   const { currentCompanyId } = useSelector((s) => s.entity);
-  const canRun = ['admin', 'hr_manager'].includes(useSelector((s) => s.auth.user?.role));
+  const role = useSelector((s) => s.auth.user?.role);
+  const canRun = ['admin', 'hr_manager'].includes(role);
+  const isAdmin = role === 'admin';
 
   const [tab, setTab] = useState('exceptions'); // exceptions | report | comparison | runs
   const [reasons, setReasons] = useState([]);
@@ -118,6 +121,26 @@ export default function AttendanceExceptions() {
     } finally { setRunning(false); }
   };
 
+  // Wipes the engine's own cases and verdicts in the range and judges it again.
+  // Cases somebody resolved, waived or explained are kept — those are decisions.
+  const reset = async () => {
+    const ok = await confirmAction(t('attendance_eval.reset_title'), t('attendance_eval.reset_warning', { from, to }));
+    if (!ok?.isConfirmed) return;
+    setRunning(true);
+    try {
+      const { data } = await evalApi.resetEvaluation({ from, to, company_id: currentCompanyId || undefined });
+      toast.success(t('attendance_eval.reset_done', {
+        cleared: data.cases_cleared, days: data.days_evaluated, opened: data.exceptions_opened,
+      }));
+      load();
+      if (tab === 'runs') evalApi.getRuns().then(({ data: r }) => setRuns(r));
+      if (tab === 'comparison') evalApi.getComparison(params()).then(({ data: c }) => setComparison(c));
+      if (tab === 'report') evalApi.getReport(params()).then(({ data: r }) => setReport(r.rows || []));
+    } catch (err) {
+      toast.error(err.response?.data?.error || t('toasts.t_operation_failed'));
+    } finally { setRunning(false); }
+  };
+
   const grouped = useMemo(() => {
     const out = { Blocking: [], Review: [], Info: [] };
     for (const e of exceptions) (out[e.severity] || out.Review).push(e);
@@ -143,9 +166,16 @@ export default function AttendanceExceptions() {
           <h1 className="text-2xl font-bold text-surface-900">{t('attendance_eval.title')}</h1>
           <p className="text-surface-500 mt-0.5 text-sm">{t('attendance_eval.subtitle')}</p>
         </div>
-        {canRun && (
-          <Button onClick={run} loading={running}><Play size={15} /> {t('attendance_eval.run')}</Button>
-        )}
+        <div className="flex items-center gap-2">
+          {isAdmin && (
+            <Button variant="secondary" onClick={reset} disabled={running} title={t('attendance_eval.reset_hint')}>
+              <RotateCcw size={15} /> {t('attendance_eval.reset')}
+            </Button>
+          )}
+          {canRun && (
+            <Button onClick={run} loading={running}><Play size={15} /> {t('attendance_eval.run')}</Button>
+          )}
+        </div>
       </div>
 
       {/* The whole point of the mode, said plainly. */}
@@ -177,6 +207,9 @@ export default function AttendanceExceptions() {
         <span className="text-surface-400 text-xs">→</span>
         <input type="date" value={to} onChange={(e) => setTo(e.target.value)}
           className="text-xs border border-surface-200 rounded-lg px-2 py-2" />
+        {to >= dayjs().format('YYYY-MM-DD') && (
+          <span className="text-[11px] text-surface-400">{t('attendance_eval.today_note')}</span>
+        )}
         <div className="flex gap-1 bg-surface-100 rounded-xl p-1 ms-2">
           {tabs.map((x) => (
             <button key={x.key} onClick={() => setTab(x.key)}

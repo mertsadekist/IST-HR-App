@@ -68,6 +68,54 @@ router.post('/run', authorize('admin', 'hr_manager'), async (req, res) => {
   }
 });
 
+// POST /api/attendance-evaluation/reset — clear the engine's opinion for a
+// range and judge it again from scratch.
+//
+// What goes: cases the engine raised that nobody has touched (Open or
+// Auto-resolved, no resolution, no linked leave, no resolver), and the eval_*
+// columns on the attendance rows. What stays: every case a person resolved,
+// waived, sent to someone or explained with leave — those are decisions, not
+// opinions — and every recorded attendance value, which this never touches.
+//
+// Admin only: it deletes rows, even if they are only the engine's.
+router.post('/reset', authorize('admin'), async (req, res) => {
+  const from = isDate(req.body.from) ? req.body.from : null;
+  const to = isDate(req.body.to) ? req.body.to : null;
+  if (!from || !to) return res.status(400).json({ error: 'A valid from and to date (YYYY-MM-DD) are required' });
+  if (from > to) return res.status(400).json({ error: 'The start date is after the end date' });
+  const days = Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000) + 1;
+  if (days > 92) return res.status(422).json({ error: `That range is ${days} days. Re-check at most 92 days at a time.` });
+
+  const companyId = req.companyId ?? null;
+  const co = companyId ? ' AND company_id = ?' : '';
+  const coParams = companyId ? [companyId] : [];
+  try {
+    const [del] = await pool.query(
+      `DELETE FROM attendance_exceptions
+        WHERE work_date BETWEEN ? AND ?${co}
+          AND status IN ('Open', 'Auto-resolved')
+          AND resolution IS NULL AND resolved_by IS NULL AND leave_request_id IS NULL`,
+      [from, to, ...coParams]);
+    const [cleared] = await pool.query(
+      `UPDATE attendance SET eval_status = NULL, eval_late_minutes = NULL, eval_early_leave_minutes = NULL,
+              eval_worked_minutes = NULL, expected_in = NULL, expected_out = NULL, expected_minutes = NULL,
+              schedule_id = NULL, schedule_snapshot = NULL, evaluated_at = NULL, evaluation_version = NULL
+        WHERE work_date BETWEEN ? AND ?${co}`,
+      [from, to, ...coParams]);
+
+    const result = await runEvaluation({
+      from, to, companyId, trigger: 'Manual', userId: req.user.id, shadow: true,
+    });
+    await addAudit(pool, req.user, 'Attendance', 'Evaluation Reset',
+      `Cleared ${del.affectedRows} untouched case(s) and ${cleared.affectedRows} engine verdict(s) for ${from} → ${to}, `
+      + `then re-checked ${result.days_evaluated} day(s): ${result.exceptions_opened} case(s) raised`);
+    res.json({ ...result, cases_cleared: del.affectedRows, verdicts_cleared: cleared.affectedRows });
+  } catch (err) {
+    console.error('POST /attendance-evaluation/reset error:', err);
+    res.status(500).json({ error: err.message || 'Internal server error' });
+  }
+});
+
 // GET /api/attendance-evaluation/runs
 router.get('/runs', async (req, res) => {
   try {

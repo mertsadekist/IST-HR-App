@@ -2913,6 +2913,12 @@
     "r_paid": "Paid days",
     "r_unpaid": "Unpaid days",
     "r_open": "Still open",
-    "report_note": "Paid and unpaid days come from the reasons recorded against each case. Unpaid days are what payroll will deduct."
+    "report_note": "Paid and unpaid days come from the reasons recorded against each case. Unpaid days are what payroll will deduct.",
+    "reset": "Clear and re-check",
+    "reset_hint": "Delete the engine’s untouched cases in this range and judge every day again",
+    "reset_title": "Clear the checks and start again?",
+    "reset_warning": "Every case the engine raised between {{from}} and {{to}} that nobody has acted on will be deleted, and those days will be judged again. Cases somebody resolved, waived or explained with leave are kept. No attendance record or payroll figure changes.",
+    "reset_done": "Cleared {{cleared}} case(s) and re-checked {{days}} day(s): {{opened}} case(s) raised",
+    "today_note": "Today is not checked until the day is closed"
   }
 }

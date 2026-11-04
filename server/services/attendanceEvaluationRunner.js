@@ -17,6 +17,9 @@ import { listSchedules, resolveDayRule, scheduleSnapshot } from './workScheduleS
 import { evaluateDay, eachDate, diffAgainstStored } from './attendanceEvaluator.js';
 import { OPEN_STATUSES, EVALUATION_VERSION } from '../config/attendanceExceptions.js';
 import { getAppSetting, setAppSetting } from './appSettings.js';
+import { localDate, addDays } from './hikRules.js';
+
+const isDateStr = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''));
 
 /** How long the engine observes before anyone decides whether to trust it. */
 export const SHADOW_PERIOD_DAYS = 28;
@@ -146,7 +149,22 @@ export async function loadLeave(employees, from, to, db) {
  */
 export async function runEvaluation({
   from, to, companyId = null, trigger = 'Manual', userId = null, shadow = true, db = pool,
+  today = localDate(process.env.TZ || 'Asia/Dubai'),
 } = {}) {
+  // A day still in progress cannot be judged. With the door feed, today's
+  // "last punch" is only the latest so far and the people who have not arrived
+  // yet are not absent — evaluating today raised exactly those false cases.
+  // Only a range that became empty *because* of that is "nothing to do yet"; a
+  // range given backwards is still a mistake and still refused below.
+  const requestedTo = to;
+  if (to >= today) to = addDays(today, -1);
+  if (isDateStr(from) && from <= requestedTo && from > to) {
+    return {
+      runId: null, days_evaluated: 0, rows_updated: 0, exceptions_opened: 0, exceptions_updated: 0,
+      exceptions_closed: 0, disagreements: 0, by_type: {}, by_status: {}, opened_cases: [],
+      days_not_observed: [], untracked_employees: [], dormant_employees: [], not_finished: true,
+    };
+  }
   const dates = eachDate(from, to);
   if (!dates.length) throw new Error('Invalid or empty date range');
   if (!shadow) {
