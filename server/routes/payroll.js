@@ -80,7 +80,7 @@ router.post('/runs/generate', authorize('admin', 'hr_manager', 'accountant'), va
     // already left. Their earned final period is a settlement matter, not a
     // monthly-payroll one — see the note in offboarding.
     const [employees] = await conn.query(
-      "SELECT id, first_name, last_name, basic_salary, full_salary, "
+      "SELECT id, first_name, last_name, basic_salary, full_salary, is_owner, "
       + "DATE_FORMAT(start_date, '%Y-%m-%d') start_date "
       + "FROM employees WHERE company_id = ? AND status IN ('Active','Onboarding')",
       [companyId]
@@ -133,8 +133,11 @@ router.post('/runs/generate', authorize('admin', 'hr_manager', 'accountant'), va
           ? annualEntitlement(emp.start_date, periodEndDate)
           : policy.defaultDaysByType.get(policy.annualTypeId) ?? null);
       }
+      // A company owner keeps their own hours and is never charged for leave or
+      // absence: no requests are fed to the leave calculation and the absence
+      // count below is skipped. Their salary line is unchanged.
       const leaveCost = leaveDeductionForPeriod({
-        requests: yearLeave,
+        requests: emp.is_owner ? [] : yearLeave,
         tiersByType: policy.tiersByType,
         poolByType: policy.poolByType,
         capByType,
@@ -163,7 +166,7 @@ router.post('/runs/generate', authorize('admin', 'hr_manager', 'accountant'), va
       // COALESCE(..., TRUE): no schedule resolved is not evidence of a rest day,
       // so the absence still counts. Failing the other way would quietly stop
       // deducting for anyone whose schedule was never set up.
-      const [[ab]] = await conn.query(
+      const [[ab]] = emp.is_owner ? [[{ days: 0 }]] : await conn.query(
         `SELECT COUNT(*) days FROM attendance a
           WHERE a.employee_id = ? AND a.status = 'Absent'
             AND DATE_FORMAT(a.work_date, '%Y-%m') = ?

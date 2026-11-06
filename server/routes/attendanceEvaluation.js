@@ -16,6 +16,7 @@ import { addAudit } from '../services/auditService.js';
 import { tenantScope, companyClause } from '../middleware/tenant.js';
 import { runEvaluation, shadowProgress } from '../services/attendanceEvaluationRunner.js';
 import { EXCEPTION_TYPES, EXCEPTION_STATUSES, OPEN_STATUSES } from '../config/attendanceExceptions.js';
+import { notOwnerSql, notOwnerByIdSql } from '../services/ownerExemption.js';
 
 const router = Router();
 router.use(auth, tenantScope, requireModule(MODULES.HR));
@@ -144,7 +145,8 @@ router.get('/summary', async (req, res) => {
     const [byType] = await pool.query(
       `SELECT x.type, x.severity, x.status, COUNT(*) n
          FROM attendance_exceptions x
-        WHERE x.work_date BETWEEN ? AND ?` + co.clause + ' GROUP BY x.type, x.severity, x.status',
+        WHERE x.work_date BETWEEN ? AND ?` + co.clause + notOwnerByIdSql('x.employee_id')
+        + ' GROUP BY x.type, x.severity, x.status',
       [from, to, ...co.params]);
 
     const coa = companyClause(req, 'a.company_id');
@@ -156,7 +158,8 @@ router.get('/summary', async (req, res) => {
               SUM(a.eval_early_leave_minutes IS NOT NULL AND a.early_leave_minutes IS NOT NULL
                   AND a.eval_early_leave_minutes <> a.early_leave_minutes) early_differs
          FROM attendance a
-        WHERE a.work_date BETWEEN ? AND ? AND a.evaluated_at IS NOT NULL` + coa.clause,
+        WHERE a.work_date BETWEEN ? AND ? AND a.evaluated_at IS NOT NULL` + coa.clause
+        + notOwnerByIdSql('a.employee_id'),
       [from, to, ...coa.params]);
 
     // Absences concentrated in a few people are a different story from absences
@@ -166,7 +169,7 @@ router.get('/summary', async (req, res) => {
               DATE_FORMAT(e.end_date, '%Y-%m-%d') end_date, COUNT(*) n,
               SUM(x.type = 'ABSENT_NO_RECORD') absences
          FROM attendance_exceptions x JOIN employees e ON e.id = x.employee_id
-        WHERE x.work_date BETWEEN ? AND ?` + co.clause + `
+        WHERE x.work_date BETWEEN ? AND ?` + co.clause + notOwnerSql('e') + `
         GROUP BY x.employee_id ORDER BY n DESC LIMIT 15`, [from, to, ...co.params]);
 
     res.json({
@@ -226,7 +229,7 @@ router.get('/exceptions', async (req, res) => {
          LEFT JOIN companies c ON c.id = x.company_id
          LEFT JOIN attendance a ON a.id = x.attendance_id
          LEFT JOIN users u ON u.id = x.resolved_by
-        WHERE x.work_date BETWEEN ? AND ?` + co.clause
+        WHERE x.work_date BETWEEN ? AND ?` + co.clause + notOwnerSql('e')
         + (filters.length ? ' AND ' + filters.join(' AND ') : '')
         + " ORDER BY FIELD(x.severity,'Blocking','Review','Info'), x.work_date DESC LIMIT 500",
       params);
@@ -256,7 +259,7 @@ router.get('/comparison', async (req, res) => {
          FROM attendance a
          JOIN employees e ON e.id = a.employee_id
          LEFT JOIN work_schedules ws ON ws.id = a.schedule_id
-        WHERE a.work_date BETWEEN ? AND ? AND a.evaluated_at IS NOT NULL` + co.clause + `
+        WHERE a.work_date BETWEEN ? AND ? AND a.evaluated_at IS NOT NULL` + co.clause + notOwnerSql('e') + `
           AND ( (a.status IS NOT NULL AND a.eval_status <> a.status)
              OR (a.late_minutes IS NOT NULL AND a.eval_late_minutes IS NOT NULL
                  AND a.eval_late_minutes <> a.late_minutes)
@@ -431,7 +434,7 @@ router.get('/report', async (req, res) => {
          LEFT JOIN companies c ON c.id = x.company_id
          LEFT JOIN leave_requests lr ON lr.id = x.leave_request_id
          LEFT JOIN leave_types lt ON lt.id = lr.leave_type_id
-        WHERE x.work_date BETWEEN ? AND ?` + co.clause + `
+        WHERE x.work_date BETWEEN ? AND ?` + co.clause + notOwnerSql('e') + `
         GROUP BY e.id
         ORDER BY still_open DESC, absences DESC, total_cases DESC`,
       [...OPEN_STATUSES, from, to, ...co.params]);

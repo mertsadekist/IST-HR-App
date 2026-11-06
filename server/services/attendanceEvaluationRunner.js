@@ -203,6 +203,7 @@ export async function runEvaluation({
               ${effectiveEndDateSql('e')} end_date, e.status
          FROM employees e
         WHERE e.status IN ('Active','Onboarding','Offboarding')
+          AND e.is_owner = FALSE
           ${companyId ? 'AND e.company_id = ?' : ''}`, companyId ? [companyId] : []);
 
     // Somebody with no device id is not in the fingerprint system at all. Marking

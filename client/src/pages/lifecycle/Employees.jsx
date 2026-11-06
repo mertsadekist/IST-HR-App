@@ -42,6 +42,7 @@ export default function Employees() {
   const [uploading, setUploading] = useState(false);
   const [attId, setAttId] = useState('');
   const [savingAtt, setSavingAtt] = useState(false);
+  const [savingOwner, setSavingOwner] = useState(false);
   const [wpsIds, setWpsIds] = useState({ work_permit_no: '', personal_no: '' });
   const [savingWps, setSavingWps] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -273,6 +274,22 @@ export default function Employees() {
     }
   };
 
+  // Company owner = exempt from attendance and attendance-driven deductions.
+  // Admin-only on the server; saved immediately, like the Attendance ID.
+  const toggleOwner = async (next) => {
+    setSavingOwner(true);
+    try {
+      await employeesApi.updateEmployee(selectedEmp.id, { is_owner: next });
+      setSelectedEmp((p) => ({ ...p, is_owner: next }));
+      setEmployees((list) => list.map((e) => (e.id === selectedEmp.id ? { ...e, is_owner: next } : e)));
+      toast.success(t(next ? 'employees.owner_saved_on' : 'employees.owner_saved_off'));
+    } catch {
+      toast.error(t('employees.owner_save_failed'));
+    } finally {
+      setSavingOwner(false);
+    }
+  };
+
   // WPS identifiers save inline (like Attendance ID) rather than only through
   // edit mode — they are filled in one pass across many employees.
   const saveWpsIds = async () => {
@@ -366,7 +383,10 @@ export default function Employees() {
                       <div className="flex items-center gap-2 text-surface-500 mt-1"><Building2 size={14}/> {emp.department_name}</div>
                     </td>
                     <td className="p-4">
-                      <Badge variant={emp.status === 'Active' ? 'success' : 'neutral'}>{emp.status}</Badge>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <Badge variant={emp.status === 'Active' ? 'success' : 'neutral'}>{emp.status}</Badge>
+                        {!!emp.is_owner && <Badge variant="info">{t('employees.owner_badge')}</Badge>}
+                      </div>
                     </td>
                     <td className="p-4 text-surface-600">
                       {emp.start_date ? dayjs(emp.start_date).format('MMM D, YYYY') : '-'}
@@ -420,6 +440,7 @@ export default function Employees() {
                 </p>
                 <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                   <Badge variant={selectedEmp.status === 'Active' ? 'success' : 'neutral'}>{selectedEmp.status}</Badge>
+                  {!!selectedEmp.is_owner && <Badge variant="info">{t('employees.owner_badge')}</Badge>}
                   <Badge variant={selectedEmp.labour_contract_status === 'Issued' ? 'success' : 'danger'}>
                     {t('employees.labour_contract_status')}: {t(selectedEmp.labour_contract_status === 'Issued' ? 'employees.lc_issued' : 'employees.lc_not_issued')}
                   </Badge>
@@ -628,6 +649,16 @@ export default function Employees() {
                       <Button size="sm" onClick={saveAttendanceId} loading={savingAtt}>{t('common.save', 'Save')}</Button>
                     </div>
                     <p className="text-[10px] text-surface-400 mt-1">{t('employees.attendance_id_hint', 'Maps this employee to the time-clock device ID used by attendance import.')}</p>
+                  </div>
+                  <div className="pt-2 mt-1 border-t border-surface-200">
+                    <label className="flex items-center gap-2 text-xs text-surface-700 font-medium cursor-pointer">
+                      <input type="checkbox" checked={!!selectedEmp.is_owner} disabled={!isAdmin || savingOwner}
+                        onChange={(e) => toggleOwner(e.target.checked)}
+                        className="rounded border-surface-300 text-brand-600" />
+                      {t('employees.owner_label')}
+                    </label>
+                    <p className="text-[10px] text-surface-400 mt-1">{t('employees.owner_hint')}</p>
+                    {!isAdmin && <p className="text-[10px] text-amber-600 mt-0.5">{t('employees.owner_admin_only')}</p>}
                   </div>
                   <div className="pt-2 mt-1 border-t border-surface-200">
                     <label className="block text-surface-500 text-xs mb-1">{t('employees.login_account', 'Portal Login')}</label>

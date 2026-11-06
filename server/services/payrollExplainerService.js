@@ -56,7 +56,7 @@ export async function buildPayrollExplanation(db, runId) {
   const [items] = await db.query(
     `SELECT pi.employee_id, pi.basic_salary, pi.allowances, pi.gross,
             pi.unpaid_leave_days, pi.absence_days, pi.deductions, pi.net,
-            CONCAT(e.first_name, ' ', e.last_name) AS name, e.attendance_id,
+            CONCAT(e.first_name, ' ', e.last_name) AS name, e.attendance_id, e.is_owner,
             DATE_FORMAT(e.start_date, '%Y-%m-%d') AS start_date,
             d.name AS department, COALESCE(jt.title, e.job_title_text) AS job_title
        FROM payroll_items pi
@@ -75,7 +75,7 @@ export async function buildPayrollExplanation(db, runId) {
     const dailyRate = round2(gross / 30);
 
     // ── leave, recomputed day by day so each day carries its own rate ──
-    const [yearLeave] = await db.query(
+    const [yearLeaveAll] = await db.query(
       `SELECT lr.id, lr.leave_type_id, lr.days, lr.reason,
               DATE_FORMAT(lr.start_date, '%Y-%m-%d') start_date,
               DATE_FORMAT(lr.end_date,   '%Y-%m-%d') end_date
@@ -83,6 +83,8 @@ export async function buildPayrollExplanation(db, runId) {
         WHERE lr.employee_id = ? AND lr.status = 'Approved'
           AND lr.end_date >= ? AND lr.start_date <= ?
         ORDER BY lr.start_date`, [it.employee_id, `${year}-01-01`, `${year}-12-31`]);
+    // A company owner is charged nothing for leave or absence (see ownerExemption.js).
+    const yearLeave = it.is_owner ? [] : yearLeaveAll;
 
     const capByType = new Map(policy.capByType);
     let annualCap = null;
@@ -128,7 +130,7 @@ export async function buildPayrollExplanation(db, runId) {
     // The same exclusion payroll itself applies. Without it a day that is both an
     // Absent row and inside approved leave would appear twice in the explanation
     // and the total would not reconcile.
-    const [absences] = await db.query(
+    const [absencesAll] = await db.query(
       `SELECT DATE_FORMAT(a.work_date, '%Y-%m-%d') work_date,
               TIME_FORMAT(a.check_in, '%H:%i') check_in,
               a.eval_status, ws.name_en AS schedule_name,
@@ -167,6 +169,7 @@ export async function buildPayrollExplanation(db, runId) {
              LIMIT 1
           ), TRUE) = TRUE
         ORDER BY a.work_date`, [it.employee_id, periodStart, periodEnd]);
+    const absences = it.is_owner ? [] : absencesAll;
 
     const absenceLines = absences.map((a) => {
       // Payroll deducts on the STORED status. The schedule engine has its own

@@ -197,7 +197,7 @@ export async function runHikSync(pool, {
 
     // ── Who they are ────────────────────────────────────────────────────────
     const [emps] = await pool.query(
-      `SELECT e.id, e.company_id, e.attendance_id, e.first_name, e.last_name, e.status,
+      `SELECT e.id, e.company_id, e.attendance_id, e.first_name, e.last_name, e.status, e.is_owner,
               DATE_FORMAT(e.start_date, '%Y-%m-%d') AS start_date,
               ${effectiveEndDateSql('e')} AS end_date
          FROM employees e WHERE e.attendance_id IS NOT NULL AND e.attendance_id <> ''`);
@@ -221,6 +221,9 @@ export async function runHikSync(pool, {
     for (const b of buckets.values()) {
       if (ignored.has(b.person_id)) { summary.ignored.push(b.person_id); continue; }
       const emp = byDevice.get(b.person_id);
+      // A company owner keeps their own hours: their punches are not recorded, and
+      // they are not an "unknown person" either — they are known and exempt.
+      if (emp?.is_owner) continue;
       if (!emp) {
         if (ambiguous.has(b.person_id)) continue;
         const u = unmatched.get(b.person_id)
@@ -237,6 +240,7 @@ export async function runHikSync(pool, {
 
     // ── What each of them was supposed to be doing ──────────────────────────
     const trackable = emps.filter((e) => byDevice.get(String(e.attendance_id).trim()) === e
+      && !e.is_owner
       && ['Active', 'Onboarding', 'Offboarding'].includes(e.status));
     const scheduleFor = await loadScheduleIndex(emps.filter((e) => byDevice.has(String(e.attendance_id).trim())), pool);
     const holidayFor = await loadHolidays(winFrom, winTo, pool);
