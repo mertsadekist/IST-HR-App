@@ -16,6 +16,7 @@ import crypto from 'crypto';
 import { extractTextFromFile } from '../services/cvParserService.js';
 import { ensureUploadDir, uploadPath } from '../config/storage.js';
 import { getEmployeeHoldings, buildClearance } from '../services/holdingsService.js';
+import { buildRadar, readEmployeeDocFields, expiryState } from '../services/employeeDocumentExpiryService.js';
 
 const upload = multer({
   dest: ensureUploadDir('employee_docs'),
@@ -186,6 +187,15 @@ router.get('/', async (req, res) => {
     const [[cnt]] = await pool.query(countSql, countParams);
     res.json({ data: rows, total: cnt.total, page, limit, totalPages: Math.ceil(cnt.total / limit) });
   } catch (err) { console.error('GET /employees error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// GET /api/employees/documents/radar — passports, visas, Emirates IDs and labour
+// cards by expiry, plus who has no dated record of one they must hold.
+// HR only: the radar lists identity-document numbers across the company.
+router.get('/documents/radar', authorize('admin', 'hr_manager'), async (req, res) => {
+  try {
+    res.json(await buildRadar(pool, companyClause(req, 'e.company_id')));
+  } catch (err) { console.error('GET /employees/documents/radar error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
 // GET /api/employees/:id (company-scoped)
@@ -685,10 +695,14 @@ router.get('/:id/documents', async (req, res) => {
     }
 
     const [rows] = await pool.query(
-      'SELECT id, employee_id, category, file_name, file_url, created_at FROM employee_documents WHERE employee_id = ? ORDER BY created_at DESC',
+      `SELECT id, employee_id, category, doc_type, doc_number, file_name, file_url, created_at,
+              DATE_FORMAT(issue_date, '%Y-%m-%d')  AS issue_date,
+              DATE_FORMAT(expiry_date, '%Y-%m-%d') AS expiry_date,
+              DATEDIFF(expiry_date, CURDATE())     AS days_left
+         FROM employee_documents WHERE employee_id = ? ORDER BY created_at DESC`,
       [employeeId]
     );
-    res.json(rows);
+    res.json(rows.map((d) => ({ ...d, state: expiryState(d.days_left) })));
   } catch (err) {
     console.error('GET /employees/:id/documents error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -708,19 +722,71 @@ router.post('/:id/documents', authorize('admin', 'hr_manager', 'hr_specialist'),
       return res.status(404).json({ error: 'Employee not found' });
     }
 
+    // An official document can carry its type, number and dates from the start,
+    // so a passport scan lands on the expiry radar without a second edit.
+    const fields = readEmployeeDocFields(req.body);
+    if (fields.error) return res.status(422).json({ error: fields.error });
+
     // Enforce that destination folder exists
     ensureUploadDir('employee_docs');
-    
-    const [result] = await pool.query(
-      'INSERT INTO employee_documents (employee_id, category, file_name, file_url, parsed_data) VALUES (?, ?, ?, ?, ?)',
-      [employeeId, category || 'General', req.file.originalname, req.file.filename, '{}']
-    );
-    
-    await addAudit(pool, req.user, 'Employees', 'Document Uploaded', `Uploaded document "${req.file.originalname}" for employee #${employeeId}`);
+
+    const [result] = await pool.query('INSERT INTO employee_documents SET ?', [{
+      employee_id: employeeId,
+      category: category || 'General',
+      file_name: req.file.originalname,
+      file_url: req.file.filename,
+      parsed_data: '{}',
+      ...fields.data,
+    }]);
+
+    await addAudit(pool, req.user, 'Employees', 'Document Uploaded', `Uploaded document "${req.file.originalname}" for employee #${employeeId}`
+      + (fields.data.doc_type ? ` (${fields.data.doc_type}${fields.data.expiry_date ? `, expires ${fields.data.expiry_date}` : ''})` : ''));
     res.status(201).json({ id: result.insertId, file_name: req.file.originalname, file_url: req.file.filename, success: true });
   } catch (err) {
     console.error('POST /employees/:id/documents error:', err);
     res.status(500).json({ error: 'Failed to upload document' });
+  }
+});
+
+// PUT /api/employees/:id/documents/:docId — set the type, number and dates
+// without re-uploading. A renewed visa is usually the same scan slot with a new
+// expiry, and the existing uploads need their dates added once.
+router.put('/:id/documents/:docId', authorize('admin', 'hr_manager'), async (req, res) => {
+  try {
+    const employeeId = parseInt(req.params.id);
+    const docId = parseInt(req.params.docId);
+
+    if (!(await getScopedEmployee(req, employeeId))) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+    const [[doc]] = await pool.query(
+      `SELECT id, file_name, doc_type,
+              DATE_FORMAT(issue_date, '%Y-%m-%d')  AS issue_date,
+              DATE_FORMAT(expiry_date, '%Y-%m-%d') AS expiry_date
+         FROM employee_documents WHERE id = ? AND employee_id = ?`, [docId, employeeId]);
+    if (!doc) return res.status(404).json({ error: 'Document not found' });
+
+    const fields = readEmployeeDocFields({
+      ...req.body, current_issue_date: doc.issue_date, current_expiry_date: doc.expiry_date,
+    });
+    if (fields.error) return res.status(422).json({ error: fields.error });
+    const data = { ...fields.data };
+    if (req.body.category !== undefined) data.category = req.body.category || 'General';
+    if (!Object.keys(data).length) return res.status(400).json({ error: 'Nothing to update' });
+
+    // A new expiry date is a new cycle: clear the warning history, or a renewed
+    // document would never warn again.
+    const expiryChanged = data.expiry_date !== undefined && data.expiry_date !== doc.expiry_date;
+    if (expiryChanged) data.expiry_alert_sent = null;
+
+    await pool.query('UPDATE employee_documents SET ? WHERE id = ?', [data, doc.id]);
+    await addAudit(pool, req.user, 'Employees', 'Document Updated',
+      `Document "${doc.file_name}" of employee #${employeeId} updated`
+      + (expiryChanged ? ` — expiry ${doc.expiry_date || 'unset'} → ${data.expiry_date || 'unset'}` : ''));
+    res.json({ success: true });
+  } catch (err) {
+    console.error('PUT /employees/:id/documents/:docId error:', err);
+    res.status(500).json({ error: 'Failed to update document' });
   }
 });
 

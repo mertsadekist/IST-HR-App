@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useSelector } from 'react-redux';
+import { useSearchParams } from 'react-router-dom';
 import Card from '@components/ui/Card';
 import Button from '@components/ui/Button';
 import Badge from '@components/ui/Badge';
@@ -15,6 +16,7 @@ import * as assetsApi from '@api/assetsApi';
 import * as wsApi from '@api/workSchedulesApi';
 import EmployeeOnboardingWizard from './components/EmployeeOnboardingWizard';
 import EmployeeHistoryReport from './components/EmployeeHistoryReport';
+import EmployeeDocumentsTab from './components/EmployeeDocumentsTab';
 import { printElementWithLetterhead, waitForPaint } from '@utils/printDoc';
 import Modal from '@components/ui/Modal';
 import { toast } from 'react-toastify';
@@ -29,6 +31,10 @@ export default function Employees() {
   const canRevealSecrets = ['admin', 'hr_manager'].includes(useSelector((s) => s.auth.user?.role));
   // Mirrors authorize('admin','hr_manager') on the schedule-assignment route.
   const canAssignSchedule = ['admin', 'hr_manager'].includes(useSelector((s) => s.auth.user?.role));
+  // Mirrors authorize('admin','hr_manager') on document upload and update.
+  const canEditDocs = canAssignSchedule;
+  // The Document Radar links here as ?open=<employee id>&tab=documents.
+  const [searchParams, setSearchParams] = useSearchParams();
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -36,10 +42,6 @@ export default function Employees() {
   // Detail & Documents tab states
   const [selectedEmp, setSelectedEmp] = useState(null);
   const [activeTab, setActiveTab] = useState('profile'); // 'profile' | 'documents'
-  const [empDocs, setEmpDocs] = useState([]);
-  const [docsLoading, setDocsLoading] = useState(false);
-  const [uploadCategory, setUploadCategory] = useState('General');
-  const [uploading, setUploading] = useState(false);
   const [attId, setAttId] = useState('');
   const [savingAtt, setSavingAtt] = useState(false);
   const [wpsIds, setWpsIds] = useState({ work_permit_no: '', personal_no: '' });
@@ -92,25 +94,27 @@ export default function Employees() {
     toast.success(t('toasts.t_employee_successfully_onboarded'));
   };
 
-  const handleOpenProfile = async (emp) => {
+  const handleOpenProfile = (emp, tab = 'profile') => {
     setSelectedEmp(emp);
     setAttId(emp.attendance_id || '');
     setWpsIds({ work_permit_no: emp.work_permit_no || '', personal_no: emp.personal_no || '' });
-    setActiveTab('profile');
+    setActiveTab(tab);
     setEditMode(false);
     setNewLoginCreds(null);
-    setEmpDocs([]);
-    setDocsLoading(true);
     if (emp.photo_path && !photoUrls[emp.id]) loadPhotos([emp]); // in case the list fetch missed it
-    try {
-      const { data } = await employeesApi.getEmployeeDocuments(emp.id);
-      setEmpDocs(data || []);
-    } catch (err) {
-      console.error('Failed to load documents', err);
-    } finally {
-      setDocsLoading(false);
-    }
   };
+
+  // Deep link from the Document Radar. Fetched by id rather than looked up in
+  // the list, which is paginated and may not hold this employee.
+  useEffect(() => {
+    const openId = searchParams.get('open');
+    if (!openId) return;
+    const tab = searchParams.get('tab') === 'documents' ? 'documents' : 'profile';
+    setSearchParams({}, { replace: true });
+    employeesApi.getEmployee(openId)
+      .then(({ data }) => handleOpenProfile(data, tab))
+      .catch(() => toast.error(t('toasts.t_failed_to_load_employees')));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startEditProfile = async () => {
     setEditForm({
@@ -236,29 +240,6 @@ export default function Employees() {
     }
   };
 
-  const handleDocUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setUploading(true);
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('category', uploadCategory);
-
-    const toastId = toast.loading(t('toasts.t_uploading_document'));
-    try {
-      await employeesApi.uploadEmployeeDocument(selectedEmp.id, formData);
-      toast.update(toastId, { render: 'Document uploaded successfully!', type: 'success', isLoading: false, autoClose: 3000 });
-      // Reload documents
-      const { data } = await employeesApi.getEmployeeDocuments(selectedEmp.id);
-      setEmpDocs(data || []);
-    } catch (err) {
-      console.error(err);
-      toast.update(toastId, { render: 'Failed to upload document', type: 'error', isLoading: false, autoClose: 3000 });
-    } finally {
-      setUploading(false);
-    }
-  };
-
   const saveAttendanceId = async () => {
     setSavingAtt(true);
     try {
@@ -290,21 +271,6 @@ export default function Employees() {
       toast.error(err.response?.data?.error || t('employees.wps_ids_save_failed'));
     } finally {
       setSavingWps(false);
-    }
-  };
-
-  const handleDocDownload = async (doc) => {
-    try {
-      const res = await employeesApi.downloadEmployeeDocument(selectedEmp.id, doc.id);
-      const url = window.URL.createObjectURL(new Blob([res.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', doc.file_name);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    } catch {
-      toast.error(t('toasts.t_failed_to_download_document'));
     }
   };
 
@@ -661,83 +627,7 @@ export default function Employees() {
             ) : activeTab === 'schedule' ? (
               <EmployeeScheduleTab employee={selectedEmp} t={t} canEdit={canAssignSchedule} />
             ) : (
-              <div className="space-y-4">
-                {/* Upload Widget */}
-                <div className="bg-surface-50 p-4 rounded-xl border border-surface-200 flex flex-col md:flex-row items-end gap-3">
-                  <div className="w-full md:w-1/3">
-                    <label className="block text-xs font-semibold text-surface-700 mb-1">
-                      Document Category / فئة المستند
-                    </label>
-                    <select
-                      value={uploadCategory}
-                      onChange={(e) => setUploadCategory(e.target.value)}
-                      className="w-full text-xs bg-white border border-surface-200 rounded-lg p-2 focus:ring-brand-500"
-                    >
-                      <option value="General">General / عام</option>
-                      <option value="ID/Passport">ID & Passport / الهوية والجواز</option>
-                      <option value="Certificate">Certificate / الشهادات</option>
-                      <option value="Handover Sheet">Handover Sheet / ورقة الاستلام والتسليم</option>
-                      <option value="Other">Other / أخرى</option>
-                    </select>
-                  </div>
-                  
-                  <div className="w-full md:flex-1 relative border-2 border-dashed border-surface-300 rounded-lg p-2.5 text-center bg-white hover:border-brand-500 transition cursor-pointer">
-                    <input
-                      type="file"
-                      disabled={uploading}
-                      onChange={handleDocUpload}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    />
-                    <span className="text-xs text-surface-500 flex items-center justify-center gap-1.5 font-medium">
-                      <Upload size={14} className="text-brand-600 animate-pulse" />
-                      Click to select and upload document / انقر لاختيار وتحميل مستند
-                    </span>
-                  </div>
-                </div>
-
-                {/* Documents Table */}
-                {docsLoading ? (
-                  <div className="flex justify-center py-6">
-                    <Loader2 className="w-6 h-6 text-brand-600 animate-spin" />
-                  </div>
-                ) : empDocs.length === 0 ? (
-                  <div className="text-center py-6 text-xs text-surface-400 italic bg-surface-50 rounded-xl border border-surface-100">
-                    No documents uploaded yet / لا توجد مستندات مرفوعة بعد.
-                  </div>
-                ) : (
-                  <div className="border border-surface-200 rounded-xl overflow-hidden text-xs">
-                    <table className="w-full text-left border-collapse bg-white">
-                      <thead>
-                        <tr className="bg-surface-50 border-b border-surface-200">
-                          <th className="p-3 font-semibold text-surface-700">Document Name / الاسم</th>
-                          <th className="p-3 font-semibold text-surface-700">Category / الفئة</th>
-                          <th className="p-3 font-semibold text-surface-700">Uploaded At / التاريخ</th>
-                          <th className="p-3 font-semibold text-surface-700 text-center">Action / الإجراء</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-surface-100">
-                        {empDocs.map((doc) => (
-                          <tr key={doc.id} className="hover:bg-surface-50/50">
-                            <td className="p-3 text-surface-950 font-medium truncate max-w-[250px]">{doc.file_name}</td>
-                            <td className="p-3"><Badge variant="info" className="text-[9px]">{doc.category}</Badge></td>
-                            <td className="p-3 text-surface-500">{dayjs(doc.created_at).format('MMM D, YYYY HH:mm')}</td>
-                            <td className="p-3 text-center">
-                              <button
-                                type="button"
-                                onClick={() => handleDocDownload(doc)}
-                                className="inline-flex items-center gap-1 text-brand-600 hover:text-brand-700 font-semibold"
-                              >
-                                <Download size={12} />
-                                Download / تحميل
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
+              <EmployeeDocumentsTab employee={selectedEmp} t={t} canEdit={canEditDocs} />
             )}
           </div>
         </Modal>

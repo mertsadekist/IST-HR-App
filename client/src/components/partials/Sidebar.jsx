@@ -9,7 +9,7 @@ import {
   BarChart3, ClipboardList, Trophy, Network, UserCog, Settings,
   Sparkles, ChevronDown, X, Package, Shield, Mail, Send,
   CalendarDays, Clock, Banknote, Inbox, HelpCircle, KeyRound, Share2, Globe,
-  Boxes, Layers, Fingerprint, ScanEye
+  Boxes, Layers, Fingerprint, ScanEye, Radar
 } from 'lucide-react';
 import { cn } from '@utils/cn';
 
@@ -53,6 +53,7 @@ const buildMenuGroups = (t) => [
       roles: HR_AND_FINANCE,
       items: [
         { path: '/employees', icon: Users, label: t('nav.employees', 'Employees'), roles: HR_AND_FINANCE },
+        { path: '/document-radar', icon: Radar, label: t('nav.document_radar'), roles: HR_ONLY },
         { path: '/onboarding', icon: UserCheck, label: t('nav.onboarding'), roles: HR_ONLY },
         { path: '/quick-offer', icon: Send, label: t('nav.quick_offer', 'Quick Offer'), roles: HR_ONLY },
         { path: '/leave', icon: CalendarDays, label: t('nav.leave', 'Leave'), roles: HR_ONLY },
