@@ -14,6 +14,7 @@ All notable changes to the IST HR System. Dates are ISO (YYYY‑MM‑DD). The ap
 - Google Drive attendance sync, its CSV parser, `GOOGLE_DRIVE_SA_*` / `ATTENDANCE_DRIVE_FOLDER_ID` variables and the `google-auth-library` dependency. Existing `Drive Sync` attendance rows and the `attendance_sync_*` ledger tables are kept as history.
 
 ### Added
+- **Document Radar** (`/document-radar`, admin and HR manager): employee passports, residence visas, Emirates IDs and labour cards by expiry date, plus the current employees with no dated record of a document they must hold (UAE nationals are not asked for a residence visa). Employee documents now carry a type, number, issue date and expiry date, set on upload or edited later from the profile's Documents tab. HR is notified 90/60/30/14/7/1 days before expiry, once per threshold, and the dashboard shows a banner when any have expired or expire within 30 days. Migration: `server/apply_employee_document_expiry.mjs`.
 - `HIK_*` environment variables, `server/apply_attendance_hik_sync.mjs`, `server/check_hik_sync.mjs` (read‑only connection check / table discovery / preview), and `hik*.sql` in `.gitignore`.
 
 ---

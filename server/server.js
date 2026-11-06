@@ -6,6 +6,7 @@ import { getAppSetting } from './services/appSettings.js';
 import { applyDueSalaryChanges } from './services/salaryReviewService.js';
 import { checkDomainRenewals } from './services/domainRenewalService.js';
 import { checkDocumentExpiry } from './services/documentExpiryService.js';
+import { checkEmployeeDocumentExpiry } from './services/employeeDocumentExpiryService.js';
 import { liveTick, finalizeTick } from './services/hikSyncService.js';
 import { sendSyncReport } from './services/attendanceSyncReport.js';
 import { hikConfig, configProblems as hikConfigProblems } from './services/hikConfig.js';
@@ -61,6 +62,14 @@ async function runDocumentExpiryCheck() {
     if (sent) console.log(`📄 Document expiry check: ${sent} alert(s) sent`);
   } catch (err) {
     console.error('Document expiry check failed:', err.message);
+  }
+  // Employees' passports, visas, Emirates IDs and labour cards: same cadence,
+  // kept in its own try so one failing does not silence the other.
+  try {
+    const sent = await checkEmployeeDocumentExpiry(pool);
+    if (sent) console.log(`🛂 Employee document expiry check: ${sent} alert(s) sent`);
+  } catch (err) {
+    console.error('Employee document expiry check failed:', err.message);
   }
 }
 
