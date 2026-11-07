@@ -59,6 +59,7 @@ const ROUTE_MODULES = [
   ['/kpi', MODULES.ANALYTICS],
   ['/email-log', MODULES.ANALYTICS],
   ['/employees', MODULES.HR],
+  ['/document-radar', MODULES.HR],
   ['/onboarding', MODULES.HR],
   ['/quick-offer', MODULES.HR],
   ['/leave', MODULES.HR],

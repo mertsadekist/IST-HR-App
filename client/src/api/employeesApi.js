@@ -35,3 +35,8 @@ export const downloadEmployeeDocument = (id, docId) => api.get(`/employees/${id}
 
 // Everything one employee holds across the four asset modules.
 export const getEmployeeHoldings = (id, params) => api.get(`/employees/${id}/holdings`, { params });
+
+// Type, number and dates on an existing document (what the expiry radar watches).
+export const updateEmployeeDocument = (id, docId, data) => api.put(`/employees/${id}/documents/${docId}`, data);
+// Passports, visas, Emirates IDs and labour cards by expiry, and who is missing one.
+export const getDocumentRadar = (params) => api.get('/employees/documents/radar', { params });

@@ -53,6 +53,7 @@ const AssessmentTaker = lazy(() => import('@pages/public/AssessmentTaker'));
 
 // Employee Lifecycle
 const EmployeesPage = lazy(() => import('@pages/lifecycle/Employees'));
+const DocumentRadar = lazy(() => import('@pages/lifecycle/DocumentRadar'));
 const OnboardingPage = lazy(() => import('@pages/lifecycle/Onboarding'));
 const OnboardingV2Page = lazy(() => import('@pages/lifecycle/OnboardingV2'));
 const QuickOfferPage = lazy(() => import('@pages/lifecycle/QuickOffer'));
@@ -123,6 +124,7 @@ export default function App() {
 
                 {/* Employee Lifecycle */}
                 <Route path="/employees" element={<EmployeesPage />} />
+                <Route path="/document-radar" element={<DocumentRadar />} />
                 <Route path="/onboarding" element={<OnboardingV2Page />} />
                 <Route path="/onboarding/legacy" element={<OnboardingPage />} />
                 <Route path="/quick-offer" element={<QuickOfferPage />} />
