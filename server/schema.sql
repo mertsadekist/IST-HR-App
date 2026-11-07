@@ -251,6 +251,9 @@ CREATE TABLE IF NOT EXISTS employees (
     basic_salary    DECIMAL(12, 2) NULL,
     full_salary     DECIMAL(12, 2) NULL,
     attendance_id   VARCHAR(100) NULL,
+    -- Company owner: keeps their own hours, so exempt from attendance, lateness
+    -- cases and attendance-driven payroll deductions.
+    is_owner        BOOLEAN NOT NULL DEFAULT FALSE,
     -- Profile picture: stored on the uploads volume, streamed via GET /employees/:id/photo.
     photo_path      VARCHAR(512) NULL,
     photo_type      VARCHAR(20) NULL,

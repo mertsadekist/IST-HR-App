@@ -11,6 +11,7 @@ import { runHikSync } from '../services/hikSyncService.js';
 import { hikConfig, configProblems as hikConfigProblems, isConfigured as hikIsConfigured } from '../services/hikConfig.js';
 import { testConnection as testHikConnection, discoverSchema as discoverHikSchema } from '../services/hikClient.js';
 import { getAppSetting } from '../services/appSettings.js';
+import { notOwnerSql, notOwnerByIdSql, isOwnerEmployee } from '../services/ownerExemption.js';
 
 const router = Router();
 // Deliberately NOT module-gated: this is a self-service router. Every read
@@ -92,7 +93,7 @@ router.get('/', async (req, res) => {
                       e.first_name, e.last_name${evalCols}
                FROM attendance a JOIN employees e ON a.employee_id = e.id
                ${self ? '' : 'LEFT JOIN work_schedules ws ON ws.id = a.schedule_id'}
-               WHERE 1=1` + co.clause;
+               WHERE 1=1` + co.clause + notOwnerSql('e');
     const params = [...co.params];
 
     if (self) {
@@ -121,6 +122,9 @@ router.post('/', authorize('admin', 'hr_manager', 'hr_specialist'), validate({
     const { employee_id, work_date, check_in, check_out, status, notes } = req.body;
     const companyId = await employeeCompany(req, employee_id);
     if (!companyId) return res.status(404).json({ error: 'Employee not found' });
+    if (await isOwnerEmployee(pool, employee_id)) {
+      return res.status(409).json({ error: 'Company owners are exempt from attendance' });
+    }
 
     let workHours = null;
     if (check_in && check_out) {
@@ -153,6 +157,9 @@ router.post('/check-in', async (req, res) => {
     if (!empId) return res.status(400).json({ error: 'No employee profile linked to your account' });
     const companyId = await employeeCompany(req, empId);
     if (!companyId) return res.status(404).json({ error: 'Employee not found' });
+    if (await isOwnerEmployee(pool, empId)) {
+      return res.status(409).json({ error: 'Company owners are exempt from attendance' });
+    }
 
     const date = todayISO();
     const now = new Date();
@@ -204,7 +211,8 @@ router.get('/summary', async (req, res) => {
     const self = !isHR(req);
     const co = self ? ownRecordsClause() : companyClause(req, 'company_id');
     let sql = `SELECT status, COUNT(*) as count, SUM(COALESCE(work_hours,0)) as hours
-               FROM attendance WHERE DATE_FORMAT(work_date, '%Y-%m') = ?` + co.clause;
+               FROM attendance WHERE DATE_FORMAT(work_date, '%Y-%m') = ?` + co.clause
+      + notOwnerByIdSql('attendance.employee_id');
     const params = [month, ...co.params];
 
     if (self) {
@@ -312,7 +320,8 @@ router.post('/import', authorize('admin', 'hr_manager', 'hr_specialist'), upload
 
     // attendance_id -> employee, within the caller's authority (cross-company roles
     // match across every company so a multi-company file imports in one pass).
-    let empSql = "SELECT id, company_id, attendance_id, first_name, last_name FROM employees WHERE attendance_id IS NOT NULL AND attendance_id <> ''";
+    // Owners are left out: their punches are skipped, not reported as unmatched IDs.
+    let empSql = "SELECT id, company_id, attendance_id, first_name, last_name, is_owner FROM employees WHERE attendance_id IS NOT NULL AND attendance_id <> ''";
     const empParams = [];
     if (!req.crossCompany) { empSql += ' AND company_id = ?'; empParams.push(req.companyId); }
     const [emps] = await pool.query(empSql, empParams);
@@ -346,6 +355,7 @@ router.post('/import', authorize('admin', 'hr_manager', 'hr_specialist'), upload
       if (!date || !swipesRaw) { skipped++; continue; }
 
       const emp = byDevice.get(deviceId);
+      if (emp?.is_owner) continue;
       if (!emp) {
         const u = unmatched.get(deviceId) || { id: deviceId, name: ix.name >= 0 ? String(row[ix.name] ?? '').trim() : '', rows: 0 };
         u.rows++; unmatched.set(deviceId, u);
@@ -395,7 +405,7 @@ router.get('/export', authorize('admin', 'hr_manager', 'hr_specialist'), async (
                       DATE_FORMAT(a.check_in, '%H:%i') AS check_in,
                       DATE_FORMAT(a.check_out, '%H:%i') AS check_out,
                       a.work_hours, a.status, a.notes
-               FROM attendance a JOIN employees e ON a.employee_id = e.id WHERE 1=1` + co.clause;
+               FROM attendance a JOIN employees e ON a.employee_id = e.id WHERE 1=1` + co.clause + notOwnerSql('e');
     const params = [...co.params];
     if (req.query.employee_id) { sql += ' AND a.employee_id = ?'; params.push(req.query.employee_id); }
     if (req.query.from) { sql += ' AND a.work_date >= ?'; params.push(req.query.from); }

@@ -5,6 +5,8 @@ import pool from './db.js';
 // error is logged but never crashes the server.
 const COLUMN_GUARDS = [
   { table: 'employees', column: 'attendance_id', ddl: 'ALTER TABLE employees ADD COLUMN attendance_id VARCHAR(100) NULL' },
+  // Company owner: exempt from attendance tracking — see server/services/ownerExemption.js.
+  { table: 'employees', column: 'is_owner', ddl: 'ALTER TABLE employees ADD COLUMN is_owner BOOLEAN NOT NULL DEFAULT FALSE' },
   {
     table: 'companies', column: 'salary_review_approver_id',
     ddl: 'ALTER TABLE companies ADD COLUMN salary_review_approver_id INT NULL, ADD FOREIGN KEY (salary_review_approver_id) REFERENCES users(id) ON DELETE SET NULL',

@@ -16,6 +16,7 @@ import crypto from 'crypto';
 import { extractTextFromFile } from '../services/cvParserService.js';
 import { ensureUploadDir, uploadPath } from '../config/storage.js';
 import { getEmployeeHoldings, buildClearance } from '../services/holdingsService.js';
+import { waiveOpenCasesFor } from '../services/ownerExemption.js';
 import { buildRadar, readEmployeeDocFields, expiryState } from '../services/employeeDocumentExpiryService.js';
 
 const upload = multer({
@@ -595,6 +596,8 @@ router.post('/', authorize('admin', 'hr_manager'), validate({
       basic_salary: basic_salary || null,
       full_salary: full_salary || null,
       attendance_id: attendance_id || null,
+      // Admin-only, like the PUT: it exempts the person from attendance and payroll deductions.
+      is_owner: req.user.role === 'admin' && (req.body.is_owner === true || req.body.is_owner === 'true'),
       status: 'Active',
     });
     await addAudit(pool, req.user, 'Employees', 'Created', `Employee ${first_name} ${last_name} created manually`);
@@ -651,12 +654,27 @@ router.put('/:id', authorize('admin', 'hr_manager'), async (req, res) => {
         }
       }
     }
+    // Marking someone as a company owner removes them from attendance tracking and
+    // from attendance-driven payroll deductions, so it is admin-only: an HR
+    // manager can see the flag but cannot exempt anyone.
+    if (req.body.is_owner !== undefined) {
+      if (req.user.role !== 'admin') {
+        return res.status(403).json({ error: 'Only an admin can mark an employee as a company owner' });
+      }
+      data.is_owner = req.body.is_owner === true || req.body.is_owner === 1 || req.body.is_owner === '1' || req.body.is_owner === 'true';
+    }
     if (!Object.keys(data).length) return res.status(400).json({ error: 'Nothing to update' });
 
     const co = companyClause(req, 'company_id');
     const [result] = await pool.query('UPDATE employees SET ? WHERE id = ?' + co.clause, [data, req.params.id, ...co.params]);
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Employee not found' });
-    await addAudit(pool, req.user, 'Employees', 'Updated', `Employee #${req.params.id} updated`);
+    let waived = 0;
+    if (data.is_owner === true) waived = await waiveOpenCasesFor(pool, req.params.id);
+    await addAudit(pool, req.user, 'Employees', 'Updated',
+      data.is_owner === undefined
+        ? `Employee #${req.params.id} updated`
+        : `Employee #${req.params.id} ${data.is_owner ? 'marked as company owner (exempt from attendance)' : 'no longer marked as company owner'}`
+          + (waived ? `; ${waived} open attendance case(s) waived` : ''));
     res.json({ success: true });
   } catch (err) {
     if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'An employee with this email already exists in this company' });
