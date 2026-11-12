@@ -6,7 +6,7 @@ import Button from '@components/ui/Button';
 import Badge from '@components/ui/Badge';
 import EmptyState from '@components/ui/EmptyState';
 import { confirmDelete } from '@utils/confirm';
-import { Users, Plus, Mail, Phone, Building2, Briefcase, FileText, Upload, Download, Calendar, DollarSign, Globe, Loader2, Pencil, X, AlertTriangle, Camera, ShieldCheck, Trash2, Laptop, KeyRound, Package, CalendarClock } from 'lucide-react';
+import { Users, Plus, Mail, Phone, Building2, Briefcase, FileText, Upload, Download, Calendar, DollarSign, Globe, Loader2, Pencil, X, AlertTriangle, Camera, Search, ShieldCheck, Trash2, Laptop, KeyRound, Package, CalendarClock } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import api from '@api/axios';
 import * as employeesApi from '@api/employeesApi';
@@ -21,6 +21,8 @@ import { printElementWithLetterhead, waitForPaint } from '@utils/printDoc';
 import Modal from '@components/ui/Modal';
 import { toast } from 'react-toastify';
 import dayjs from 'dayjs';
+
+const PAGE_SIZE = 50;
 
 export default function Employees() {
   const { t } = useTranslation();
@@ -37,6 +39,14 @@ export default function Employees() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');   // what is typed
+  const [query, setQuery] = useState('');     // what is sent, after the debounce
+  const [activeOnly, setActiveOnly] = useState(false); // show only status = Active
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const queryRef = useRef('');
+  const loadSeq = useRef(0);
   const [wizardOpen, setWizardOpen] = useState(false);
 
   // Detail & Documents tab states
@@ -69,23 +79,48 @@ export default function Employees() {
     return String(co?.email_domains || '').split(',').map((d) => d.trim()).filter(Boolean);
   }, [companies, selectedEmp]);
 
+  // Search is done on the server so it reaches every employee, not only the
+  // page already loaded. Typing is debounced so each keystroke is not a request.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const next = search.trim();
+      if (next === queryRef.current) return;
+      queryRef.current = next;
+      setPage(1); // a new search starts from the first page; both updates batch into one load
+      setQuery(next);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // A different company starts again from the first page.
+  useEffect(() => { setPage(1); }, [currentCompanyId]);
+
   useEffect(() => {
     loadEmployees();
-  }, [currentCompanyId]);
+  }, [currentCompanyId, query, activeOnly, page]);
 
   const loadEmployees = async () => {
+    const requestId = ++loadSeq.current; // a slower, older response must not overwrite a newer one
     setLoading(true);
     revokeAllPhotos(); // the previous company's blobs are no longer referenced
     try {
-      const url = currentCompanyId ? `/employees?company_id=${currentCompanyId}` : '/employees';
-      const { data } = await api.get(url);
+      const qs = new URLSearchParams({ limit: String(PAGE_SIZE), page: String(page) });
+      if (currentCompanyId) qs.set('company_id', currentCompanyId);
+      if (query) qs.set('search', query);
+      if (activeOnly) qs.set('status', 'Active');
+      const { data } = await api.get(`/employees?${qs}`);
+      if (requestId !== loadSeq.current) return;
       const list = data.data || data; // handle standard pagination response or flat array
+      setTotal(Number(data.total ?? list.length) || 0);
+      setTotalPages(Math.max(1, Number(data.totalPages) || 1));
+      // A page past the end (people were removed meanwhile) falls back to the last one.
+      if (data.totalPages && page > data.totalPages) { setPage(data.totalPages); return; }
       setEmployees(list);
       loadPhotos(list); // not awaited: avatars fill in as they arrive
     } catch (err) {
-      toast.error(t('toasts.t_failed_to_load_employees'));
+      if (requestId === loadSeq.current) toast.error(t('toasts.t_failed_to_load_employees'));
     } finally {
-      setLoading(false);
+      if (requestId === loadSeq.current) setLoading(false);
     }
   };
 
@@ -307,6 +342,34 @@ export default function Employees() {
         </Button>
       </div>
 
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+      <div className="relative w-full max-w-md">
+        <Search size={16} className="absolute start-3 top-1/2 -translate-y-1/2 text-surface-400 pointer-events-none" />
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder={t('employees.search_placeholder')}
+          aria-label={t('employees.search_label')}
+          className="w-full text-sm bg-white border border-surface-200 rounded-xl ps-9 pe-9 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500"
+        />
+        {search && (
+          <button type="button" onClick={() => setSearch('')} aria-label={t('employees.search_clear')}
+            className="absolute end-2 top-1/2 -translate-y-1/2 p-1 text-surface-400 hover:text-surface-700">
+            <X size={14} />
+          </button>
+        )}
+      </div>
+      <div role="group" aria-label={t('employees.filter_label')} className="inline-flex rounded-xl border border-surface-200 bg-white p-0.5 text-sm shrink-0">
+        {[[false, 'employees.filter_all'], [true, 'employees.filter_active']].map(([value, key]) => (
+          <button key={key} type="button" aria-pressed={activeOnly === value} onClick={() => { setActiveOnly(value); setPage(1); }}
+            className={`px-3 py-1.5 rounded-[10px] font-medium transition-colors ${activeOnly === value ? 'bg-brand-600 text-white' : 'text-surface-600 hover:bg-surface-50'}`}>
+            {t(key)}
+          </button>
+        ))}
+      </div>
+      </div>
+
       <Card className="!p-0 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm whitespace-nowrap">
@@ -363,6 +426,24 @@ export default function Employees() {
             </tbody>
           </table>
         </div>
+        {/* Without this, anyone beyond the first page of results simply could not be
+            reached — they existed but never appeared. */}
+        {total > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-surface-100 text-sm text-surface-600">
+            <span>{t('employees.showing_range', { from: (page - 1) * PAGE_SIZE + 1, to: Math.min(page * PAGE_SIZE, total), total })}</span>
+            {totalPages > 1 && (
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="secondary" disabled={page <= 1 || loading} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                  {t('employees.page_prev')}
+                </Button>
+                <span className="tabular-nums">{t('employees.page_of', { page, pages: totalPages })}</span>
+                <Button size="sm" variant="secondary" disabled={page >= totalPages || loading} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+                  {t('employees.page_next')}
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
       </Card>
 
       {wizardOpen && (

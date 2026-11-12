@@ -168,7 +168,10 @@ router.post('/onboard', authorize('admin', 'hr_manager'), async (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const page = Math.max(parseInt(req.query.page) || 1, 1);
-    const limit = Math.min(parseInt(req.query.limit) || 25, 100);
+    // Cap raised from 100: the pickers across the app (leave, attendance, assets,
+    // letters, offboarding…) ask for 200–500 so every employee is selectable, and a
+    // cap of 100 silently cut them off at 100.
+    const limit = Math.min(parseInt(req.query.limit) || 25, 500);
     const offset = (page - 1) * limit;
     const co = companyClause(req, 'e.company_id');
     const coCount = companyClause(req, 'company_id');
@@ -182,8 +185,20 @@ router.get('/', async (req, res) => {
     let countSql = 'SELECT COUNT(*) as total FROM employees WHERE 1=1' + coCount.clause;
     const params = [...co.params], countParams = [...coCount.params];
     if (req.query.status) { sql += ' AND e.status = ?'; params.push(req.query.status); countSql += ' AND status = ?'; countParams.push(req.query.status); }
-    if (req.query.search) { const s = `%${req.query.search}%`; sql += ' AND (e.first_name LIKE ? OR e.last_name LIKE ? OR e.email LIKE ?)'; params.push(s,s,s); countSql += ' AND (first_name LIKE ? OR last_name LIKE ? OR email LIKE ?)'; countParams.push(s,s,s); }
-    sql += ' ORDER BY e.created_at DESC LIMIT ? OFFSET ?'; params.push(limit, offset);
+    // Search by name (first, last, or "first last" together), email, phone, job
+    // title or device attendance ID. LIKE wildcards typed by the user are escaped.
+    const term = String(req.query.search || '').trim().slice(0, 100);
+    if (term) {
+      const s = `%${term.replace(/[\\%_]/g, '\\$&')}%`;
+      sql += ` AND (e.first_name LIKE ? OR e.last_name LIKE ? OR CONCAT(e.first_name, ' ', e.last_name) LIKE ?
+                 OR e.email LIKE ? OR e.phone LIKE ? OR e.job_title_text LIKE ? OR e.attendance_id LIKE ?)`;
+      countSql += ` AND (first_name LIKE ? OR last_name LIKE ? OR CONCAT(first_name, ' ', last_name) LIKE ?
+                 OR email LIKE ? OR phone LIKE ? OR job_title_text LIKE ? OR attendance_id LIKE ?)`;
+      for (let i = 0; i < 7; i++) { params.push(s); countParams.push(s); }
+    }
+    // id breaks ties: bulk-created employees share a created_at, and without a total
+    // order a row can appear on two pages or on none.
+    sql += ' ORDER BY e.created_at DESC, e.id DESC LIMIT ? OFFSET ?'; params.push(limit, offset);
     const [rows] = await pool.query(sql, params);
     const [[cnt]] = await pool.query(countSql, countParams);
     res.json({ data: rows, total: cnt.total, page, limit, totalPages: Math.ceil(cnt.total / limit) });
