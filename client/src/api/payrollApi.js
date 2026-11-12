@@ -18,3 +18,19 @@ export const wpsSend = (id, data) => api.post(`/payroll/runs/${id}/wps-send`, da
 export const explanationExport = (id) => api.get(`/payroll/runs/${id}/explanation`, { responseType: 'blob' });
 export const myPayslips = (params) => api.get('/payroll/payslips/my', { params });
 export const employeePayslips = (employeeId, params) => api.get(`/payroll/payslips/${employeeId}`, { params });
+
+// ── Payroll v2 ────────────────────────────────────────────────────────────────
+// Blocking checks, warnings and the comparison with the last approved run.
+export const getReview = (id) => api.get(`/payroll/runs/${id}/review`);
+// Draft → Pending Approval. An admin may pass override_reason past blocking checks.
+export const submitRun = (id, data = {}) => api.put(`/payroll/runs/${id}/submit`, data);
+// Pending Approval → Approved. The submitter needs self_approval_reason (admin only).
+export const approveRunWith = (id, data = {}) => api.put(`/payroll/runs/${id}/approve`, data);
+// Pending Approval → Draft, with a reason.
+export const rejectRun = (id, reason) => api.put(`/payroll/runs/${id}/reject`, { reason });
+export const notifyPayslips = (id) => api.post(`/payroll/runs/${id}/notify-payslips`);
+// Allowance breakdown (housing, transport…) of an employee's contract total.
+export const getComponentTypes = () => api.get('/payroll/component-types');
+export const getEmployeeComponents = (employeeId) => api.get(`/payroll/employees/${employeeId}/components`);
+export const saveEmployeeComponents = (employeeId, components) =>
+  api.put(`/payroll/employees/${employeeId}/components`, { components });

@@ -17,6 +17,7 @@ import * as wsApi from '@api/workSchedulesApi';
 import EmployeeOnboardingWizard from './components/EmployeeOnboardingWizard';
 import EmployeeHistoryReport from './components/EmployeeHistoryReport';
 import EmployeeDocumentsTab from './components/EmployeeDocumentsTab';
+import EmployeePayComponentsTab from './components/EmployeePayComponentsTab';
 import { printElementWithLetterhead, waitForPaint } from '@utils/printDoc';
 import Modal from '@components/ui/Modal';
 import { toast } from 'react-toastify';
@@ -557,6 +558,16 @@ export default function Employees() {
                 {t('employees.bank_tab')}
               </button>
               <button
+                onClick={() => setActiveTab('pay')}
+                className={`px-4 py-2 text-sm font-semibold border-b-2 transition-all ${
+                  activeTab === 'pay'
+                    ? 'border-brand-600 text-brand-600'
+                    : 'border-transparent text-surface-500 hover:text-surface-700'
+                }`}
+              >
+                {t('pay_components.tab')}
+              </button>
+              <button
                 onClick={() => setActiveTab('schedule')}
                 className={`px-4 py-2 text-sm font-semibold border-b-2 transition-all ${
                   activeTab === 'schedule'
@@ -745,6 +756,8 @@ export default function Employees() {
               <EmployeeAssetsTab employee={selectedEmp} t={t} canReveal={canRevealSecrets} />
             ) : activeTab === 'bank' ? (
               <EmployeeBankTab employee={selectedEmp} t={t} isAdmin={isAdmin} />
+            ) : activeTab === 'pay' ? (
+              <EmployeePayComponentsTab employee={selectedEmp} t={t} canEdit={canEditDocs} />
             ) : activeTab === 'schedule' ? (
               <EmployeeScheduleTab employee={selectedEmp} t={t} canEdit={canAssignSchedule} />
             ) : (

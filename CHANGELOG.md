@@ -14,6 +14,15 @@ All notable changes to the IST HR System. Dates are ISO (YYYY‑MM‑DD). The ap
 - Google Drive attendance sync, its CSV parser, `GOOGLE_DRIVE_SA_*` / `ATTENDANCE_DRIVE_FOLDER_ID` variables and the `google-auth-library` dependency. Existing `Drive Sync` attendance rows and the `attendance_sync_*` ledger tables are kept as history.
 
 ### Added
+- **Payroll v2** (no change to how any figure is calculated):
+  - **Payslip lines.** Each payroll item now stores its lines: basic, each allowance, leave deductions by leave type, and absence, with the working (days × daily rate). They add up exactly to gross and deductions. HR sees them by expanding an employee in the run; the employee sees them in My Salary.
+  - **Salary breakdown.** A new tab on the employee profile records what the allowances are made of (housing, transport, food, phone, other). It only labels the payslip: `full_salary` stays the contract total, and any difference shows as its own line and as a warning.
+  - **Approval workflow.** Draft → Pending Approval → Approved → Paid. Send back returns a run to Draft with a reason, and the submitter is notified. Four eyes: whoever submitted the run cannot approve it; an admin can, but only with a written reason kept on the run.
+  - **Blocking checks before submit.** No salary; WPS employees missing a work permit, personal number, IBAN or bank; an invalid UAE IBAN (format + mod-97); company MOL ID missing. An admin can override with a recorded reason.
+  - **Warnings.** Net changed by more than 10% against the last approved or paid run, deductions over half of gross, unverified bank, breakdown not matching, new in the run, outside WPS.
+  - **Comparison tab** showing each employee's net against the previous approved or paid run, and which lines moved.
+  - **Email payslips.** Once approved, each employee gets the existing `payslip_notification` email with their totals.
+  - Schema is created at startup by `ensureSchema`: `pay_component_types` (seeded), `employee_pay_components`, `payroll_item_lines`, new `payroll_runs` columns, and the `Pending Approval` status. No manual migration is needed.
 - **Document Radar** (`/document-radar`, admin and HR manager): employee passports, residence visas, Emirates IDs and labour cards by expiry date, plus the current employees with no dated record of a document they must hold (UAE nationals are not asked for a residence visa). Employee documents now carry a type, number, issue date and expiry date, set on upload or edited later from the profile's Documents tab. HR is notified 90/60/30/14/7/1 days before expiry, once per threshold, and the dashboard shows a banner when any have expired or expire within 30 days. Migration: `server/apply_employee_document_expiry.mjs`.
 - `HIK_*` environment variables, `server/apply_attendance_hik_sync.mjs`, `server/check_hik_sync.mjs` (read‑only connection check / table discovery / preview), and `hik*.sql` in `.gitignore`.
 

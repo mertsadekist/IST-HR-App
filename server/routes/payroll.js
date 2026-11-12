@@ -12,7 +12,10 @@ import {
 import { buildPayrollExplanation } from '../services/payrollExplainerService.js';
 import { renderPayrollExplanationWorkbook } from '../services/payrollExplainerWorkbook.js';
 import { buildWpsWorkbook, wpsReadiness } from '../services/wpsService.js';
-import { notifyRole } from '../services/notificationService.js';
+import { notify, notifyRole } from '../services/notificationService.js';
+import {
+  activeComponents, buildPayslipLines, groupLeaveByType, computeVariance, checkRun,
+} from '../services/payrollV2.js';
 import { sendEmail } from '../services/emailService.js';
 import { getTemplate } from '../services/emailTemplates.js';
 
@@ -42,8 +45,179 @@ router.get('/runs/:id', authorize('admin', 'hr_manager', 'accountant'), async (r
     const [items] = await pool.query(
       `SELECT pi.*, e.first_name, e.last_name FROM payroll_items pi
        JOIN employees e ON pi.employee_id = e.id WHERE pi.run_id = ? ORDER BY e.first_name`, [run.id]);
-    res.json({ ...run, items });
+    res.json({ ...run, items: await attachLines(items) });
   } catch (err) { console.error('GET /payroll/runs/:id error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// ─── Payroll v2 helpers ──────────────────────────────────────────────────────
+
+/** Adds each item's payslip lines (empty for runs generated before v2). */
+async function attachLines(items) {
+  if (!items.length) return items;
+  const [lines] = await pool.query(
+    `SELECT item_id, kind, code, label, quantity, rate, amount, explanation
+       FROM payroll_item_lines WHERE item_id IN (?) ORDER BY item_id, sort_order`,
+    [items.map((i) => i.id)]);
+  const byItem = new Map();
+  for (const l of lines) {
+    if (!byItem.has(l.item_id)) byItem.set(l.item_id, []);
+    byItem.get(l.item_id).push({ ...l, quantity: l.quantity == null ? null : Number(l.quantity),
+      rate: l.rate == null ? null : Number(l.rate), amount: Number(l.amount) });
+  }
+  return items.map((i) => ({ ...i, lines: byItem.get(i.id) || [] }));
+}
+
+/** employee id → [{code, label, label_ar, amount, effective_from, effective_to}] */
+async function loadComponents(db, companyId) {
+  const [rows] = await db.query(
+    `SELECT epc.employee_id, epc.component_code AS code, epc.amount,
+            DATE_FORMAT(epc.effective_from, '%Y-%m-%d') AS effective_from,
+            DATE_FORMAT(epc.effective_to, '%Y-%m-%d') AS effective_to,
+            COALESCE(pct.name_en, epc.component_code) AS label, pct.name_ar AS label_ar
+       FROM employee_pay_components epc
+       LEFT JOIN pay_component_types pct ON pct.code = epc.component_code
+      WHERE epc.company_id = ?
+      ORDER BY COALESCE(pct.sort_order, 999), epc.id`, [companyId]);
+  const map = new Map();
+  for (const r of rows) {
+    if (!map.has(r.employee_id)) map.set(r.employee_id, []);
+    map.get(r.employee_id).push({ ...r, amount: Number(r.amount) });
+  }
+  return map;
+}
+
+/**
+ * Everything the approver reads before deciding: the blocking checks, the
+ * warnings, and the comparison with the last approved or paid run.
+ */
+async function loadRunReview(req, runId) {
+  const co = companyClause(req, 'company_id');
+  const [[run]] = await pool.query('SELECT * FROM payroll_runs WHERE id = ?' + co.clause, [runId, ...co.params]);
+  if (!run) return null;
+
+  const [[company]] = await pool.query('SELECT id, name, mol_id FROM companies WHERE id = ?', [run.company_id]);
+  const [rawItems] = await pool.query(
+    `SELECT pi.id, pi.employee_id, pi.basic_salary, pi.allowances, pi.gross, pi.deductions, pi.net,
+            TRIM(CONCAT(COALESCE(e.first_name, ''), ' ', COALESCE(e.last_name, ''))) AS name,
+            e.work_permit_no, e.personal_no, e.labour_contract_status, e.status AS employment_status,
+            b.bank_name, b.iban, b.verified AS bank_verified
+       FROM payroll_items pi
+       JOIN employees e ON e.id = pi.employee_id
+       LEFT JOIN employee_bank_details b ON b.employee_id = e.id
+      WHERE pi.run_id = ?
+      ORDER BY e.first_name, e.last_name`, [run.id]);
+  const items = await attachLines(rawItems);
+
+  // The allowance breakdown in force for the period, to spot one that no longer
+  // adds up to the contract (e.g. after a salary review changed full_salary).
+  const periodStart = `${run.period}-01`;
+  const [[{ last_day: periodEnd }]] = await pool.query("SELECT DATE_FORMAT(LAST_DAY(?), '%Y-%m-%d') last_day", [periodStart]);
+  const components = await loadComponents(pool, run.company_id);
+  for (const it of items) {
+    const active = activeComponents(components.get(it.employee_id), periodStart, periodEnd);
+    it.component_sum = active.length ? active.reduce((s, c) => s + Number(c.amount), 0) : null;
+  }
+
+  // Compared against what was actually paid: the latest earlier run that got
+  // as far as approval.
+  const [[prevRun]] = await pool.query(
+    `SELECT id, period FROM payroll_runs
+      WHERE company_id = ? AND period < ? AND status IN ('Approved','Paid')
+      ORDER BY period DESC LIMIT 1`, [run.company_id, run.period]);
+  let prevItems = [];
+  if (prevRun) {
+    const [rows] = await pool.query(
+      `SELECT pi.id, pi.employee_id, pi.gross, pi.deductions, pi.net,
+              TRIM(CONCAT(COALESCE(e.first_name, ''), ' ', COALESCE(e.last_name, ''))) AS name
+         FROM payroll_items pi JOIN employees e ON e.id = pi.employee_id
+        WHERE pi.run_id = ?`, [prevRun.id]);
+    prevItems = await attachLines(rows);
+  }
+
+  const variance = computeVariance(items, prevItems);
+  const checks = checkRun({ items, company, variance });
+  return { run, company, items, variance, checks, previous: prevRun || null };
+}
+
+const reviewSummary = (review) => ({
+  run_id: review.run.id,
+  period: review.run.period,
+  status: review.run.status,
+  previous_period: review.previous?.period || null,
+  errors: review.checks.errors,
+  warnings: review.checks.warnings,
+  ok: review.checks.ok,
+  variance: review.variance,
+});
+
+// GET /api/payroll/runs/:id/review — checks, warnings and month-on-month variance.
+router.get('/runs/:id/review', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
+  try {
+    const review = await loadRunReview(req, req.params.id);
+    if (!review) return res.status(404).json({ error: 'Payroll run not found' });
+    res.json(reviewSummary(review));
+  } catch (err) { console.error('GET /payroll/runs/:id/review error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// PUT /api/payroll/runs/:id/submit — Draft → Pending Approval.
+//
+// Blocking checks run here: a missing IBAN or work permit for someone paid
+// through WPS, an invalid IBAN, no salary. Only an admin can push past them, and
+// only with a written reason that stays on the run and in the audit trail.
+router.put('/runs/:id/submit', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
+  try {
+    const review = await loadRunReview(req, req.params.id);
+    if (!review) return res.status(404).json({ error: 'Payroll run not found' });
+    const { run } = review;
+    if (run.status !== 'Draft') return res.status(409).json({ error: `Run is already ${run.status}` });
+    if (!review.items.length) return res.status(409).json({ error: 'This payroll run has no employees' });
+
+    const override = String(req.body?.override_reason || '').trim();
+    if (!review.checks.ok) {
+      if (!override) {
+        return res.status(422).json({ error: 'The run has blocking problems', code: 'CHECKS_FAILED', ...reviewSummary(review) });
+      }
+      if (req.user.role !== 'admin') return res.status(403).json({ error: 'Only an admin can submit past blocking checks' });
+      if (override.length < 10) return res.status(422).json({ error: 'Give a reason of at least 10 characters for the override' });
+    }
+
+    await pool.query(
+      `UPDATE payroll_runs SET status = 'Pending Approval', submitted_by = ?, submitted_at = NOW(),
+              check_override_reason = ?, rejected_by = NULL, rejected_at = NULL, rejection_reason = NULL
+        WHERE id = ?`, [req.user.id, review.checks.ok ? null : override.slice(0, 500), run.id]);
+    await addAudit(pool, req.user, 'Payroll', 'Submitted',
+      `Payroll run #${run.id} (${run.period}) submitted for approval`
+      + (review.checks.warnings.length ? `; ${review.checks.warnings.length} warning(s)` : '')
+      + (review.checks.ok ? '' : `; ${review.checks.errors.length} blocking problem(s) overridden: ${override}`));
+    await notifyRole(pool, run.company_id, ['admin', 'hr_manager', 'accountant'], {
+      type: 'payroll', title: 'Payroll waiting for approval',
+      body: `Payroll ${run.period}: ${review.items.length} employee(s), net ${Number(run.total_net).toFixed(2)}`,
+      link: '/payroll-runs',
+    }, req.user.id);
+    res.json({ success: true, warnings: review.checks.warnings.length });
+  } catch (err) { console.error('PUT /payroll/runs/:id/submit error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// PUT /api/payroll/runs/:id/reject — Pending Approval → back to Draft, with a reason.
+router.put('/runs/:id/reject', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
+  try {
+    const reason = String(req.body?.reason || '').trim();
+    if (!reason) return res.status(422).json({ error: 'A reason is required' });
+    const co = companyClause(req, 'company_id');
+    const [[run]] = await pool.query('SELECT id, period, status, company_id, submitted_by FROM payroll_runs WHERE id = ?' + co.clause, [req.params.id, ...co.params]);
+    if (!run) return res.status(404).json({ error: 'Payroll run not found' });
+    if (run.status !== 'Pending Approval') return res.status(409).json({ error: 'Only a run waiting for approval can be sent back' });
+    await pool.query(
+      `UPDATE payroll_runs SET status = 'Draft', rejected_by = ?, rejected_at = NOW(), rejection_reason = ?,
+              submitted_by = NULL, submitted_at = NULL, check_override_reason = NULL
+        WHERE id = ?`, [req.user.id, reason.slice(0, 500), run.id]);
+    await addAudit(pool, req.user, 'Payroll', 'Rejected', `Payroll run #${run.id} (${run.period}) sent back: ${reason}`);
+    if (run.submitted_by && run.submitted_by !== req.user.id) {
+      await notify(pool, { userId: run.submitted_by, companyId: run.company_id, type: 'warning',
+        title: `Payroll ${run.period} sent back`, body: reason, link: '/payroll-runs' });
+    }
+    res.json({ success: true });
+  } catch (err) { console.error('PUT /payroll/runs/:id/reject error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
 // Generate a payroll run for a period, pulling unpaid-leave and absence deductions.
@@ -59,7 +233,7 @@ router.post('/runs/generate', authorize('admin', 'hr_manager', 'accountant'), va
     // One run per company+period; regenerate only allowed while Draft.
     const [[existing]] = await conn.query('SELECT id, status FROM payroll_runs WHERE company_id = ? AND period = ?', [companyId, period]);
     if (existing && existing.status !== 'Draft') {
-      conn.release();
+      // Released once, by the finally below.
       return res.status(409).json({ error: `A ${existing.status} payroll run already exists for ${period}` });
     }
 
@@ -95,6 +269,11 @@ router.post('/runs/generate', authorize('admin', 'hr_manager', 'accountant'), va
     // The pay tiers, the pools types draw on, and the yearly caps — loaded once
     // for the whole run rather than per employee.
     const policy = await loadLeavePolicy(conn);
+    const typeNames = new Map((policy.types || []).map((t) => [t.id, t.name]));
+
+    // Allowance breakdowns (housing, transport…) for everyone in the company,
+    // loaded once. They label the payslip lines; they never change gross.
+    const componentsByEmployee = await loadComponents(conn, companyId);
 
     let totalGross = 0, totalDeductions = 0, totalNet = 0;
     for (const emp of employees) {
@@ -143,6 +322,7 @@ router.post('/runs/generate', authorize('admin', 'hr_manager', 'accountant'), va
         capByType,
         periodStart,
         periodEnd: periodEndDate,
+        typeNames,
       });
       const ul = { days: leaveCost.deduction_days };
 
@@ -202,12 +382,27 @@ router.post('/runs/generate', authorize('admin', 'hr_manager', 'accountant'), va
         absenceDays: Number(ab.days) || 0,
       });
 
-      await conn.query('INSERT INTO payroll_items SET ?', {
+      const [itemRes] = await conn.query('INSERT INTO payroll_items SET ?', {
         run_id: runId, company_id: companyId, employee_id: emp.id,
         basic_salary: calc.basic_salary, allowances: calc.allowances, gross: calc.gross,
         unpaid_leave_days: calc.unpaid_leave_days, absence_days: calc.absence_days,
         deductions: calc.deductions, net: calc.net,
       });
+
+      // The payslip, line by line: a breakdown of calc, summing to it exactly.
+      const lines = buildPayslipLines({
+        calc,
+        components: activeComponents(componentsByEmployee.get(emp.id), periodStart, periodEndDate),
+        leaveByType: groupLeaveByType(leaveCost.lines),
+      });
+      if (lines.length) {
+        await conn.query(
+          `INSERT INTO payroll_item_lines
+             (item_id, run_id, employee_id, kind, code, label, quantity, rate, amount, explanation, sort_order)
+           VALUES ?`,
+          [lines.map((l) => [itemRes.insertId, runId, emp.id, l.kind, l.code, String(l.label).slice(0, 150),
+            l.quantity, l.rate, l.amount, l.explanation ? String(l.explanation).slice(0, 500) : null, l.sort])]);
+      }
       totalGross += calc.gross; totalDeductions += calc.deductions; totalNet += calc.net;
     }
 
@@ -225,19 +420,160 @@ router.post('/runs/generate', authorize('admin', 'hr_manager', 'accountant'), va
   } finally { conn.release(); }
 });
 
+// PUT /api/payroll/runs/:id/approve — Pending Approval → Approved.
+//
+// Four eyes: whoever submitted the run does not approve it. An admin who is the
+// only person available can, but only with a written reason kept on the run. The
+// checks run again, because data can change while a run waits.
 router.put('/runs/:id/approve', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
   try {
-    const co = companyClause(req, 'company_id');
-    const [[run]] = await pool.query('SELECT status FROM payroll_runs WHERE id = ?' + co.clause, [req.params.id, ...co.params]);
-    if (!run) return res.status(404).json({ error: 'Payroll run not found' });
-    if (run.status !== 'Draft') return res.status(409).json({ error: `Run is already ${run.status}` });
-    await pool.query('UPDATE payroll_runs SET status = ?, approved_by = ?, approved_at = NOW() WHERE id = ?', ['Approved', req.user.id, req.params.id]);
-    await addAudit(pool, req.user, 'Payroll', 'Approved', `Payroll run #${req.params.id} approved`);
-    if (req.companyId != null) {
-      await notifyRole(pool, req.companyId, ['admin'], { type: 'payroll', title: 'Payroll approved', body: `Payroll run #${req.params.id} approved and ready to mark paid`, link: '/payroll' }, req.user.id);
+    const review = await loadRunReview(req, req.params.id);
+    if (!review) return res.status(404).json({ error: 'Payroll run not found' });
+    const { run } = review;
+    if (run.status === 'Draft') return res.status(409).json({ error: 'Submit the run for approval first', code: 'NOT_SUBMITTED' });
+    if (run.status !== 'Pending Approval') return res.status(409).json({ error: `Run is already ${run.status}` });
+
+    const selfReason = String(req.body?.self_approval_reason || '').trim();
+    if (run.submitted_by === req.user.id) {
+      if (req.user.role !== 'admin') {
+        return res.status(403).json({ error: 'The person who submitted the run cannot approve it', code: 'SAME_PERSON' });
+      }
+      if (selfReason.length < 10) {
+        return res.status(422).json({ error: 'You submitted this run: give a reason of at least 10 characters to approve it yourself', code: 'SAME_PERSON' });
+      }
     }
+    if (!review.checks.ok && !run.check_override_reason) {
+      return res.status(422).json({ error: 'The run has blocking problems', code: 'CHECKS_FAILED', ...reviewSummary(review) });
+    }
+
+    await pool.query(
+      'UPDATE payroll_runs SET status = ?, approved_by = ?, approved_at = NOW(), self_approval_reason = ? WHERE id = ?',
+      ['Approved', req.user.id, run.submitted_by === req.user.id ? selfReason.slice(0, 500) : null, run.id]);
+    await addAudit(pool, req.user, 'Payroll', 'Approved', `Payroll run #${req.params.id} approved`
+      + (run.submitted_by === req.user.id ? ` by its submitter: ${selfReason}` : ''));
+    await notifyRole(pool, run.company_id, ['admin', 'accountant'], { type: 'payroll', title: 'Payroll approved', body: `Payroll ${run.period} approved and ready to mark paid`, link: '/payroll-runs' }, req.user.id);
     res.json({ success: true });
   } catch (err) { console.error('PUT /payroll/runs/:id/approve error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// POST /api/payroll/runs/:id/notify-payslips — tell each employee their payslip
+// is ready. The email carries the totals only; the line-by-line payslip stays
+// behind the login in My Salary, where it can be explained.
+router.post('/runs/:id/notify-payslips', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
+  try {
+    const co = companyClause(req, 'pr.company_id');
+    const [[run]] = await pool.query(
+      `SELECT pr.id, pr.period, pr.status, pr.company_id, c.name AS company_name
+         FROM payroll_runs pr LEFT JOIN companies c ON c.id = pr.company_id
+        WHERE pr.id = ?` + co.clause, [req.params.id, ...co.params]);
+    if (!run) return res.status(404).json({ error: 'Payroll run not found' });
+    if (!['Approved', 'Paid'].includes(run.status)) return res.status(409).json({ error: 'Payslips can be sent once the run is approved' });
+
+    const [rows] = await pool.query(
+      `SELECT pi.basic_salary, pi.allowances, pi.deductions, pi.net,
+              TRIM(CONCAT(COALESCE(e.first_name, ''), ' ', COALESCE(e.last_name, ''))) AS name, e.email
+         FROM payroll_items pi JOIN employees e ON e.id = pi.employee_id
+        WHERE pi.run_id = ?`, [run.id]);
+    const [y, m] = run.period.split('-').map(Number);
+    const month = new Date(Date.UTC(y, m - 1, 1)).toLocaleString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+    const fmt = (n) => Number(n || 0).toFixed(2);
+
+    let sent = 0, failed = 0;
+    const noEmail = [];
+    for (const r of rows) {
+      if (!r.email) { noEmail.push(r.name); continue; }
+      const { subject, html } = getTemplate('payslip_notification', {
+        name: r.name, month, company: run.company_name,
+        basic_salary: fmt(r.basic_salary), allowances: fmt(r.allowances),
+        deductions: fmt(r.deductions), net_salary: fmt(r.net),
+      });
+      const result = await sendEmail({
+        to: r.email, toName: r.name, subject, html, companyId: run.company_id,
+        templateType: 'payslip_notification', relatedModule: 'Payroll', relatedId: run.id, sentBy: req.user.id,
+      });
+      if (result.success) sent++; else failed++;
+    }
+    await pool.query('UPDATE payroll_runs SET payslips_notified_at = NOW() WHERE id = ?', [run.id]);
+    await addAudit(pool, req.user, 'Payroll', 'Payslips Sent',
+      `Payslip emails for run #${run.id} (${run.period}): ${sent} sent, ${failed} failed, ${noEmail.length} without email`);
+    res.json({ success: true, sent, failed, no_email: noEmail });
+  } catch (err) { console.error('POST /payroll/runs/:id/notify-payslips error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// ─── Salary components (housing, transport…) ─────────────────────────────────
+router.get('/component-types', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT code, name_en, name_ar FROM pay_component_types WHERE active = TRUE ORDER BY sort_order, code');
+    res.json(rows);
+  } catch (err) { console.error('GET /payroll/component-types error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+async function scopedEmployee(req, employeeId) {
+  const co = companyClause(req, 'company_id');
+  const [[emp]] = await pool.query(
+    'SELECT id, company_id, first_name, last_name, basic_salary, full_salary FROM employees WHERE id = ?' + co.clause,
+    [employeeId, ...co.params]);
+  return emp || null;
+}
+
+router.get('/employees/:employeeId/components', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
+  try {
+    const emp = await scopedEmployee(req, req.params.employeeId);
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+    const [rows] = await pool.query(
+      `SELECT id, component_code, amount,
+              DATE_FORMAT(effective_from, '%Y-%m-%d') AS effective_from,
+              DATE_FORMAT(effective_to, '%Y-%m-%d') AS effective_to
+         FROM employee_pay_components WHERE employee_id = ? ORDER BY id`, [emp.id]);
+    const basic = Number(emp.basic_salary || 0);
+    const full = Math.max(basic, Number(emp.full_salary || basic));
+    res.json({ basic_salary: basic, full_salary: full, allowances: Math.round((full - basic) * 100) / 100,
+      components: rows.map((r) => ({ ...r, amount: Number(r.amount) })) });
+  } catch (err) { console.error('GET /payroll/employees/:id/components error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// Replaces the whole breakdown. The contract total (full_salary) is not touched:
+// changing pay goes through a salary review; this only says what it is made of.
+router.put('/employees/:employeeId/components', authorize('admin', 'hr_manager'), async (req, res) => {
+  let conn = null;
+  try {
+    const emp = await scopedEmployee(req, req.params.employeeId);
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+    const list = Array.isArray(req.body?.components) ? req.body.components : null;
+    if (!list) return res.status(422).json({ error: 'components must be a list' });
+
+    const [types] = await pool.query('SELECT code FROM pay_component_types');
+    const known = new Set(types.map((t) => t.code));
+    const isDate = (v) => !v || (/^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v)));
+    const clean = [];
+    for (const c of list) {
+      const amount = Number(c.amount);
+      if (!known.has(c.component_code)) return res.status(422).json({ error: `Unknown component ${c.component_code}` });
+      if (!Number.isFinite(amount) || amount < 0) return res.status(422).json({ error: 'Amounts must be zero or more' });
+      if (!isDate(c.effective_from) || !isDate(c.effective_to)) return res.status(422).json({ error: 'Invalid date' });
+      if (c.effective_from && c.effective_to && c.effective_to < c.effective_from) return res.status(422).json({ error: 'End date is before the start date' });
+      clean.push([emp.id, emp.company_id, c.component_code, Math.round(amount * 100) / 100,
+        c.effective_from || null, c.effective_to || null, req.user.id]);
+    }
+
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+    await conn.query('DELETE FROM employee_pay_components WHERE employee_id = ?', [emp.id]);
+    if (clean.length) {
+      await conn.query(
+        `INSERT INTO employee_pay_components
+           (employee_id, company_id, component_code, amount, effective_from, effective_to, updated_by) VALUES ?`, [clean]);
+    }
+    await conn.commit();
+    await addAudit(pool, req.user, 'Payroll', 'Components Updated',
+      `Salary breakdown of ${emp.first_name} ${emp.last_name} set: `
+      + (clean.map((c) => `${c[2]} ${c[3].toFixed(2)}`).join(', ') || 'none'));
+    res.json({ success: true });
+  } catch (err) {
+    if (conn) { try { await conn.rollback(); } catch { /* not in a transaction */ } }
+    console.error('PUT /payroll/employees/:id/components error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  } finally { if (conn) conn.release(); }
 });
 
 // The accountant is the person who actually moves the money, so they close the
@@ -515,7 +851,8 @@ router.get('/payslips/my', async (req, res) => {
     if (req.query.period) { sql += ' AND pr.period = ?'; params.push(req.query.period); }
     sql += ' ORDER BY pr.period DESC';
     const [rows] = await pool.query(sql, params);
-    res.json(rows);
+    // With its lines, so the employee can see how each figure was worked out.
+    res.json(await attachLines(rows));
   } catch (err) { console.error('GET /payroll/payslips/my error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
@@ -528,7 +865,7 @@ router.get('/payslips/:employeeId', authorize('admin', 'hr_manager', 'accountant
        FROM payroll_items pi JOIN payroll_runs pr ON pi.run_id = pr.id
        WHERE pi.employee_id = ?` + co.clause + ' ORDER BY pr.period DESC',
       [req.params.employeeId, ...co.params]);
-    res.json(rows);
+    res.json(await attachLines(rows));
   } catch (err) { console.error('GET /payroll/payslips/:employeeId error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
