@@ -11,7 +11,8 @@ import { useMyCompany } from './useMyCompany';
 import SalaryReport from './components/SalaryReport';
 import { printElementWithLetterhead, waitForPaint } from '@utils/printDoc';
 import { toast } from 'react-toastify';
-import { Banknote, Download } from 'lucide-react';
+import { Banknote, Download, ChevronDown, ChevronRight } from 'lucide-react';
+import PayslipLines from '@components/payroll/PayslipLines';
 
 const money = (n) => Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -22,6 +23,7 @@ export default function MySalary() {
   const [payslips, setPayslips] = useState([]);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [openId, setOpenId] = useState(null);
   const reportRef = useRef(null);
 
   useEffect(() => {
@@ -83,9 +85,15 @@ export default function MySalary() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-100">
-                {payslips.map((p) => (
-                  <tr key={p.id} className="hover:bg-surface-50/60">
-                    <td className="px-5 py-3 font-medium text-surface-800">{p.period}</td>
+                {payslips.map((p) => [
+                  <tr key={p.id} className={`hover:bg-surface-50/60 ${p.lines?.length ? 'cursor-pointer' : ''}`}
+                    onClick={() => p.lines?.length && setOpenId(openId === p.id ? null : p.id)}>
+                    <td className="px-5 py-3 font-medium text-surface-800">
+                      <span className="inline-flex items-center gap-1">
+                        {p.lines?.length ? (openId === p.id ? <ChevronDown size={13} /> : <ChevronRight size={13} className="rtl:rotate-180" />) : null}
+                        {p.period}
+                      </span>
+                    </td>
                     <td className="px-5 py-3 text-end text-surface-600">{money(p.basic_salary)}</td>
                     <td className="px-5 py-3 text-end text-surface-600">{money(p.allowances)}</td>
                     <td className="px-5 py-3 text-end text-surface-600">{money(p.gross)}</td>
@@ -98,8 +106,14 @@ export default function MySalary() {
                         {t(`portal.st_${String(p.run_status || '').toLowerCase()}`, p.run_status)}
                       </Badge>
                     </td>
-                  </tr>
-                ))}
+                  </tr>,
+                  // How this month was worked out, line by line.
+                  openId === p.id && (
+                    <tr key={`${p.id}-lines`} className="bg-surface-50/70">
+                      <td colSpan={7} className="px-5 py-4"><PayslipLines t={t} lines={p.lines} net={p.net} /></td>
+                    </tr>
+                  ),
+                ])}
               </tbody>
               <tfoot className="bg-surface-50 border-t border-surface-200">
                 <tr>

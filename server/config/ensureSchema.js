@@ -91,6 +91,15 @@ const COLUMN_GUARDS = [
   // How many door punches a Hik Central day was built from — see
   // server/apply_attendance_hik_sync.mjs. NULL for rows that predate it.
   { table: 'attendance', column: 'punch_count', ddl: 'ALTER TABLE attendance ADD COLUMN punch_count SMALLINT NULL' },
+  // Payroll v2: who submitted, who sent it back and why, and any recorded override.
+  { table: 'payroll_runs', column: 'submitted_by', ddl: 'ALTER TABLE payroll_runs ADD COLUMN submitted_by INT NULL' },
+  { table: 'payroll_runs', column: 'submitted_at', ddl: 'ALTER TABLE payroll_runs ADD COLUMN submitted_at TIMESTAMP NULL' },
+  { table: 'payroll_runs', column: 'rejected_by', ddl: 'ALTER TABLE payroll_runs ADD COLUMN rejected_by INT NULL' },
+  { table: 'payroll_runs', column: 'rejected_at', ddl: 'ALTER TABLE payroll_runs ADD COLUMN rejected_at TIMESTAMP NULL' },
+  { table: 'payroll_runs', column: 'rejection_reason', ddl: 'ALTER TABLE payroll_runs ADD COLUMN rejection_reason VARCHAR(500) NULL' },
+  { table: 'payroll_runs', column: 'check_override_reason', ddl: 'ALTER TABLE payroll_runs ADD COLUMN check_override_reason VARCHAR(500) NULL' },
+  { table: 'payroll_runs', column: 'self_approval_reason', ddl: 'ALTER TABLE payroll_runs ADD COLUMN self_approval_reason VARCHAR(500) NULL' },
+  { table: 'payroll_runs', column: 'payslips_notified_at', ddl: 'ALTER TABLE payroll_runs ADD COLUMN payslips_notified_at TIMESTAMP NULL' },
 ];
 
 // Tiny key/value store for global app settings (e.g. timezone).
@@ -442,6 +451,56 @@ const TABLE_GUARDS = [
      UNIQUE KEY uq_hik_run_claim (claim_key),
      INDEX idx_hik_run_started (started_at)
    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  // ── Payroll v2 (services/payrollV2.js) ──────────────────────────────────────
+  // What an allowance can be. The contract total stays employees.full_salary;
+  // these only break the allowance part of it down for the payslip.
+  `CREATE TABLE IF NOT EXISTS pay_component_types (
+     id         INT AUTO_INCREMENT PRIMARY KEY,
+     code       VARCHAR(30) NOT NULL,
+     name_en    VARCHAR(100) NOT NULL,
+     name_ar    VARCHAR(100) NOT NULL,
+     sort_order SMALLINT NOT NULL DEFAULT 0,
+     active     BOOLEAN NOT NULL DEFAULT TRUE,
+     UNIQUE KEY uq_pay_component_code (code)
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  `INSERT IGNORE INTO pay_component_types (code, name_en, name_ar, sort_order) VALUES
+     ('HOUSING', 'Housing allowance', 'بدل السكن', 10),
+     ('TRANSPORT', 'Transport allowance', 'بدل المواصلات', 20),
+     ('FOOD', 'Food allowance', 'بدل الطعام', 30),
+     ('PHONE', 'Phone allowance', 'بدل الهاتف', 40),
+     ('OTHER', 'Other allowance', 'بدل آخر', 90)`,
+  `CREATE TABLE IF NOT EXISTS employee_pay_components (
+     id             INT AUTO_INCREMENT PRIMARY KEY,
+     employee_id    INT NOT NULL,
+     company_id     INT NOT NULL,
+     component_code VARCHAR(30) NOT NULL,
+     amount         DECIMAL(12,2) NOT NULL DEFAULT 0,
+     effective_from DATE NULL,
+     effective_to   DATE NULL,
+     updated_by     INT NULL,
+     created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     INDEX idx_epc_employee (employee_id),
+     FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE,
+     FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  // One row per payslip line, written with the item it explains.
+  `CREATE TABLE IF NOT EXISTS payroll_item_lines (
+     id          INT AUTO_INCREMENT PRIMARY KEY,
+     item_id     INT NOT NULL,
+     run_id      INT NOT NULL,
+     employee_id INT NOT NULL,
+     kind        ENUM('earning','deduction') NOT NULL,
+     code        VARCHAR(40) NOT NULL,
+     label       VARCHAR(150) NOT NULL,
+     quantity    DECIMAL(8,2) NULL,
+     rate        DECIMAL(12,2) NULL,
+     amount      DECIMAL(12,2) NOT NULL DEFAULT 0,
+     explanation VARCHAR(500) NULL,
+     sort_order  SMALLINT NOT NULL DEFAULT 0,
+     INDEX idx_pil_item (item_id),
+     INDEX idx_pil_run (run_id),
+     FOREIGN KEY (item_id) REFERENCES payroll_items(id) ON DELETE CASCADE
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 ];
 
 // Enum values that must exist, widened in place. COLUMN_GUARDS only covers
@@ -453,6 +512,8 @@ const ENUM_GUARDS = [
   // Rows written by the Hik Central sync. 'Drive Sync' stays in the list: those
   // rows are history and must not be orphaned by widening the column.
   { table: 'attendance', column: 'source', values: ['Hik Central', 'Self Service'], suffix: " NOT NULL DEFAULT 'Manual'" },
+  // Payroll v2: a run is submitted for approval before it is approved.
+  { table: 'payroll_runs', column: 'status', values: ['Pending Approval'], suffix: " NOT NULL DEFAULT 'Draft'" },
 ];
 
 export async function ensureSchema() {

@@ -9,14 +9,44 @@ import Modal from '@components/ui/Modal';
 import Input from '@components/ui/Input';
 import EmptyState from '@components/ui/EmptyState';
 import { toast } from 'react-toastify';
-import { confirmDelete } from '@utils/confirm';
-import { Banknote, Plus, RefreshCw, Loader2, CheckCircle2, Trash2, FileSpreadsheet, AlertTriangle, Send, FileText } from 'lucide-react';
+import { confirmDelete, confirmAction } from '@utils/confirm';
+import { Banknote, Plus, RefreshCw, Loader2, CheckCircle2, Trash2, FileSpreadsheet, AlertTriangle, Send, FileText, ChevronDown, ChevronRight, XCircle, Mail, Undo2 } from 'lucide-react';
+import { lineLabel, money } from '@utils/payslipLines';
+import PayslipLines from '@components/payroll/PayslipLines';
 import { downloadBlob } from '@utils/pdf';
 import dayjs from 'dayjs';
 
 const apiErr = (e, f) => e?.response?.data?.error || (e?.response?.data?.errors?.[0]?.message) || f;
-const statusVariant = (s) => ({ Draft: 'info', Approved: 'warning', Paid: 'success', Cancelled: 'danger' }[s] || 'info');
-const stLabel = (t, s) => t(`payroll_runs.st_${String(s || '').toLowerCase()}`, s);
+const statusVariant = (s) => ({ Draft: 'info', 'Pending Approval': 'pending', Approved: 'brand', Paid: 'success', Cancelled: 'danger' }[s] || 'info');
+const stLabel = (t, s) => t(`payroll_runs.st_${String(s || '').toLowerCase().replace(/\s+/g, '_')}`, s);
+
+// What each check code means, in the reader's language. Codes mirror checkRun()
+// in server/services/payrollV2.js.
+function checkLabel(t, c) {
+  switch (c.code) {
+    case 'NO_SALARY': return t('payroll_runs.chk_no_salary');
+    case 'WPS_MISSING': return t('payroll_runs.chk_wps_missing', { fields: (c.detail || []).map((f) => wpsFieldLabel(t, f)).join(' · ') });
+    case 'IBAN_INVALID': return t('payroll_runs.chk_iban_invalid');
+    case 'COMPANY_MOL_MISSING': return t('payroll_runs.chk_company_mol_missing');
+    case 'BANK_UNVERIFIED': return t('payroll_runs.chk_bank_unverified');
+    case 'NOT_IN_WPS': return t('payroll_runs.chk_not_in_wps');
+    case 'DEDUCTIONS_OVER_HALF': return t('payroll_runs.chk_deductions_over_half');
+    case 'COMPONENTS_MISMATCH': return t('payroll_runs.chk_components_mismatch', {
+      components: money(c.detail?.components), allowances: money(c.detail?.allowances) });
+    case 'BIG_CHANGE': return t('payroll_runs.chk_big_change', { prev: money(c.detail?.prev_net), net: money(c.detail?.net), pct: c.detail?.pct });
+    case 'NEW_IN_RUN': return t('payroll_runs.chk_new_in_run');
+    default: return c.code;
+  }
+}
+function wpsFieldLabel(t, f) {
+  switch (f) {
+    case 'work_permit_no': return t('payroll_runs.fld_work_permit');
+    case 'personal_no': return t('payroll_runs.fld_personal_no');
+    case 'iban': return t('payroll_runs.fld_iban');
+    case 'bank_name': return t('payroll_runs.fld_bank_name');
+    default: return f;
+  }
+}
 
 export default function PayrollRuns() {
   const { t } = useTranslation();
@@ -53,10 +83,74 @@ export default function PayrollRuns() {
     try { const { data } = await payApi.generateRun({ period, company_id: currentCompanyId }); toast.success(t('payroll_runs.run_generated', { count: data.employee_count, net: data.total_net })); load(); }
     catch (e) { toast.error(apiErr(e, t('payroll_runs.generate_failed'))); } finally { setGenerating(false); }
   };
-  const openDetail = async (r) => { setOpenRun(r); try { const { data } = await payApi.getRun(r.id); setDetail(data); } catch { toast.error(t('payroll_runs.load_run_failed')); } };
-  const reloadDetail = async () => { if (openRun) { const { data } = await payApi.getRun(openRun.id); setDetail(data); } load(); };
+  // ── Run review: blocking checks, warnings, and the comparison with last month ──
+  const [review, setReview] = useState(null);
+  const [tab, setTab] = useState('employees');
+  const [expanded, setExpanded] = useState(() => new Set());
+  const [actionBusy, setActionBusy] = useState(false);
+  // One dialog for every action that needs a written reason: rejecting, an
+  // admin override of blocking checks, an admin approving their own submission.
+  const [reasonDlg, setReasonDlg] = useState(null); // { title, hint, minLen, confirmLabel, onSubmit }
+  const [reasonText, setReasonText] = useState('');
 
-  const approve = async (r) => { try { await payApi.approveRun(r.id); toast.success(t('payroll_runs.approved')); reloadDetail(); } catch (e) { toast.error(apiErr(e, t('common.operation_failed'))); } };
+  const loadReview = async (id) => {
+    try { const { data } = await payApi.getReview(id); setReview(data); } catch { setReview(null); }
+  };
+  const openDetail = async (r) => {
+    setOpenRun(r); setDetail(null); setReview(null); setTab('employees'); setExpanded(new Set());
+    try { const { data } = await payApi.getRun(r.id); setDetail(data); loadReview(r.id); } catch { toast.error(t('payroll_runs.load_run_failed')); }
+  };
+  const reloadDetail = async () => {
+    if (openRun) { const { data } = await payApi.getRun(openRun.id); setDetail(data); loadReview(openRun.id); }
+    load();
+  };
+  const toggleRow = (id) => setExpanded((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const askReason = (dlg) => { setReasonText(''); setReasonDlg(dlg); };
+
+  const runAction = async (fn, okMsg) => {
+    setActionBusy(true);
+    try { await fn(); toast.success(okMsg); setReasonDlg(null); await reloadDetail(); }
+    catch (e) {
+      // A 422 from submit/approve carries the fresh review; show it rather than a bare error.
+      if (e?.response?.data?.code === 'CHECKS_FAILED') setReview(e.response.data);
+      toast.error(apiErr(e, t('common.operation_failed')));
+    } finally { setActionBusy(false); }
+  };
+
+  const submit = () => {
+    if (review && !review.ok) {
+      if (!isAdmin) { toast.error(t('payroll_runs.fix_errors_first')); return; }
+      askReason({ title: t('payroll_runs.override_title'), hint: t('payroll_runs.override_hint'), minLen: 10,
+        confirmLabel: t('payroll_runs.submit'), onSubmit: (reason) => runAction(() => payApi.submitRun(detail.id, { override_reason: reason }), t('payroll_runs.submitted')) });
+      return;
+    }
+    runAction(() => payApi.submitRun(detail.id), t('payroll_runs.submitted'));
+  };
+  const approve = () => {
+    if (detail.submitted_by === user?.id) {
+      if (!isAdmin) { toast.error(t('payroll_runs.same_person')); return; }
+      askReason({ title: t('payroll_runs.self_approve_title'), hint: t('payroll_runs.self_approve_hint'), minLen: 10,
+        confirmLabel: t('payroll_runs.approve'), onSubmit: (reason) => runAction(() => payApi.approveRunWith(detail.id, { self_approval_reason: reason }), t('payroll_runs.approved')) });
+      return;
+    }
+    runAction(() => payApi.approveRunWith(detail.id), t('payroll_runs.approved'));
+  };
+  const reject = () => askReason({ title: t('payroll_runs.reject_title'), hint: t('payroll_runs.reject_hint'), minLen: 1,
+    confirmLabel: t('payroll_runs.reject'), onSubmit: (reason) => runAction(() => payApi.rejectRun(detail.id, reason), t('payroll_runs.rejected')) });
+  const notifyPayslips = async () => {
+    // One click emails every employee in the run, so it is asked first.
+    const ok = await confirmAction(t('payroll_runs.email_payslips'),
+      t('payroll_runs.email_payslips_confirm', { count: detail.items?.length || 0 }));
+    if (!ok.isConfirmed) return;
+    setActionBusy(true);
+    try {
+      const { data } = await payApi.notifyPayslips(detail.id);
+      toast.success(t('payroll_runs.payslips_sent', { sent: data.sent, missing: data.no_email?.length || 0 }));
+      if (data.failed) toast.warning(t('payroll_runs.payslips_failed', { count: data.failed }));
+      await reloadDetail();
+    } catch (e) { toast.error(apiErr(e, t('common.operation_failed'))); }
+    finally { setActionBusy(false); }
+  };
   const pay = async (r) => { try { await payApi.markPaid(r.id); toast.success(t('payroll_runs.marked_paid')); reloadDetail(); } catch (e) { toast.error(apiErr(e, t('common.operation_failed'))); } };
   const del = async (r) => { const c = await confirmDelete(`payroll run ${r.period}`); if (!c.isConfirmed) return; try { await payApi.deleteRun(r.id); toast.success(t('common.deleted')); if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); setOpenRun(null); setDetail(null); load(); } catch (e) { toast.error(apiErr(e, t('common.operation_failed'))); } };
 
@@ -182,27 +276,129 @@ export default function PayrollRuns() {
                   <FileText size={14} /> {t('payroll_runs.explain_export')}
                 </Button>
                 <Button size="sm" variant="secondary" onClick={openWps} loading={wpsBusy && !wps}><FileSpreadsheet size={14} /> {t('payroll_runs.wps_export')}</Button>
-                {detail.status === 'Draft' && <Button size="sm" onClick={() => approve(detail)}><CheckCircle2 size={14} /> {t('payroll_runs.approve')}</Button>}
+                {detail.status === 'Draft' && (
+                  <Button size="sm" onClick={submit} loading={actionBusy} disabled={!review || (!review.ok && !isAdmin)}
+                    title={review && !review.ok && !isAdmin ? t('payroll_runs.fix_errors_first') : undefined}>
+                    <Send size={14} /> {t('payroll_runs.submit')}
+                  </Button>
+                )}
+                {detail.status === 'Pending Approval' && (
+                  <>
+                    <Button size="sm" variant="secondary" onClick={reject} disabled={actionBusy}><Undo2 size={14} /> {t('payroll_runs.reject')}</Button>
+                    {(detail.submitted_by !== user?.id || isAdmin) && (
+                      <Button size="sm" onClick={approve} loading={actionBusy}><CheckCircle2 size={14} /> {t('payroll_runs.approve')}</Button>
+                    )}
+                  </>
+                )}
+                {['Approved', 'Paid'].includes(detail.status) && (
+                  <Button size="sm" variant="secondary" onClick={notifyPayslips} loading={actionBusy}
+                    title={detail.payslips_notified_at ? t('payroll_runs.payslips_already', { at: dayjs(detail.payslips_notified_at).format('YYYY-MM-DD HH:mm') }) : undefined}>
+                    <Mail size={14} /> {t('payroll_runs.email_payslips')}
+                  </Button>
+                )}
                 {detail.status === 'Approved' && canClosePayroll && <Button size="sm" onClick={() => pay(detail)}>{t('payroll_runs.mark_paid')}</Button>}
                 {detail.status === 'Draft' && isAdmin && <Button size="sm" variant="danger" onClick={() => del(detail)}><Trash2 size={14} /></Button>}
               </div>
             </div>
-            <Card className="!p-0 overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-surface-50 text-surface-500 text-xs"><tr>
-                  <th className="text-left p-3">{t('payroll_runs.th_employee')}</th><th className="p-3">{t('payroll_runs.th_basic')}</th><th className="p-3">{t('payroll_runs.th_allowances')}</th><th className="p-3">{t('payroll_runs.th_gross')}</th>
-                  <th className="p-3">{t('payroll_runs.th_unpaid')}</th><th className="p-3">{t('payroll_runs.th_absence')}</th><th className="p-3">{t('payroll_runs.th_deductions')}</th><th className="p-3">{t('payroll_runs.th_net')}</th></tr></thead>
-                <tbody>{(detail.items || []).map((it) => (
-                  <tr key={it.id} className="border-t border-surface-50">
-                    <td className="p-3">{it.first_name} {it.last_name}</td>
-                    <td className="p-3 text-center">{it.basic_salary}</td><td className="p-3 text-center">{it.allowances}</td><td className="p-3 text-center">{it.gross}</td>
-                    <td className="p-3 text-center">{it.unpaid_leave_days}</td><td className="p-3 text-center">{it.absence_days}</td>
-                    <td className="p-3 text-center text-red-500">{it.deductions}</td><td className="p-3 text-center font-semibold text-brand-600">{it.net}</td>
-                  </tr>
-                ))}</tbody>
-              </table>
-            </Card>
+
+            {/* Sent back by the approver: the reason stays on screen until resubmitted. */}
+            {detail.status === 'Draft' && detail.rejection_reason && (
+              <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-sm">
+                <Undo2 size={16} className="mt-0.5 shrink-0" />
+                <span>{t('payroll_runs.rejected_banner', { reason: detail.rejection_reason })}</span>
+              </div>
+            )}
+            {detail.status === 'Pending Approval' && detail.submitted_by === user?.id && !isAdmin && (
+              <p className="text-xs text-surface-500">{t('payroll_runs.waiting_other_approver')}</p>
+            )}
+            {detail.check_override_reason && (
+              <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-2">{t('payroll_runs.override_banner', { reason: detail.check_override_reason })}</p>
+            )}
+
+            {/* Checks: errors stop the run; warnings are for the approver to read. */}
+            {review && ['Draft', 'Pending Approval'].includes(detail.status) && (review.errors.length > 0 || review.warnings.length > 0) && (
+              <div className="space-y-2">
+                {review.errors.length > 0 && (
+                  <div className="p-3 rounded-xl bg-red-50 border border-red-200">
+                    <p className="text-sm font-semibold text-red-800 flex items-center gap-1.5 mb-1"><XCircle size={15} /> {t('payroll_runs.errors_title', { count: review.errors.length })}</p>
+                    <ul className="text-xs text-red-800 space-y-0.5">
+                      {review.errors.map((c, i) => <li key={i}>{c.name ? <b>{c.name}: </b> : null}{checkLabel(t, c)}</li>)}
+                    </ul>
+                  </div>
+                )}
+                {review.warnings.length > 0 && (
+                  <details className="p-3 rounded-xl bg-amber-50 border border-amber-200">
+                    <summary className="text-sm font-semibold text-amber-900 cursor-pointer flex items-center gap-1.5"><AlertTriangle size={15} /> {t('payroll_runs.warnings_title', { count: review.warnings.length })}</summary>
+                    <ul className="text-xs text-amber-900 space-y-0.5 mt-2">
+                      {review.warnings.map((c, i) => <li key={i}>{c.name ? <b>{c.name}: </b> : null}{checkLabel(t, c)}</li>)}
+                    </ul>
+                  </details>
+                )}
+              </div>
+            )}
+
+            <div className="flex gap-1 border-b border-surface-200">
+              {['employees', 'variance'].map((k) => (
+                <button key={k} type="button" onClick={() => setTab(k)}
+                  className={`px-3 py-2 text-sm font-semibold border-b-2 -mb-px ${tab === k ? 'border-brand-600 text-brand-600' : 'border-transparent text-surface-500 hover:text-surface-700'}`}>
+                  {k === 'employees' ? t('payroll_runs.tab_employees') : t('payroll_runs.tab_variance', { period: review?.previous_period || '—' })}
+                </button>
+              ))}
+            </div>
+
+            {tab === 'employees' ? (
+              <Card className="!p-0 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-surface-50 text-surface-500 text-xs"><tr>
+                    <th className="text-start p-3">{t('payroll_runs.th_employee')}</th><th className="p-3">{t('payroll_runs.th_basic')}</th><th className="p-3">{t('payroll_runs.th_allowances')}</th><th className="p-3">{t('payroll_runs.th_gross')}</th>
+                    <th className="p-3">{t('payroll_runs.th_unpaid')}</th><th className="p-3">{t('payroll_runs.th_absence')}</th><th className="p-3">{t('payroll_runs.th_deductions')}</th><th className="p-3">{t('payroll_runs.th_net')}</th></tr></thead>
+                  <tbody>{(detail.items || []).map((it) => {
+                    const open = expanded.has(it.id);
+                    const hasLines = it.lines?.length > 0;
+                    return [
+                      <tr key={it.id} className={`border-t border-surface-50 ${hasLines ? 'cursor-pointer hover:bg-surface-50/60' : ''}`} onClick={() => hasLines && toggleRow(it.id)}>
+                        <td className="p-3">
+                          <span className="inline-flex items-center gap-1">
+                            {hasLines ? (open ? <ChevronDown size={13} /> : <ChevronRight size={13} className="rtl:rotate-180" />) : null}
+                            {it.first_name} {it.last_name}
+                          </span>
+                        </td>
+                        <td className="p-3 text-center">{it.basic_salary}</td><td className="p-3 text-center">{it.allowances}</td><td className="p-3 text-center">{it.gross}</td>
+                        <td className="p-3 text-center">{it.unpaid_leave_days}</td><td className="p-3 text-center">{it.absence_days}</td>
+                        <td className="p-3 text-center text-red-500">{it.deductions}</td><td className="p-3 text-center font-semibold text-brand-600">{it.net}</td>
+                      </tr>,
+                      open && (
+                        <tr key={`${it.id}-lines`} className="bg-surface-50/70">
+                          <td colSpan={8} className="px-6 py-3"><PayslipLines t={t} lines={it.lines} net={it.net} /></td>
+                        </tr>
+                      ),
+                    ];
+                  })}</tbody>
+                </table>
+                {!(detail.items || []).some((it) => it.lines?.length) && (detail.items || []).length > 0 && (
+                  <p className="text-[11px] text-surface-400 px-3 py-2 border-t border-surface-100">{t('payroll_runs.no_lines_hint')}</p>
+                )}
+              </Card>
+            ) : (
+              <VarianceTable t={t} review={review} />
+            )}
           </div>
+        )}
+      </Modal>
+
+      {/* A written reason: reject, admin override of checks, admin self-approval. */}
+      <Modal open={!!reasonDlg} onClose={() => setReasonDlg(null)} title={reasonDlg?.title || ''} size="md">
+        {reasonDlg && (
+          <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (reasonText.trim().length >= reasonDlg.minLen) reasonDlg.onSubmit(reasonText.trim()); }}>
+            <p className="text-sm text-surface-600">{reasonDlg.hint}</p>
+            <textarea rows={3} autoFocus value={reasonText} onChange={(e) => setReasonText(e.target.value)}
+              className="w-full px-3 py-2.5 text-sm bg-white border border-surface-200 rounded-xl input-focus resize-none" />
+            {reasonDlg.minLen > 1 && <p className="text-[11px] text-surface-400">{t('payroll_runs.reason_min', { count: reasonDlg.minLen })}</p>}
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="secondary" onClick={() => setReasonDlg(null)}>{t('common.cancel')}</Button>
+              <Button type="submit" loading={actionBusy} disabled={reasonText.trim().length < reasonDlg.minLen}>{reasonDlg.confirmLabel}</Button>
+            </div>
+          </form>
         )}
       </Modal>
 
@@ -335,5 +531,49 @@ export default function PayrollRuns() {
         </form>
       </Modal>
     </div>
+  );
+}
+
+/**
+ * Month-on-month: each employee's net against the last approved or paid run,
+ * with what moved. A change above 10% is highlighted.
+ */
+function VarianceTable({ t, review }) {
+  if (!review) return <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 text-brand-600 animate-spin" /></div>;
+  if (!review.previous_period) return <p className="text-sm text-surface-500 py-6 text-center">{t('payroll_runs.no_previous')}</p>;
+  const statusText = (s) => ({
+    new: t('payroll_runs.var_new'), left: t('payroll_runs.var_left'), same: t('payroll_runs.var_same'), changed: t('payroll_runs.var_changed'),
+  })[s];
+  const rows = [...review.variance].sort((a, b) => Number(b.flagged) - Number(a.flagged) || Math.abs(b.diff || 0) - Math.abs(a.diff || 0));
+  return (
+    <Card className="!p-0 overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead className="bg-surface-50 text-surface-500 text-xs"><tr>
+          <th className="text-start p-3">{t('payroll_runs.th_employee')}</th>
+          <th className="p-3">{t('payroll_runs.var_prev_net', { period: review.previous_period })}</th>
+          <th className="p-3">{t('payroll_runs.th_net')}</th>
+          <th className="p-3">{t('payroll_runs.var_diff')}</th>
+          <th className="text-start p-3">{t('payroll_runs.var_what_changed')}</th>
+        </tr></thead>
+        <tbody>{rows.map((v) => (
+          <tr key={`${v.employee_id}-${v.status}`} className={`border-t border-surface-50 ${v.flagged ? 'bg-amber-50/60' : ''}`}>
+            <td className="p-3">
+              {v.name}
+              {v.status !== 'changed' && <Badge variant={v.status === 'same' ? 'inactive' : 'info'} className="text-[10px] ms-2">{statusText(v.status)}</Badge>}
+            </td>
+            <td className="p-3 text-center font-mono">{v.prev_net == null ? '—' : money(v.prev_net)}</td>
+            <td className="p-3 text-center font-mono">{v.net == null ? '—' : money(v.net)}</td>
+            <td className={`p-3 text-center font-mono ${v.diff > 0 ? 'text-emerald-600' : v.diff < 0 ? 'text-red-600' : 'text-surface-400'}`}>
+              {v.diff == null ? '—' : `${v.diff > 0 ? '+' : ''}${money(v.diff)}${v.pct != null ? ` (${v.pct > 0 ? '+' : ''}${v.pct}%)` : ''}`}
+            </td>
+            <td className="p-3 text-xs text-surface-600">
+              {v.changes.map((c, i) => (
+                <span key={i} className="block">{lineLabel(t, c)}: <span className="font-mono">{money(c.prev)} → {money(c.cur)}</span></span>
+              ))}
+            </td>
+          </tr>
+        ))}</tbody>
+      </table>
+    </Card>
   );
 }

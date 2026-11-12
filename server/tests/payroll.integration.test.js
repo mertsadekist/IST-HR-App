@@ -87,9 +87,44 @@ describe('Payroll lifecycle', () => {
     expect(res.body.length).toBe(0);
   });
 
-  it('approve then mark-paid; payslip becomes visible to the employee', async () => {
+  it('a Draft run cannot be approved before it is submitted', async () => {
     const appr = await request.put(`/api/payroll/runs/${f.ids.runId}/approve`).set(auth(tokAdminA)).send({});
+    expect(appr.status).toBe(409);
+    expect(appr.body.code).toBe('NOT_SUBMITTED');
+  });
+
+  it('stores payslip lines that add up to the item', async () => {
+    const res = await request.get(`/api/payroll/runs/${f.ids.runId}`).set(auth(tokAdminA));
+    const item = res.body.items[0];
+    const sum = (k) => Math.round(item.lines.filter((l) => l.kind === k).reduce((s, l) => s + l.amount, 0) * 100) / 100;
+    expect(sum('earning')).toBe(Number(item.gross));
+    expect(sum('deduction')).toBe(Number(item.deductions));
+  });
+
+  it('a rejected run goes back to Draft with its reason', async () => {
+    const sub = await request.put(`/api/payroll/runs/${f.ids.runId}/submit`).set(auth(tokAdminA)).send({});
+    expect(sub.status).toBe(200);
+    const noReason = await request.put(`/api/payroll/runs/${f.ids.runId}/reject`).set(auth(tokAdminA)).send({});
+    expect(noReason.status).toBe(422);
+    const rej = await request.put(`/api/payroll/runs/${f.ids.runId}/reject`).set(auth(tokAdminA)).send({ reason: 'Recheck absences' });
+    expect(rej.status).toBe(200);
+    const run = await request.get(`/api/payroll/runs/${f.ids.runId}`).set(auth(tokAdminA));
+    expect(run.body.status).toBe('Draft');
+    expect(run.body.rejection_reason).toBe('Recheck absences');
+  });
+
+  it('submit, then approve: the submitter needs a written reason to approve it themselves', async () => {
+    const sub = await request.put(`/api/payroll/runs/${f.ids.runId}/submit`).set(auth(tokAdminA)).send({});
+    expect(sub.status).toBe(200);
+    const bare = await request.put(`/api/payroll/runs/${f.ids.runId}/approve`).set(auth(tokAdminA)).send({});
+    expect(bare.status).toBe(422);
+    expect(bare.body.code).toBe('SAME_PERSON');
+    const appr = await request.put(`/api/payroll/runs/${f.ids.runId}/approve`).set(auth(tokAdminA))
+      .send({ self_approval_reason: 'Only admin on duty this week' });
     expect(appr.status).toBe(200);
+  });
+
+  it('mark-paid; payslip becomes visible to the employee', async () => {
     const paid = await request.put(`/api/payroll/runs/${f.ids.runId}/mark-paid`).set(auth(tokAdminA)).send({});
     expect(paid.status).toBe(200);
 
