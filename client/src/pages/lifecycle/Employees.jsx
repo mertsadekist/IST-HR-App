@@ -24,6 +24,13 @@ import dayjs from 'dayjs';
 
 const PAGE_SIZE = 50;
 
+// The three list views, in button order. `statuses` is sent to the server as-is.
+const STATUS_VIEWS = {
+  current: { label: 'employees.filter_current', statuses: 'Active,Onboarding' },
+  left: { label: 'employees.filter_left', statuses: 'Offboarding,Exited' },
+  all: { label: 'employees.filter_all', statuses: null },
+};
+
 export default function Employees() {
   const { t } = useTranslation();
   const { currentCompanyId } = useSelector((s) => s.entity);
@@ -41,7 +48,9 @@ export default function Employees() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');   // what is typed
   const [query, setQuery] = useState('');     // what is sent, after the debounce
-  const [activeOnly, setActiveOnly] = useState(false); // show only status = Active
+  // Which employees the list shows. Default is the people currently working here
+  // (Active + Onboarding); leavers are one click away rather than mixed in.
+  const [statusView, setStatusView] = useState('current'); // 'current' | 'left' | 'all'
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -97,7 +106,7 @@ export default function Employees() {
 
   useEffect(() => {
     loadEmployees();
-  }, [currentCompanyId, query, activeOnly, page]);
+  }, [currentCompanyId, query, statusView, page]);
 
   const loadEmployees = async () => {
     const requestId = ++loadSeq.current; // a slower, older response must not overwrite a newer one
@@ -107,7 +116,7 @@ export default function Employees() {
       const qs = new URLSearchParams({ limit: String(PAGE_SIZE), page: String(page) });
       if (currentCompanyId) qs.set('company_id', currentCompanyId);
       if (query) qs.set('search', query);
-      if (activeOnly) qs.set('status', 'Active');
+      if (STATUS_VIEWS[statusView].statuses) qs.set('status', STATUS_VIEWS[statusView].statuses);
       const { data } = await api.get(`/employees?${qs}`);
       if (requestId !== loadSeq.current) return;
       const list = data.data || data; // handle standard pagination response or flat array
@@ -361,10 +370,10 @@ export default function Employees() {
         )}
       </div>
       <div role="group" aria-label={t('employees.filter_label')} className="inline-flex rounded-xl border border-surface-200 bg-white p-0.5 text-sm shrink-0">
-        {[[false, 'employees.filter_all'], [true, 'employees.filter_active']].map(([value, key]) => (
-          <button key={key} type="button" aria-pressed={activeOnly === value} onClick={() => { setActiveOnly(value); setPage(1); }}
-            className={`px-3 py-1.5 rounded-[10px] font-medium transition-colors ${activeOnly === value ? 'bg-brand-600 text-white' : 'text-surface-600 hover:bg-surface-50'}`}>
-            {t(key)}
+        {Object.entries(STATUS_VIEWS).map(([value, { label }]) => (
+          <button key={value} type="button" aria-pressed={statusView === value} onClick={() => { setStatusView(value); setPage(1); }}
+            className={`px-3 py-1.5 rounded-[10px] font-medium transition-colors ${statusView === value ? 'bg-brand-600 text-white' : 'text-surface-600 hover:bg-surface-50'}`}>
+            {t(label)}
           </button>
         ))}
       </div>
