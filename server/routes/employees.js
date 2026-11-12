@@ -184,7 +184,15 @@ router.get('/', async (req, res) => {
                LEFT JOIN users u ON u.employee_id = e.id WHERE 1=1` + co.clause;
     let countSql = 'SELECT COUNT(*) as total FROM employees WHERE 1=1' + coCount.clause;
     const params = [...co.params], countParams = [...coCount.params];
-    if (req.query.status) { sql += ' AND e.status = ?'; params.push(req.query.status); countSql += ' AND status = ?'; countParams.push(req.query.status); }
+    // status may be one value or a comma-separated list ("Active,Onboarding").
+    // Unknown values are dropped rather than passed to SQL.
+    const statuses = String(req.query.status || '').split(',').map((s) => s.trim())
+      .filter((s) => EMPLOYEE_STATUSES.includes(s));
+    if (statuses.length) {
+      const marks = statuses.map(() => '?').join(',');
+      sql += ` AND e.status IN (${marks})`; params.push(...statuses);
+      countSql += ` AND status IN (${marks})`; countParams.push(...statuses);
+    }
     // Search by name (first, last, or "first last" together), email, phone, job
     // title or device attendance ID. LIKE wildcards typed by the user are escaped.
     const term = String(req.query.search || '').trim().slice(0, 100);
