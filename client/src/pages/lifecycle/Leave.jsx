@@ -9,9 +9,13 @@ import Badge from '@components/ui/Badge';
 import Modal from '@components/ui/Modal';
 import EmptyState from '@components/ui/EmptyState';
 import { toast } from 'react-toastify';
-import { CalendarDays, Plus, RefreshCw, Check, X, Upload } from 'lucide-react';
+import { CalendarDays, Plus, RefreshCw, Check, X, Upload, Settings2 } from 'lucide-react';
 import dayjs from 'dayjs';
 import ApprovalProgress from '@components/approvals/ApprovalProgress';
+import LeaveBalancesTab from '@components/leave/LeaveBalancesTab';
+import TeamCalendar from '@components/leave/TeamCalendar';
+import LeavePreview from '@components/leave/LeavePreview';
+import LeaveContext from '@components/leave/LeaveContext';
 
 const apiErr = (e, f) => e?.response?.data?.error || (e?.response?.data?.errors?.[0]?.message) || f;
 const statusVariant = (s) => ({ Approved: 'success', Rejected: 'danger', Cancelled: 'danger', Pending: 'warning' }[s] || 'info');
@@ -25,7 +29,6 @@ export default function Leave() {
   const isAdminUser = user?.role === 'admin';
   const [tab, setTab] = useState('requests');
   const [requests, setRequests] = useState([]);
-  const [balances, setBalances] = useState([]);
   const [types, setTypes] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -34,6 +37,7 @@ export default function Leave() {
   const [decision, setDecision] = useState(null); // { request, action }
   const [balModal, setBalModal] = useState(false);
   const [typeModal, setTypeModal] = useState(false);
+  const [policyType, setPolicyType] = useState(null);
 
   const loadAll = async () => {
     setLoading(true);
@@ -41,7 +45,6 @@ export default function Leave() {
       const [tp, rq] = await Promise.all([leaveApi.getTypes(), leaveApi.getRequests(statusFilter ? { status: statusFilter } : {})]);
       setTypes(tp.data); setRequests(rq.data);
       if (isHR) {
-        const b = await leaveApi.getBalances({}); setBalances(b.data);
         try { const e = await employeesApi.getEmployees({ limit: 500 }); setEmployees(e.data.data || []); } catch { /* ignore */ }
       }
     } catch { toast.error(t('common.failed_load')); }
@@ -74,7 +77,7 @@ export default function Leave() {
       </div>
 
       <div className="flex gap-1 border-b border-surface-100">
-        {['requests', ...(isHR ? ['balances', 'types', 'report'] : [])].map((tb) => (
+        {['requests', ...(isHR ? ['calendar', 'balances', 'types', 'report'] : [])].map((tb) => (
           <button key={tb} onClick={() => setTab(tb)}
             className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-all ${tab === tb ? 'border-brand-600 text-brand-700' : 'border-transparent text-surface-500 hover:text-surface-700'}`}>{t(`leave.tab_${tb}`)}</button>
         ))}
@@ -126,28 +129,11 @@ export default function Leave() {
         </>
       )}
 
+      {tab === 'calendar' && isHR && <TeamCalendar t={t} />}
+
+      {/* What each person has left, and the ledger behind it (opening, carry-forward, encashment…). */}
       {tab === 'balances' && isHR && (
-        <Card className="!p-0 overflow-hidden">
-          <div className="flex items-center justify-between p-4 border-b border-surface-100">
-            <h3 className="font-semibold text-surface-800">{t('leave.balances_title')}</h3>
-            <Button size="sm" onClick={() => setBalModal(true)}><Plus size={14} /> {t('leave.set_entitlement')}</Button>
-          </div>
-          <table className="w-full text-sm">
-            <thead className="bg-surface-50 text-surface-500 text-xs"><tr>
-              <th className="text-left p-3">{t('leave.th_employee')}</th><th className="text-left p-3">{t('leave.th_type')}</th><th className="p-3">{t('leave.th_year')}</th>
-              <th className="p-3">{t('leave.th_entitled')}</th><th className="p-3">{t('leave.th_used')}</th><th className="p-3">{t('leave.th_remaining')}</th></tr></thead>
-            <tbody>
-              {balances.map((b) => (
-                <tr key={b.id} className="border-t border-surface-50">
-                  <td className="p-3">{b.first_name} {b.last_name}</td><td className="p-3">{b.leave_type_name}</td>
-                  <td className="p-3 text-center">{b.year}</td><td className="p-3 text-center">{b.entitled}</td>
-                  <td className="p-3 text-center">{b.used}</td><td className="p-3 text-center font-semibold text-brand-600">{b.remaining}</td>
-                </tr>
-              ))}
-              {balances.length === 0 && <tr><td colSpan={6} className="p-6 text-center text-surface-400 text-sm">{t('leave.no_balances')}</td></tr>}
-            </tbody>
-          </table>
-        </Card>
+        <LeaveBalancesTab t={t} types={types} employees={employees} onSetEntitlement={() => setBalModal(true)} />
       )}
 
       {tab === 'types' && isHR && (
@@ -182,9 +168,20 @@ export default function Leave() {
                     <Badge variant="info" className="text-[10px]">{t('leave.draws_on', { name: tp.draws_on_name })}</Badge>
                   )}
                   {tp.status === 'Inactive' && <Badge variant="inactive" className="text-[10px]">{t('leave.retired')}</Badge>}
+                  {tp.day_basis === 'working' && <Badge variant="brand" className="text-[10px]">{t('leave_x.working_days_badge')}</Badge>}
+                  {tp.carry_forward_max !== undefined && Number(tp.carry_forward_max) !== 0 && (
+                    <Badge variant="success" className="text-[10px]">
+                      {tp.carry_forward_max == null ? t('leave_x.carry_all_badge') : t('leave_x.carry_badge', { n: Number(tp.carry_forward_max) })}
+                    </Badge>
+                  )}
                   <span className="ms-auto text-xs text-surface-400 shrink-0">
                     {Number(tp.default_days) > 0 ? t('leave.days_per_year', { n: tp.default_days }) : '—'}
                   </span>
+                  {(isAdminUser || tp.company_id != null) && (
+                    <button type="button" onClick={() => setPolicyType(tp)} className="p-1 text-surface-400 hover:text-brand-600" title={t('leave_x.policy_title')} aria-label={t('leave_x.policy_title')}>
+                      <Settings2 size={14} />
+                    </button>
+                  )}
                 </div>
 
                 {(tp.tiers?.length || 0) > 0 && (
@@ -219,6 +216,7 @@ export default function Leave() {
       <RequestModal open={reqModal} onClose={() => setReqModal(false)} types={types} isHR={isHR} employees={employees} onSaved={() => { setReqModal(false); loadAll(); }} />
       <BalanceModal open={balModal} onClose={() => setBalModal(false)} types={types} employees={employees} onSaved={() => { setBalModal(false); loadAll(); }} />
       <TypeModal open={typeModal} onClose={() => setTypeModal(false)} onSaved={() => { setTypeModal(false); loadAll(); }} />
+      {policyType && <TypePolicyModal type={policyType} onClose={() => setPolicyType(null)} onSaved={() => { setPolicyType(null); loadAll(); }} />}
     </div>
   );
 }
@@ -278,7 +276,7 @@ function ReportTab({ employees = [] }) {
                     <td className="p-3"><span className="inline-flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full" style={{ background: s.color || '#7c3aed' }} />{s.name}</span></td>
                     <td className="p-3 text-center">{s.entitled}</td>
                     <td className="p-3 text-center">{s.used}</td>
-                    <td className="p-3 text-center font-semibold text-brand-600">{Math.max(0, s.entitled - s.used)}</td>
+                    <td className="p-3 text-center font-semibold text-brand-600">{Math.max(0, s.entitled + Number(s.adjusted || 0) - s.used)}</td>
                   </tr>
                 ))}
                 {report.summary.length === 0 && <tr><td colSpan={4} className="p-6 text-center text-surface-400 text-sm">{t('leave.no_balances')}</td></tr>}
@@ -406,6 +404,8 @@ function RequestModal({ open, onClose, types, isHR, employees = [], onSaved }) {
             </select>
           </div>
         )}
+        <LeavePreview t={t} leaveTypeId={form.leave_type_id} start={form.start_date} end={form.end_date}
+          partialHours={mode === 'part' ? form.partial_hours : ''} employeeId={isHR ? form.employee_id : ''} />
         <div><label className="text-xs font-semibold text-surface-700">{t('leave.f_reason')}</label><textarea rows={2} value={form.reason} onChange={(e) => setForm((f) => ({ ...f, reason: e.target.value }))} className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1" /></div>
         <div>
           <label className="text-xs font-semibold text-surface-700">{t('leave.f_request_proof')}</label>
@@ -483,6 +483,7 @@ function DecisionModal({ decision, onClose, onDone }) {
             <span className="text-surface-500"> · {req.leave_type_name} · {dayjs(req.start_date).format('MMM D')} → {dayjs(req.end_date).format('MMM D, YYYY')} · {req.days} {t('leave.days')}</span>
           </div>
           {req.approval && <ApprovalProgress t={t} approval={req.approval} />}
+          <LeaveContext t={t} requestId={req.id} />
           {isApprove && chainRunning && (
             <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-1.5">
               <p>{isAdminUser ? t('approvals.override_hint') : t('approvals.chain_running')}</p>
@@ -595,6 +596,64 @@ function TypeModal({ open, onClose, onSaved }) {
           </div>
         </div>
         <Button onClick={save} loading={saving}>{t('common.add')}</Button>
+      </div>
+    </Modal>
+  );
+}
+
+/** How a type counts days and what happens to its unused days at year end. */
+function TypePolicyModal({ type, onClose, onSaved }) {
+  const { t } = useTranslation();
+  const [form, setForm] = useState({
+    day_basis: type.day_basis || 'calendar',
+    carry: type.carry_forward_max == null ? 'all' : Number(type.carry_forward_max) > 0 ? 'some' : 'none',
+    carry_forward_max: type.carry_forward_max == null ? '' : String(Number(type.carry_forward_max)),
+    carry_forward_expiry_months: type.carry_forward_expiry_months == null ? '' : String(type.carry_forward_expiry_months),
+  });
+  const [saving, setSaving] = useState(false);
+  const set = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }));
+  const save = async () => {
+    setSaving(true);
+    try {
+      await leaveApi.updateTypePolicy(type.id, {
+        day_basis: form.day_basis,
+        carry_forward_max: form.carry === 'all' ? null : form.carry === 'none' ? 0 : Number(form.carry_forward_max),
+        carry_forward_expiry_months: form.carry === 'none' || form.carry_forward_expiry_months === '' ? null : Number(form.carry_forward_expiry_months),
+      });
+      toast.success(t('common.updated'));
+      onSaved();
+    } catch (e) { toast.error(apiErr(e, t('leave.action_failed'))); } finally { setSaving(false); }
+  };
+  const cls = 'w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1';
+  return (
+    <Modal open onClose={onClose} title={`${t('leave_x.policy_title')}: ${type.name}`} size="md">
+      <div className="space-y-3">
+        <div><label className="text-xs font-semibold text-surface-700">{t('leave_x.day_basis')}</label>
+          <select value={form.day_basis} onChange={set('day_basis')} className={cls}>
+            <option value="calendar">{t('leave_x.basis_calendar')}</option>
+            <option value="working">{t('leave_x.basis_working')}</option>
+          </select>
+          <p className="text-[10px] text-surface-400 mt-1">{t('leave_x.basis_hint')}</p></div>
+        <div><label className="text-xs font-semibold text-surface-700">{t('leave_x.carry_rule')}</label>
+          <select value={form.carry} onChange={set('carry')} className={cls}>
+            <option value="none">{t('leave_x.carry_none_opt')}</option>
+            <option value="some">{t('leave_x.carry_some_opt')}</option>
+            <option value="all">{t('leave_x.carry_all_opt')}</option>
+          </select></div>
+        {form.carry !== 'none' && (
+          <div className="grid grid-cols-2 gap-3">
+            {form.carry === 'some' && (
+              <div><label className="text-xs font-semibold text-surface-700">{t('leave_x.carry_max')}</label>
+                <input type="number" min="0" step="0.5" value={form.carry_forward_max} onChange={set('carry_forward_max')} className={cls} /></div>
+            )}
+            <div><label className="text-xs font-semibold text-surface-700">{t('leave_x.carry_expiry')}</label>
+              <input type="number" min="1" max="12" value={form.carry_forward_expiry_months} onChange={set('carry_forward_expiry_months')} placeholder={t('leave_x.never')} className={cls} /></div>
+          </div>
+        )}
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose}>{t('common.cancel')}</Button>
+          <Button onClick={save} loading={saving}>{t('common.save')}</Button>
+        </div>
       </div>
     </Modal>
   );

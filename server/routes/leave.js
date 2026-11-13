@@ -9,6 +9,7 @@ import { notify, notifyRole, userIdForEmployee } from '../services/notificationS
 import { annualEntitlement, completedMonths } from '../services/leavePolicyService.js';
 import { resolveEffectiveSchedule } from '../services/workScheduleService.js';
 import { startApproval, cancelApproval, approvalSummaries } from '../services/approvalService.js';
+import { countRequestDays } from '../services/leaveBalanceStore.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -141,7 +142,10 @@ router.get('/balances', async (req, res) => {
     const self = !isHR(req);
     const co = self ? ownRecordsClause() : companyClause(req, 'lb.company_id');
     let sql = `SELECT lb.*, lt.name as leave_type_name, lt.color,
-               (lb.entitled - lb.used) as remaining,
+               (SELECT COALESCE(SUM(la.days), 0) FROM leave_adjustments la
+                 WHERE la.employee_id = lb.employee_id AND la.leave_type_id = lb.leave_type_id AND la.year = lb.year) AS adjusted,
+               (lb.entitled - lb.used + (SELECT COALESCE(SUM(la.days), 0) FROM leave_adjustments la
+                 WHERE la.employee_id = lb.employee_id AND la.leave_type_id = lb.leave_type_id AND la.year = lb.year)) as remaining,
                e.first_name, e.last_name
                FROM leave_balances lb
                JOIN leave_types lt ON lb.leave_type_id = lt.id
@@ -256,12 +260,14 @@ router.get('/report', async (req, res) => {
               lt.deducts_from_leave_type_id,
               COALESCE(lb.entitled, lt.default_days) AS entitled,
               COALESCE(lb.used, 0) AS used,
-              lb.entitled IS NOT NULL AS entitled_is_override
+              lb.entitled IS NOT NULL AS entitled_is_override,
+              (SELECT COALESCE(SUM(la.days), 0) FROM leave_adjustments la
+                WHERE la.employee_id = ? AND la.leave_type_id = lt.id AND la.year = ?) AS adjusted
        FROM leave_types lt
        LEFT JOIN leave_balances lb ON lb.leave_type_id = lt.id AND lb.employee_id = ? AND lb.year = ?
        WHERE lt.status = 'Active' AND (lt.company_id = ? OR lt.company_id IS NULL)
        ORDER BY lt.sort_order, lt.name`,
-      [employeeId, year, emp.company_id]
+      [employeeId, year, employeeId, year, emp.company_id]
     );
 
     // Annual leave accrues with service, so the flat default_days on the type is
@@ -339,6 +345,13 @@ router.post('/requests', validate({
 
     let days = inclusiveDays(start_date, end_date);
     if (days <= 0) return res.status(422).json({ error: 'Validation failed', errors: [{ field: 'end_date', message: 'end_date must be on or after start_date' }] });
+    // A working-day type (study leave) skips rest days and public holidays.
+    const [[ltype]] = await pool.query('SELECT id, day_basis FROM leave_types WHERE id = ?', [leave_type_id]);
+    if (ltype?.day_basis === 'working' && (req.body.partial_hours == null || req.body.partial_hours === '')) {
+      const counted = await countRequestDays(pool, { employeeId, companyId: emp.company_id, type: ltype, start: start_date, end: end_date });
+      if (counted.days <= 0) return res.status(422).json({ error: 'There are no working days in those dates' });
+      days = counted.days;
+    }
 
     // Part of a day, entered in hours.
     //
@@ -516,8 +529,12 @@ router.put('/requests/:id/approve', authorize('admin', 'hr_manager'), async (req
       [lr.employee_id, lr.leave_type_id, year]
     );
 
-    // Paid leave types are capped by entitlement; unpaid leave is never blocked.
-    const remaining = Number(bal.entitled) - Number(bal.used);
+    // Paid leave types are capped by entitlement plus the ledger (opening,
+    // carried, corrected, encashed days); unpaid leave is never blocked.
+    const [[ledger]] = await conn.query(
+      'SELECT COALESCE(SUM(days), 0) AS days FROM leave_adjustments WHERE employee_id = ? AND leave_type_id = ? AND year = ?',
+      [lr.employee_id, lr.leave_type_id, year]);
+    const remaining = Number(bal.entitled) - Number(bal.used) + Number(ledger.days || 0);
     if (type?.is_paid && Number(lr.days) > remaining) {
       await conn.rollback();
       return res.status(400).json({ error: `Insufficient balance: ${remaining} day(s) remaining, ${lr.days} requested` });

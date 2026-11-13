@@ -135,7 +135,10 @@ export function buildSettlement(input) {
   const accrued = accruedAnnualLeave(emp.start_date, lwd);
   const taken = Math.max(0, Number(input.annualTakenThisYear) || 0);
   const carry = Math.max(0, Number(input.carryForwardDays) || 0);
-  const computedLeave = round2(Math.max(0, accrued - taken) + carry);
+  // Opening balances, carried days, corrections, lapses and encashments of the
+  // leaving year (leave_adjustments), signed.
+  const ledger = Number(input.ledgerDays) || 0;
+  const computedLeave = round2(Math.max(0, accrued - taken + ledger) + carry);
   const override = input.leaveDaysOverride;
   const leaveDays = override != null && override !== '' && Number.isFinite(Number(override))
     ? round2(Math.max(0, Number(override))) : computedLeave;
@@ -145,7 +148,7 @@ export function buildSettlement(input) {
       quantity: leaveDays, rate: round2(dailyBasic),
       explanation: (override != null && override !== ''
         ? `${leaveDays} day(s) confirmed by HR`
-        : `accrued ${accrued} - taken ${taken}${carry ? ` + carried forward ${carry}` : ''} = ${leaveDays} day(s)`)
+        : `accrued ${accrued} - taken ${taken}${ledger ? ` ${ledger > 0 ? '+' : '-'} balance adjustments ${Math.abs(ledger)}` : ''}${carry ? ` + carried forward ${carry}` : ''} = ${leaveDays} day(s)`)
         + ` x ${money(dailyBasic)} (basic ${money(basic)} / 30)`,
     });
   }

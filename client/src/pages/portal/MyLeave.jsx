@@ -11,11 +11,12 @@ import Select from '@components/ui/Select';
 import EmptyState from '@components/ui/EmptyState';
 import PortalShell from './PortalShell';
 import ApprovalProgress from '@components/approvals/ApprovalProgress';
+import LeavePreview from '@components/leave/LeavePreview';
 import { useMyCompany } from './useMyCompany';
 import LeaveReport from './components/LeaveReport';
 import { printElementWithLetterhead, waitForPaint } from '@utils/printDoc';
 import { toast } from 'react-toastify';
-import { CalendarDays, Download, Plus, Send, X } from 'lucide-react';
+import { CalendarDays, Download, Plus, Send, X, CalendarPlus } from 'lucide-react';
 import dayjs from 'dayjs';
 
 /** One round trip for everything the page shows. Failures degrade to empty. */
@@ -45,7 +46,9 @@ export default function MyLeave() {
   const [exporting, setExporting] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ leave_type_id: '', start_date: '', end_date: '', reason: '' });
+  const [form, setForm] = useState({ leave_type_id: '', start_date: '', end_date: '', reason: '', partial_hours: '' });
+  // Full days, or a few hours of one day (a medical appointment, a school run).
+  const [mode, setMode] = useState('full');
   const reportRef = useRef(null);
 
   // The fetch is a plain function outside the component and the state writes
@@ -76,10 +79,6 @@ export default function MyLeave() {
   const pending = requests.filter((r) => r.status === 'Pending').length;
 
   const requestedDays = inclusiveDays(form.start_date, form.end_date);
-  const chosenBalance = shown.find((b) => String(b.leave_type_id) === String(form.leave_type_id));
-  // Advisory only — HR decides. Blocking here would stop a legitimate request
-  // for a type whose entitlement has simply not been set up yet.
-  const overBalance = chosenBalance && requestedDays > Number(chosenBalance.remaining || 0);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -87,6 +86,7 @@ export default function MyLeave() {
       toast.error(t('portal.req_missing')); return;
     }
     if (requestedDays <= 0) { toast.error(t('portal.req_bad_range')); return; }
+    if (mode === 'part' && !(Number(form.partial_hours) > 0)) { toast.error(t('leave_x.hours_required')); return; }
     setSaving(true);
     try {
       await leaveApi.createRequest({
@@ -94,14 +94,28 @@ export default function MyLeave() {
         start_date: form.start_date,
         end_date: form.end_date,
         reason: form.reason.trim() || undefined,
+        ...(mode === 'part' ? { partial_hours: Number(form.partial_hours) } : {}),
       });
       toast.success(t('portal.req_sent'));
       setFormOpen(false);
-      setForm({ leave_type_id: '', start_date: '', end_date: '', reason: '' });
+      setForm({ leave_type_id: '', start_date: '', end_date: '', reason: '', partial_hours: '' });
+      setMode('full');
       reload();
     } catch (err) {
       toast.error(apiErr(err, t('portal.req_failed')));
     } finally { setSaving(false); }
+  };
+
+  // An approved leave as a calendar file, to add to Outlook or Google Calendar.
+  const addToCalendar = async (r) => {
+    try {
+      const { data } = await leaveApi.downloadIcs(r.id);
+      const url = URL.createObjectURL(data);
+      const a = document.createElement('a');
+      a.href = url; a.download = `leave-${r.id}.ics`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) { toast.error(apiErr(err, t('common.operation_failed'))); }
   };
 
   const cancel = async (r) => {
@@ -224,6 +238,12 @@ export default function MyLeave() {
                     <td className="px-5 py-3 text-end">
                       {/* Only a request nobody has decided yet is the employee's
                           to withdraw. */}
+                      {r.status === 'Approved' && (
+                        <button onClick={() => addToCalendar(r)} title={t('leave_x.add_to_calendar')} aria-label={t('leave_x.add_to_calendar')}
+                          className="p-1.5 text-surface-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors">
+                          <CalendarPlus size={14} />
+                        </button>
+                      )}
                       {r.status === 'Pending' && (
                         <button onClick={() => cancel(r)} title={t('portal.withdraw')}
                           className="p-1.5 text-surface-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
@@ -247,21 +267,37 @@ export default function MyLeave() {
             onChange={(e) => setForm((p) => ({ ...p, leave_type_id: e.target.value }))}
             options={types.map((ty) => ({ value: String(ty.id), label: ty.name }))}
             placeholder={t('common.select', 'Select...')} />
-          <div className="grid grid-cols-2 gap-4">
-            <Input type="date" label={t('portal.from')} required value={form.start_date}
-              onChange={(e) => setForm((p) => ({ ...p, start_date: e.target.value }))} />
-            <Input type="date" label={t('portal.to')} required value={form.end_date} min={form.start_date || undefined}
-              onChange={(e) => setForm((p) => ({ ...p, end_date: e.target.value }))} />
+          <div className="flex gap-1 bg-surface-100 rounded-xl p-1">
+            {['full', 'part'].map((m) => (
+              <button key={m} type="button"
+                onClick={() => { setMode(m); if (m === 'part') setForm((p) => ({ ...p, end_date: p.start_date })); }}
+                className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${mode === m ? 'bg-white text-brand-700 shadow-sm' : 'text-surface-500 hover:text-surface-700'}`}>
+                {t(`leave.mode_${m}`)}
+              </button>
+            ))}
           </div>
-
-          {requestedDays > 0 && (
-            <div className={`text-xs rounded-xl border p-3 ${overBalance
-              ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-surface-50 border-surface-200 text-surface-600'}`}>
-              {t('portal.req_days', { days: requestedDays })}
-              {chosenBalance && ` · ${t('portal.req_balance', { remaining: Number(chosenBalance.remaining || 0) })}`}
-              {overBalance && <div className="mt-1 font-medium">{t('portal.req_over_balance')}</div>}
+          {mode === 'full' ? (
+            <div className="grid grid-cols-2 gap-4">
+              <Input type="date" label={t('portal.from')} required value={form.start_date}
+                onChange={(e) => setForm((p) => ({ ...p, start_date: e.target.value }))} />
+              <Input type="date" label={t('portal.to')} required value={form.end_date} min={form.start_date || undefined}
+                onChange={(e) => setForm((p) => ({ ...p, end_date: e.target.value }))} />
             </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <Input type="date" label={t('leave.f_date')} required value={form.start_date}
+                  onChange={(e) => setForm((p) => ({ ...p, start_date: e.target.value, end_date: e.target.value }))} />
+                <Input type="number" min="0.25" max="12" step="0.25" label={t('leave.f_hours')} required value={form.partial_hours}
+                  onChange={(e) => setForm((p) => ({ ...p, partial_hours: e.target.value }))} />
+              </div>
+              <p className="text-[11px] text-surface-500">{t('leave.hours_hint')}</p>
+            </>
           )}
+
+          {/* Days counted, how they are paid and the balance left — advisory, HR decides. */}
+          <LeavePreview t={t} leaveTypeId={form.leave_type_id} start={form.start_date} end={form.end_date}
+            partialHours={mode === 'part' ? form.partial_hours : ''} />
 
           <div>
             <label className="block text-sm font-medium text-surface-700 mb-1.5">{t('portal.reason')}</label>

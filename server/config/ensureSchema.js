@@ -124,6 +124,12 @@ const COLUMN_GUARDS = [
   },
   // A one-time item paid by a settlement rather than a monthly run.
   { table: 'payroll_adjustments', column: 'settlement_id', ddl: 'ALTER TABLE payroll_adjustments ADD COLUMN settlement_id INT NULL' },
+  // Leave policy per type (services/leaveBalanceService.js): count calendar or
+  // working days; how many unused days carry into the next year (NULL = all,
+  // 0 = none) and after how many months of that year they lapse (NULL = never).
+  { table: 'leave_types', column: 'day_basis', ddl: "ALTER TABLE leave_types ADD COLUMN day_basis ENUM('calendar','working') NOT NULL DEFAULT 'calendar'" },
+  { table: 'leave_types', column: 'carry_forward_max', ddl: 'ALTER TABLE leave_types ADD COLUMN carry_forward_max DECIMAL(6,2) NULL DEFAULT 0' },
+  { table: 'leave_types', column: 'carry_forward_expiry_months', ddl: 'ALTER TABLE leave_types ADD COLUMN carry_forward_expiry_months TINYINT NULL' },
 ];
 
 // Tiny key/value store for global app settings (e.g. timezone).
@@ -724,6 +730,47 @@ const TABLE_GUARDS = [
      INDEX idx_osl_offboarding (offboarding_id),
      FOREIGN KEY (offboarding_id) REFERENCES offboarding_records(id) ON DELETE CASCADE
    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  // The leave balance ledger (services/leaveBalanceService.js). Signed days on
+  // top of the yearly entitlement, each with a reason. source_year is set on
+  // the rows a year-end run writes, so running it again updates, not repeats.
+  `CREATE TABLE IF NOT EXISTS leave_adjustments (
+     id                    INT AUTO_INCREMENT PRIMARY KEY,
+     company_id            INT NOT NULL,
+     employee_id           INT NOT NULL,
+     leave_type_id         INT NOT NULL,
+     year                  SMALLINT NOT NULL,
+     kind                  ENUM('Opening','Adjustment','Carry Forward','Lapse','Encashment') NOT NULL,
+     days                  DECIMAL(6,2) NOT NULL,
+     reason                VARCHAR(500) NOT NULL,
+     expires_on            DATE NULL,
+     source_year           SMALLINT NULL,
+     payroll_adjustment_id INT NULL,
+     created_by            INT NULL,
+     created_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     UNIQUE KEY uq_leave_adj_run (employee_id, leave_type_id, year, kind, source_year),
+     INDEX idx_leave_adj_emp_year (employee_id, year),
+     INDEX idx_leave_adj_company (company_id),
+     FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE,
+     FOREIGN KEY (leave_type_id) REFERENCES leave_types(id) ON DELETE CASCADE
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+];
+
+// Rows the app needs, added once after the columns exist. Each is skipped when
+// a group-wide type of that name is already there, so HR's edits are kept.
+const SEED_GUARDS = [
+  // Decree-Law 33/2021 art. 32: ten working days a year to sit exams, after two
+  // years of service, for a student at an accredited UAE institution.
+  `INSERT INTO leave_types (company_id, name, default_days, is_paid, paid_mode, accrual, eligibility_months,
+       requires_document, day_basis, carry_forward_max, sort_order, color, description)
+   SELECT NULL, 'Study Leave', 10, 1, 'Full', 'Fixed', 24, 1, 'working', 0, 65, '#0EA5E9',
+       'Ten working days a year to sit examinations, for an employee with at least two years of service who is enrolled at an accredited institution in the UAE (Federal Decree-Law 33 of 2021, article 32). Proof of enrolment and the exam timetable are required.'
+    WHERE NOT EXISTS (SELECT 1 FROM leave_types WHERE company_id IS NULL AND name = 'Study Leave')`,
+  // Not a statutory leave under the current law: company policy, unpaid, once.
+  `INSERT INTO leave_types (company_id, name, default_days, is_paid, paid_mode, accrual, max_days_per_request,
+       requires_document, day_basis, carry_forward_max, sort_order, color, description)
+   SELECT NULL, 'Hajj Leave', 30, 0, 'None', 'Per Event', 30, 1, 'calendar', 0, 75, '#10B981',
+       'Up to thirty days, unpaid, once during employment, to perform Hajj. Company policy rather than a statutory entitlement; subject to Management approval and the Hajj permit.'
+    WHERE NOT EXISTS (SELECT 1 FROM leave_types WHERE company_id IS NULL AND name = 'Hajj Leave')`,
 ];
 
 // Enum values that must exist, widened in place. COLUMN_GUARDS only covers
@@ -737,6 +784,8 @@ const ENUM_GUARDS = [
   { table: 'attendance', column: 'source', values: ['Hik Central', 'Self Service'], suffix: " NOT NULL DEFAULT 'Manual'" },
   // Payroll v2: a run is submitted for approval before it is approved.
   { table: 'payroll_runs', column: 'status', values: ['Pending Approval'], suffix: " NOT NULL DEFAULT 'Draft'" },
+  // Unused leave paid out through a monthly run.
+  { table: 'payroll_adjustments', column: 'category', values: ['Leave Encashment'], suffix: " NOT NULL DEFAULT 'Other'" },
 ];
 
 export async function ensureSchema() {
@@ -775,5 +824,11 @@ export async function ensureSchema() {
     } catch (e) {
       console.error(`ensureSchema(enum ${g.table}.${g.column}) failed:`, e.message);
     }
+  }
+  for (const sql of SEED_GUARDS) {
+    try {
+      const [r] = await pool.query(sql);
+      if (r.affectedRows) console.log('🔧 ensureSchema: seeded a row');
+    } catch (e) { console.error('ensureSchema(seed) failed:', e.message); }
   }
 }

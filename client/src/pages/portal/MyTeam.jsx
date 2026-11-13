@@ -6,6 +6,7 @@ import Badge from '@components/ui/Badge';
 import EmptyState from '@components/ui/EmptyState';
 import PortalShell from './PortalShell';
 import * as portalApi from '@api/portalApi';
+import TeamCalendar from '@components/leave/TeamCalendar';
 
 const todayVariant = { present: 'success', late: 'warning', absent: 'danger', leave: 'info', none: 'inactive' };
 
@@ -96,6 +97,8 @@ export default function MyTeam() {
           ))}
         </div>
       )}
+      {/* Who is off when, this month and the next ones. */}
+      <TeamCalendar t={t} />
       <p className="text-[11px] text-surface-400">{t('team.privacy_note')}</p>
     </PortalShell>
   );
