@@ -71,6 +71,8 @@ export default function Employees() {
   const [editForm, setEditForm] = useState({});
   const [savingProfile, setSavingProfile] = useState(false);
   const [departments, setDepartments] = useState([]);
+  // Everyone in the organization who can be picked as a direct manager.
+  const [managerOptions, setManagerOptions] = useState([]);
   const [creatingLogin, setCreatingLogin] = useState(false);
   const [newLoginCreds, setNewLoginCreds] = useState(null);
   // Photo bytes come from an authenticated endpoint, so an <img src> can't
@@ -148,6 +150,10 @@ export default function Employees() {
     setEditMode(false);
     setNewLoginCreds(null);
     if (emp.photo_path && !photoUrls[emp.id]) loadPhotos([emp]); // in case the list fetch missed it
+    // The list row lacks a few joined fields (the manager's name); fill them in.
+    employeesApi.getEmployee(emp.id)
+      .then(({ data }) => setSelectedEmp((prev) => (prev && prev.id === data.id ? { ...prev, ...data } : prev)))
+      .catch(() => {});
   };
 
   // Deep link from the Document Radar. Fetched by id rather than looked up in
@@ -172,11 +178,16 @@ export default function Employees() {
       start_date: selectedEmp.start_date ? dayjs(selectedEmp.start_date).format('YYYY-MM-DD') : '',
       status: selectedEmp.status || 'Active',
       labour_contract_status: selectedEmp.labour_contract_status || 'Not Issued',
+      manager_employee_id: selectedEmp.manager_employee_id ? String(selectedEmp.manager_employee_id) : '',
     });
     try {
       const { data } = await departmentsApi.getDepartments({ company_id: selectedEmp.company_id });
       setDepartments(data.data || data || []);
     } catch { /* ignore */ }
+    try {
+      const { data } = await employeesApi.getOrgPeople();
+      setManagerOptions(data || []);
+    } catch { setManagerOptions([]); }
     setEditMode(true);
   };
 
@@ -193,6 +204,7 @@ export default function Employees() {
         basic_salary: editForm.basic_salary === '' ? null : Number(editForm.basic_salary),
         full_salary: editForm.full_salary === '' ? null : Number(editForm.full_salary),
         start_date: editForm.start_date || null,
+        manager_employee_id: editForm.manager_employee_id ? Number(editForm.manager_employee_id) : null,
       };
       await employeesApi.updateEmployee(selectedEmp.id, patch);
       const { data } = await employeesApi.getEmployee(selectedEmp.id);
@@ -642,6 +654,15 @@ export default function Employees() {
                         {departments.map(d => <option key={d.id} value={String(d.id)}>{d.name}</option>)}
                       </select>
                       <input value={editForm.job_title_text} onChange={(e) => setEditForm(f => ({ ...f, job_title_text: e.target.value }))} placeholder={t('employees.job_title', 'Job title')} className="w-full text-xs bg-white border border-surface-200 rounded-lg px-2 py-1.5" />
+                      <div>
+                        <label className="block text-surface-500 text-[10px] mb-0.5">{t('org.manager')}</label>
+                        <select value={editForm.manager_employee_id} onChange={(e) => setEditForm(f => ({ ...f, manager_employee_id: e.target.value }))} className="w-full text-xs bg-white border border-surface-200 rounded-lg px-2 py-1.5">
+                          <option value="">{t('org.no_manager')}</option>
+                          {managerOptions.filter((p) => p.id !== selectedEmp.id).map((p) => (
+                            <option key={p.id} value={String(p.id)}>{p.name}{p.job_title ? ` — ${p.job_title}` : ''}{p.short_code ? ` (${p.short_code})` : ''}</option>
+                          ))}
+                        </select>
+                      </div>
                       <select value={editForm.status} onChange={(e) => setEditForm(f => ({ ...f, status: e.target.value }))} className="w-full text-xs bg-white border border-surface-200 rounded-lg px-2 py-1.5">
                         {['Onboarding', 'Active', 'Offboarding', 'Exited'].map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
@@ -663,6 +684,7 @@ export default function Employees() {
                     <div className="flex justify-between"><span className="text-surface-500">Company:</span> <span className="font-semibold text-surface-800">{selectedEmp.company_name || 'N/A'}</span></div>
                     <div className="flex justify-between"><span className="text-surface-500">Department:</span> <span className="font-semibold text-surface-800">{selectedEmp.department_name || 'N/A'}</span></div>
                     <div className="flex justify-between"><span className="text-surface-500">Job Title:</span> <span className="font-semibold text-surface-800">{selectedEmp.job_title_text || selectedEmp.job_title_name || 'N/A'}</span></div>
+                    <div className="flex justify-between"><span className="text-surface-500">{t('org.manager')}:</span> <span className="font-semibold text-surface-800">{selectedEmp.manager_name || t('org.no_manager')}</span></div>
                     <div className="flex justify-between"><span className="text-surface-500">Status:</span> <Badge variant={selectedEmp.status === 'Active' ? 'success' : 'neutral'}>{selectedEmp.status}</Badge></div>
                     <div className="flex justify-between items-center">
                       <span className="text-surface-500">{t('employees.labour_contract_status')}</span>

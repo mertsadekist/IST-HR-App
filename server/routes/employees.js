@@ -18,6 +18,7 @@ import { ensureUploadDir, uploadPath } from '../config/storage.js';
 import { getEmployeeHoldings, buildClearance } from '../services/holdingsService.js';
 import { waiveOpenCasesFor } from '../services/ownerExemption.js';
 import { buildRadar, readEmployeeDocFields, expiryState } from '../services/employeeDocumentExpiryService.js';
+import { wouldCreateCycle } from '../services/orgService.js';
 
 const upload = multer({
   dest: ensureUploadDir('employee_docs'),
@@ -222,11 +223,31 @@ router.get('/documents/radar', authorize('admin', 'hr_manager'), async (req, res
   } catch (err) { console.error('GET /employees/documents/radar error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
+// GET /api/employees/org/people — current staff with their manager, for the
+// people org chart and the manager picker. No salary or document fields.
+router.get('/org/people', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
+  try {
+    const co = companyClause(req, 'e.company_id');
+    const [rows] = await pool.query(
+      `SELECT e.id, e.manager_employee_id, e.company_id, e.status, e.photo_path,
+              TRIM(CONCAT(COALESCE(e.first_name, ''), ' ', COALESCE(e.last_name, ''))) AS name,
+              COALESCE(jt.title, e.job_title_text) AS job_title, d.name AS department_name, c.short_code
+         FROM employees e
+         LEFT JOIN job_titles jt ON jt.id = e.job_title_id
+         LEFT JOIN departments d ON d.id = e.department_id
+         LEFT JOIN companies c ON c.id = e.company_id
+        WHERE e.status IN ('Onboarding','Active','Offboarding')` + co.clause + `
+        ORDER BY name`, co.params);
+    res.json(rows.map((r) => ({ ...r, has_photo: !!r.photo_path, photo_path: undefined })));
+  } catch (err) { console.error('GET /employees/org/people error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
 // GET /api/employees/:id (company-scoped)
 router.get('/:id', async (req, res) => {
   try {
     const co = companyClause(req, 'e.company_id');
-    const [rows] = await pool.query(`SELECT e.*, c.name as company_name, c.short_code, d.name as department_name, jt.title as job_title_name, u.id as user_id, u.username
+    const [rows] = await pool.query(`SELECT e.*, c.name as company_name, c.short_code, d.name as department_name, jt.title as job_title_name, u.id as user_id, u.username,
+               (SELECT TRIM(CONCAT(COALESCE(m.first_name, ''), ' ', COALESCE(m.last_name, ''))) FROM employees m WHERE m.id = e.manager_employee_id) AS manager_name
       FROM employees e LEFT JOIN companies c ON e.company_id = c.id LEFT JOIN departments d ON e.department_id = d.id LEFT JOIN job_titles jt ON e.job_title_id = jt.id
       LEFT JOIN users u ON u.employee_id = e.id WHERE e.id = ?` + co.clause, [req.params.id, ...co.params]);
     if (!rows.length) return res.status(404).json({ error: 'Employee not found' });
@@ -685,6 +706,25 @@ router.put('/:id', authorize('admin', 'hr_manager'), async (req, res) => {
         return res.status(403).json({ error: 'Only an admin can mark an employee as a company owner' });
       }
       data.is_owner = req.body.is_owner === true || req.body.is_owner === 1 || req.body.is_owner === '1' || req.body.is_owner === 'true';
+    }
+    // Direct manager: any current employee of the organization (a manager can sit
+    // in another of its companies), never the person themselves or anyone below
+    // them — that would make a loop with no top.
+    if (req.body.manager_employee_id !== undefined) {
+      const mid = req.body.manager_employee_id === '' || req.body.manager_employee_id == null
+        ? null : Number(req.body.manager_employee_id);
+      if (mid != null) {
+        if (!Number.isInteger(mid)) return res.status(422).json({ error: 'Invalid manager' });
+        const [[mgr]] = await pool.query("SELECT id, status FROM employees WHERE id = ?", [mid]);
+        if (!mgr) return res.status(422).json({ error: 'Manager not found' });
+        if (mgr.status === 'Exited') return res.status(422).json({ error: 'The manager has left the company' });
+        const [links] = await pool.query('SELECT id, manager_employee_id FROM employees WHERE manager_employee_id IS NOT NULL');
+        const managerOf = new Map(links.map((l) => [l.id, l.manager_employee_id]));
+        if (wouldCreateCycle(Number(req.params.id), mid, managerOf)) {
+          return res.status(422).json({ error: 'That person reports to this employee, so they cannot be their manager' });
+        }
+      }
+      data.manager_employee_id = mid;
     }
     if (!Object.keys(data).length) return res.status(400).json({ error: 'Nothing to update' });
 

@@ -40,3 +40,6 @@ export const getEmployeeHoldings = (id, params) => api.get(`/employees/${id}/hol
 export const updateEmployeeDocument = (id, docId, data) => api.put(`/employees/${id}/documents/${docId}`, data);
 // Passports, visas, Emirates IDs and labour cards by expiry, and who is missing one.
 export const getDocumentRadar = (params) => api.get('/employees/documents/radar', { params });
+
+// Current staff with their direct manager: the people org chart and the manager picker.
+export const getOrgPeople = (params) => api.get('/employees/org/people', { params });
