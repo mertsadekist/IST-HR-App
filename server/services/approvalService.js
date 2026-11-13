@@ -19,7 +19,7 @@
  */
 import { notifyUsers } from './notificationService.js';
 
-export const PROCESSES = ['leave', 'overtime'];
+export const PROCESSES = ['leave', 'overtime', 'expense', 'advance'];
 export const STEP_TYPES = ['direct_manager', 'second_manager', 'role', 'user'];
 export const STEP_ROLES = ['admin', 'hr_manager', 'accountant'];
 

@@ -8,7 +8,7 @@ import Button from '@components/ui/Button';
 import * as approvalsApi from '@api/approvalsApi';
 import { stepLabel } from '@utils/approvals';
 
-const PROCESSES = ['leave', 'overtime'];
+const PROCESSES = ['leave', 'overtime', 'expense', 'advance'];
 const blankStep = { type: 'direct_manager' };
 
 /**
@@ -80,7 +80,7 @@ export default function ApprovalChains() {
           {PROCESSES.map((p) => (
             <button key={p} type="button" onClick={() => setProcess(p)}
               className={`px-3 py-2 rounded-lg text-xs font-medium ${process === p ? 'bg-brand-600 text-white' : 'text-surface-600 hover:bg-surface-100'}`}>
-              {p === 'leave' ? t('approvals.process_leave') : t('approvals.process_overtime')}
+              {t(`approvals.process_${p}`)}
             </button>
           ))}
         </div>

@@ -62,6 +62,7 @@ const buildMenuGroups = (t) => [
         { path: '/attendance/sync', icon: Fingerprint, label: t('nav.attendance_sync'), roles: HR_ONLY },
         { path: '/attendance/exceptions', icon: ScanEye, label: t('nav.attendance_exceptions'), roles: HR_ONLY },
         { path: '/overtime', icon: Timer, label: t('nav.overtime'), roles: HR_AND_FINANCE },
+        { path: '/requests', icon: Inbox, label: t('nav.employee_requests'), roles: HR_AND_FINANCE },
         { path: '/payroll-runs', icon: Banknote, label: t('nav.payroll_runs', 'Payroll Runs'), roles: HR_AND_FINANCE },
         { path: '/payroll-items', icon: HandCoins, label: t('nav.payroll_items'), roles: HR_AND_FINANCE },
         { path: '/salary-reviews', icon: TrendingUp, label: t('nav.salary_reviews', 'Salary Reviews'), roles: HR_ONLY },
@@ -125,6 +126,7 @@ const buildMenuGroups = (t) => [
         { path: '/portal/attendance', icon: Clock, label: t('nav.my_attendance') },
         { path: '/portal/salary', icon: Banknote, label: t('nav.my_salary') },
         { path: '/portal/leave', icon: CalendarDays, label: t('nav.my_leave') },
+        { path: '/portal/requests', icon: Inbox, label: t('nav.my_requests') },
         // Only for people who manage someone (see hasTeam in Sidebar).
         { path: '/portal/team', icon: Users, label: t('nav.my_team'), requiresTeam: true },
         // For anyone who is an approver: a manager, or named in a chain step.
