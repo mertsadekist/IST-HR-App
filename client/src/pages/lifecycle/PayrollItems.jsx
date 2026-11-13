@@ -246,7 +246,9 @@ export default function PayrollItems() {
                     <td className="p-3">{a.label}{a.note && <span className="block text-[11px] text-surface-400">{a.note}</span>}</td>
                     <td className={`p-3 text-center font-mono ${a.kind === 'earning' ? 'text-emerald-700' : 'text-red-600'}`}>{a.kind === 'earning' ? '+' : '−'}{money(a.amount)}</td>
                     <td className="p-3">
-                      {a.locked
+                      {a.settlement_id
+                        ? <Badge variant="success" className="text-[10px]"><Lock size={10} /> {t('payroll_items.in_settlement')}</Badge>
+                        : a.locked
                         ? <Badge variant="success" className="text-[10px]"><Lock size={10} /> {t('payroll_items.in_run', {
                           status: t(`payroll_runs.st_${String(a.run_status).toLowerCase().replace(/\s+/g, '_')}`, a.run_status) })}</Badge>
                         : a.run_status === 'Draft'

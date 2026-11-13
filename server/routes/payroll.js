@@ -302,7 +302,7 @@ router.post('/runs/generate', authorize('admin', 'hr_manager', 'accountant'), va
     // foreign key, and the one-time items become available again.
     const [adjRows] = await conn.query(
       `SELECT id, employee_id, kind, category, label, amount, note FROM payroll_adjustments
-        WHERE company_id = ? AND period = ? AND item_id IS NULL
+        WHERE company_id = ? AND period = ? AND item_id IS NULL AND settlement_id IS NULL
         ORDER BY id`, [companyId, period]);
     const adjustmentsByEmployee = groupBy(adjRows, 'employee_id');
 
@@ -1037,8 +1037,9 @@ router.get('/adjustments', authorize('admin', 'hr_manager', 'accountant'), async
          LEFT JOIN payroll_runs pr ON pr.id = pi.run_id
         ${where}
         ORDER BY a.period DESC, a.created_at DESC`, params);
+    // Locked once a submitted run, or a paid final settlement, has taken it.
     res.json(rows.map((r) => ({ ...r, amount: Number(r.amount),
-      locked: !!r.run_status && r.run_status !== 'Draft' })));
+      locked: (!!r.run_status && r.run_status !== 'Draft') || !!r.settlement_id })));
   } catch (err) { console.error('GET /payroll/adjustments error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
@@ -1079,7 +1080,7 @@ router.delete('/adjustments/:id', authorize('admin'), async (req, res) => {
   try {
     const co = companyClause(req, 'a.company_id');
     const [[adj]] = await pool.query(
-      `SELECT a.id, a.label, a.amount, a.period, pr.status AS run_status
+      `SELECT a.id, a.label, a.amount, a.period, a.settlement_id, pr.status AS run_status
          FROM payroll_adjustments a
          LEFT JOIN payroll_items pi ON pi.id = a.item_id
          LEFT JOIN payroll_runs pr ON pr.id = pi.run_id
@@ -1088,6 +1089,7 @@ router.delete('/adjustments/:id', authorize('admin'), async (req, res) => {
     if (adj.run_status && adj.run_status !== 'Draft') {
       return res.status(409).json({ error: `Already in a ${adj.run_status} payroll run` });
     }
+    if (adj.settlement_id) return res.status(409).json({ error: 'Already paid in a final settlement' });
     await pool.query('DELETE FROM payroll_adjustments WHERE id = ?', [adj.id]);
     await addAudit(pool, req.user, 'Payroll', 'One-time Item Deleted', `"${adj.label}" ${Number(adj.amount).toFixed(2)} (${adj.period}) deleted`);
     res.json({ success: true, needs_regenerate: adj.run_status === 'Draft' });
