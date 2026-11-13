@@ -50,7 +50,7 @@ export function groupLeaveByType(dayLines) {
  * @returns {{kind:'earning'|'deduction', code:string, label:string, quantity:number|null,
  *            rate:number|null, amount:number, explanation:string, sort:number}[]}
  */
-export function buildPayslipLines({ calc, components = [], leaveByType = [] }) {
+export function buildPayslipLines({ calc, components = [], leaveByType = [], extras = [] }) {
   const lines = [];
   const earn = (code, label, amount, explanation = '') =>
     lines.push({ kind: 'earning', code, label, quantity: null, rate: null, amount: round2(amount), explanation });
@@ -106,10 +106,25 @@ export function buildPayslipLines({ calc, components = [], leaveByType = [] }) {
       explanation: `${d.quantity} day(s) x ${money(calc.daily_rate)} (gross ${money(calc.gross)} / 30)`,
     });
   }
-  if (calc.extra_deductions > 0) {
-    lines.push({ kind: 'deduction', code: 'EXTRA', label: 'Other deductions', quantity: null, rate: null,
-      amount: round2(calc.extra_deductions), explanation: '' });
-  }
+  // One-time items and loan instalments, each on its own line. `extras` are
+  // {kind, code, label, amount, explanation?}; whatever part of the totals they do
+  // not account for still gets a line, so the payslip always adds up.
+  const itemised = (kind, total, restCode, restLabel) => {
+    let acc = 0;
+    for (const x of (extras || []).filter((e) => e.kind === kind && Number(e.amount) > 0)) {
+      acc = round2(acc + round2(x.amount));
+      lines.push({ kind, code: x.code, label: x.label || x.code, quantity: null, rate: null,
+        amount: round2(x.amount), explanation: x.explanation || '' });
+    }
+    const rest = round2(total - acc);
+    if (rest > 0) lines.push({ kind, code: restCode, label: restLabel, quantity: null, rate: null, amount: rest, explanation: '' });
+  };
+  // Earnings first, so the earning lines stay together on the payslip.
+  const deductionLines = lines.filter((l) => l.kind === 'deduction');
+  lines.length = lines.length - deductionLines.length;
+  itemised('earning', calc.additions || 0, 'ADDITION', 'Other additions');
+  lines.push(...deductionLines);
+  itemised('deduction', calc.extra_deductions, 'EXTRA', 'Other deductions');
   return lines.map((l, i) => ({ ...l, sort: i }));
 }
 
@@ -233,4 +248,31 @@ export function checkRun({ items, company, variance = [] }) {
     if (v.flagged && v.status === 'new') add(warnings, v, 'NEW_IN_RUN');
   }
   return { errors, warnings, ok: errors.length === 0 };
+}
+
+/**
+ * This period's instalment of each loan or salary advance.
+ *
+ * A loan is repaid in equal instalments from its start month until nothing is
+ * outstanding; the last instalment is whatever is left, never more. `repaid` is
+ * what earlier runs already took (runs in progress included, so regenerating a
+ * Draft does not double-count; the caller excludes the run being regenerated).
+ *
+ * @param {{id:number, type:string, principal:number, instalment:number,
+ *          start_period:string, status:string, repaid:number}[]} loans
+ * @param {string} period 'YYYY-MM'
+ * @returns {{loan_id:number, type:string, amount:number, outstanding_after:number}[]}
+ */
+export function loanInstalmentsFor(loans, period) {
+  const out = [];
+  for (const l of loans || []) {
+    if (l.status !== 'Active') continue;
+    if (!l.start_period || String(l.start_period) > period) continue;
+    const outstanding = round2(Number(l.principal) - Number(l.repaid || 0));
+    if (outstanding <= 0) continue;
+    const amount = round2(Math.min(Number(l.instalment) || outstanding, outstanding));
+    if (amount <= 0) continue;
+    out.push({ loan_id: l.id, type: l.type, amount, outstanding_after: round2(outstanding - amount) });
+  }
+  return out;
 }

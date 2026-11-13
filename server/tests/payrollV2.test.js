@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import { computePayrollItem } from '../services/payrollService.js';
 import {
-  buildPayslipLines, groupLeaveByType, activeComponents, isValidUaeIban, computeVariance, checkRun,
+  buildPayslipLines, groupLeaveByType, activeComponents, isValidUaeIban, computeVariance, checkRun, loanInstalmentsFor,
 } from '../services/payrollV2.js';
 
 const sum = (lines, kind) => Math.round(lines.filter((l) => l.kind === kind).reduce((s, l) => s + l.amount, 0) * 100) / 100;
@@ -63,6 +63,47 @@ describe('buildPayslipLines', () => {
     const lines = buildPayslipLines({ calc, leaveByType: [{ name: 'Unpaid Leave', days: 2 }] });
     expect(lines.filter((l) => l.code === 'LEAVE')).toHaveLength(1);
     expect(sum(lines, 'deduction')).toBe(900);
+  });
+});
+
+describe('one-time items and loans', () => {
+  it('pays additions on top of gross without touching the daily rate', () => {
+    const calc = computePayrollItem({ basicSalary: 6000, fullSalary: 9000, absenceDays: 1, extraEarnings: 1500 });
+    expect(calc.daily_rate).toBe(300);
+    expect(calc.additions).toBe(1500);
+    expect(calc.net).toBe(9000 + 1500 - 300);
+  });
+
+  it('itemises bonuses, loan instalments and one-time deductions, adding up exactly', () => {
+    const calc = computePayrollItem({ basicSalary: 6000, fullSalary: 9000, absenceDays: 1, extraEarnings: 1500, extraDeductions: 700 });
+    const lines = buildPayslipLines({ calc, extras: [
+      { kind: 'earning', code: 'BONUS', label: 'Q3 bonus', amount: 1000 },
+      { kind: 'earning', code: 'COMMISSION', label: 'Commission', amount: 500 },
+      { kind: 'deduction', code: 'LOAN', label: 'Loan instalment', amount: 500 },
+      { kind: 'deduction', code: 'DEDUCTION', label: 'Damaged laptop', amount: 200 },
+    ] });
+    expect(lines.map((l) => l.code)).toEqual(['BASIC', 'ALLOWANCE', 'BONUS', 'COMMISSION', 'ABSENCE', 'LOAN', 'DEDUCTION']);
+    expect(sum(lines, 'earning')).toBe(calc.gross + calc.additions);
+    expect(sum(lines, 'deduction')).toBe(calc.deductions);
+  });
+
+  it('keeps an unitemised remainder on its own line', () => {
+    const calc = computePayrollItem({ basicSalary: 5000, fullSalary: 5000, extraDeductions: 300 });
+    const lines = buildPayslipLines({ calc, extras: [{ kind: 'deduction', code: 'LOAN', label: 'Loan', amount: 200 }] });
+    expect(lines.filter((l) => l.kind === 'deduction').map((l) => [l.code, l.amount])).toEqual([['LOAN', 200], ['EXTRA', 100]]);
+  });
+
+  it('takes equal instalments from the start month, and only what is left at the end', () => {
+    const loan = { id: 1, type: 'Loan', principal: 1000, instalment: 400, start_period: '2026-05', status: 'Active' };
+    expect(loanInstalmentsFor([{ ...loan, repaid: 0 }], '2026-04')).toEqual([]);
+    expect(loanInstalmentsFor([{ ...loan, repaid: 0 }], '2026-05')).toEqual([{ loan_id: 1, type: 'Loan', amount: 400, outstanding_after: 600 }]);
+    expect(loanInstalmentsFor([{ ...loan, repaid: 800 }], '2026-07')).toEqual([{ loan_id: 1, type: 'Loan', amount: 200, outstanding_after: 0 }]);
+    expect(loanInstalmentsFor([{ ...loan, repaid: 1000 }], '2026-08')).toEqual([]);
+  });
+
+  it('skips cancelled and settled loans', () => {
+    const base = { id: 2, type: 'Advance', principal: 500, instalment: 500, start_period: '2026-01', repaid: 0 };
+    expect(loanInstalmentsFor([{ ...base, status: 'Cancelled' }, { ...base, id: 3, status: 'Settled' }], '2026-02')).toEqual([]);
   });
 });
 

@@ -100,6 +100,8 @@ const COLUMN_GUARDS = [
   { table: 'payroll_runs', column: 'check_override_reason', ddl: 'ALTER TABLE payroll_runs ADD COLUMN check_override_reason VARCHAR(500) NULL' },
   { table: 'payroll_runs', column: 'self_approval_reason', ddl: 'ALTER TABLE payroll_runs ADD COLUMN self_approval_reason VARCHAR(500) NULL' },
   { table: 'payroll_runs', column: 'payslips_notified_at', ddl: 'ALTER TABLE payroll_runs ADD COLUMN payslips_notified_at TIMESTAMP NULL' },
+  // One-time earnings paid on top of gross (bonus, commission…): the WPS variable portion.
+  { table: 'payroll_items', column: 'additions', ddl: 'ALTER TABLE payroll_items ADD COLUMN additions DECIMAL(12,2) NOT NULL DEFAULT 0 AFTER gross' },
 ];
 
 // Tiny key/value store for global app settings (e.g. timezone).
@@ -500,6 +502,63 @@ const TABLE_GUARDS = [
      INDEX idx_pil_item (item_id),
      INDEX idx_pil_run (run_id),
      FOREIGN KEY (item_id) REFERENCES payroll_items(id) ON DELETE CASCADE
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  // ── Loans, salary advances and one-time pay items ───────────────────────────
+  // A loan is repaid in instalments by payroll from its start month. What has
+  // been repaid is the sum of its repayment rows, each tied to the payroll item
+  // that took it — so deleting or regenerating a Draft run gives the money back.
+  `CREATE TABLE IF NOT EXISTS employee_loans (
+     id            INT AUTO_INCREMENT PRIMARY KEY,
+     company_id    INT NOT NULL,
+     employee_id   INT NOT NULL,
+     type          ENUM('Loan','Advance') NOT NULL DEFAULT 'Loan',
+     principal     DECIMAL(12,2) NOT NULL,
+     instalment    DECIMAL(12,2) NOT NULL,
+     start_period  CHAR(7) NOT NULL,
+     status        ENUM('Active','Settled','Cancelled') NOT NULL DEFAULT 'Active',
+     reason        VARCHAR(500) NULL,
+     created_by    INT NULL,
+     created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     closed_by     INT NULL,
+     closed_at     TIMESTAMP NULL,
+     close_note    VARCHAR(500) NULL,
+     INDEX idx_loan_employee (employee_id),
+     INDEX idx_loan_company_status (company_id, status),
+     FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE,
+     FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  `CREATE TABLE IF NOT EXISTS loan_repayments (
+     id       INT AUTO_INCREMENT PRIMARY KEY,
+     loan_id  INT NOT NULL,
+     run_id   INT NOT NULL,
+     item_id  INT NOT NULL,
+     period   CHAR(7) NOT NULL,
+     amount   DECIMAL(12,2) NOT NULL,
+     INDEX idx_lr_loan (loan_id),
+     FOREIGN KEY (loan_id) REFERENCES employee_loans(id) ON DELETE CASCADE,
+     FOREIGN KEY (item_id) REFERENCES payroll_items(id) ON DELETE CASCADE
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  // One-time earnings or deductions for one month. run_id/item_id record which
+  // payroll item paid it; once that run is approved the item is locked.
+  `CREATE TABLE IF NOT EXISTS payroll_adjustments (
+     id          INT AUTO_INCREMENT PRIMARY KEY,
+     company_id  INT NOT NULL,
+     employee_id INT NOT NULL,
+     period      CHAR(7) NOT NULL,
+     kind        ENUM('earning','deduction') NOT NULL,
+     category    ENUM('Bonus','Commission','Allowance','Reimbursement','Overtime','Deduction','Other') NOT NULL DEFAULT 'Other',
+     label       VARCHAR(150) NOT NULL,
+     amount      DECIMAL(12,2) NOT NULL,
+     note        VARCHAR(500) NULL,
+     run_id      INT NULL,
+     item_id     INT NULL,
+     created_by  INT NULL,
+     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     INDEX idx_adj_company_period (company_id, period),
+     INDEX idx_adj_employee (employee_id),
+     FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE,
+     FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+     FOREIGN KEY (item_id) REFERENCES payroll_items(id) ON DELETE SET NULL
    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 ];
 

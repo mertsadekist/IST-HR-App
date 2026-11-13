@@ -53,7 +53,8 @@
     "attendance_sync": "Hik Central Sync",
     "work_schedules": "Work Schedules",
     "attendance_exceptions": "Attendance Checks",
-    "document_radar": "Document Radar"
+    "document_radar": "Document Radar",
+    "payroll_items": "Loans & One-time Items"
   },
   "topbar": {
     "search_placeholder": "Search across HR system...",
@@ -1400,7 +1401,8 @@
     "req_cancelled": "Request withdrawn",
     "withdraw": "Withdraw this request",
     "reason": "Reason",
-    "reason_ph": "Optional — anything HR should know..."
+    "reason_ph": "Optional — anything HR should know...",
+    "additions": "Additions"
   },
   "send_doc": {
     "attach_note": "The document will be attached as a PDF file.",
@@ -1740,7 +1742,8 @@
     "payslips_sent": "Payslip emails sent: {{sent}} ({{missing}} without an email address)",
     "payslips_failed": "{{count}} email(s) could not be sent — see the Email Log",
     "payslips_already": "Already sent on {{at}}",
-    "email_payslips_confirm": "Email each of the {{count}} employee(s) in this run that their payslip is ready? People without an email address are skipped."
+    "email_payslips_confirm": "Email each of the {{count}} employee(s) in this run that their payslip is ready? People without an email address are skipped.",
+    "th_additions": "Additions"
   },
   "salary_reviews": {
     "title": "Salary Reviews",
@@ -3071,7 +3074,10 @@
     "comp_food": "Food allowance",
     "comp_phone": "Phone allowance",
     "comp_other": "Other allowance",
-    "working": "{{qty}} day(s) × {{rate}}"
+    "working": "{{qty}} day(s) × {{rate}}",
+    "line_other_additions": "Other additions",
+    "line_loan": "Loan instalment",
+    "line_advance": "Salary advance repayment"
   },
   "pay_components": {
     "tab": "Salary breakdown",
@@ -3091,5 +3097,64 @@
     "add": "Add allowance",
     "matches": "The listed allowances add up to the contract: {{total}}",
     "mismatch": "Listed allowances total {{listed}} but the contract allowances are {{allowances}}. The difference shows as its own payslip line."
+  },
+  "payroll_items": {
+    "title": "Loans & One-time Items",
+    "subtitle": "Loans and salary advances repaid through payroll, and one-off payments or deductions for a month.",
+    "tab_loans": "Loans & advances",
+    "tab_items": "One-time items",
+    "new_loan": "New loan or advance",
+    "new_item": "New one-time item",
+    "no_loans": "No loans or advances yet.",
+    "no_items": "No one-time items for {{period}}.",
+    "employee": "Employee",
+    "choose_employee": "Choose an employee",
+    "type": "Type",
+    "type_loan": "Loan",
+    "type_advance": "Salary advance",
+    "amount": "Amount",
+    "instalment": "Monthly instalment",
+    "months": "{{count}} month(s)",
+    "from_month": "First month deducted",
+    "repaid": "Repaid",
+    "outstanding": "Outstanding",
+    "in_progress": "{{amount}} in a run not yet approved",
+    "status": "Status",
+    "loan_active": "Active",
+    "loan_settled": "Settled",
+    "loan_cancelled": "Cancelled",
+    "reason": "Reason",
+    "note": "Note",
+    "plan_preview": "Repaid over {{count}} month(s), last instalment in {{last}}.",
+    "loan_created": "Loan created. It is deducted from the first month’s payroll.",
+    "close": "Close",
+    "close_title": "Close the loan early",
+    "close_hint": "{{name}} still owes {{amount}}. Closing stops the monthly deductions; what was already deducted stays.",
+    "close_settled": "Settled (repaid outside payroll)",
+    "close_cancelled": "Cancelled (written off)",
+    "loan_closed": "Loan closed",
+    "month": "Payroll month",
+    "category": "Category",
+    "description": "Description",
+    "description_ph": "e.g. Q3 sales bonus",
+    "kind": "Paid or deducted",
+    "kind_earning": "Paid to the employee",
+    "kind_deduction": "Deducted from pay",
+    "cat_bonus": "Bonus",
+    "cat_commission": "Commission",
+    "cat_allowance": "One-time allowance",
+    "cat_reimbursement": "Reimbursement",
+    "cat_overtime": "Overtime",
+    "cat_deduction": "Deduction",
+    "cat_other": "Other",
+    "item_hint": "Paid or deducted in this month’s payroll run. If the month’s run is already a Draft, regenerate it to include this item.",
+    "adj_added": "Item added to the month’s payroll",
+    "adj_added_regenerate": "Item added. Regenerate this month’s Draft payroll run to include it.",
+    "adj_deleted_regenerate": "Item deleted. Regenerate this month’s Draft payroll run to remove it.",
+    "total_paid": "Paid",
+    "total_deducted": "Deducted",
+    "waiting_run": "Waiting for the payroll run",
+    "in_draft": "In the Draft run",
+    "in_run": "In a run: {{status}}"
   }
 }

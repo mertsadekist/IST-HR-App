@@ -13,6 +13,12 @@ export function lineLabel(t, line, lang) {
     case 'OTHER': return t('payslip.comp_other');
     case 'ABSENCE': return t('payslip.line_absence');
     case 'EXTRA': return t('payslip.line_extra');
+    case 'ADDITION': return t('payslip.line_other_additions');
+    case 'LOAN': return /advance/i.test(line.label || '') ? t('payslip.line_advance') : t('payslip.line_loan');
+    // One-time items carry the description HR typed for them.
+    case 'BONUS': case 'COMMISSION': case 'ONE_TIME_ALLOWANCE': case 'REIMBURSEMENT':
+    case 'OVERTIME': case 'DEDUCTION':
+      return line.label || line.code;
     // Totals, used by the month-on-month comparison of runs made before v2.
     case 'GROSS': return t('payslip.gross');
     case 'DEDUCTIONS': return t('payslip.deductions');

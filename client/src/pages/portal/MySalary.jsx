@@ -46,7 +46,8 @@ export default function MySalary() {
     finally { setExporting(false); }
   };
 
-  const totalPaid = payslips.reduce((s, p) => s + Number(p.net || 0), 0);
+  const showAdditions = payslips.some((p) => Number(p.additions) > 0);
+  const totalPaid =payslips.reduce((s, p) => s + Number(p.net || 0), 0);
   const lastNet = payslips[0]?.net;
 
   return (
@@ -79,6 +80,7 @@ export default function MySalary() {
                   <th className="px-5 py-3 text-end font-semibold">{t('portal.basic')}</th>
                   <th className="px-5 py-3 text-end font-semibold">{t('portal.allowances')}</th>
                   <th className="px-5 py-3 text-end font-semibold">{t('portal.gross')}</th>
+                  {showAdditions && <th className="px-5 py-3 text-end font-semibold">{t('portal.additions')}</th>}
                   <th className="px-5 py-3 text-end font-semibold">{t('portal.deductions')}</th>
                   <th className="px-5 py-3 text-end font-semibold">{t('portal.net')}</th>
                   <th className="px-5 py-3 text-start font-semibold">{t('portal.status')}</th>
@@ -97,6 +99,9 @@ export default function MySalary() {
                     <td className="px-5 py-3 text-end text-surface-600">{money(p.basic_salary)}</td>
                     <td className="px-5 py-3 text-end text-surface-600">{money(p.allowances)}</td>
                     <td className="px-5 py-3 text-end text-surface-600">{money(p.gross)}</td>
+                    {showAdditions && (
+                      <td className="px-5 py-3 text-end text-emerald-700">{Number(p.additions) > 0 ? `+${money(p.additions)}` : money(0)}</td>
+                    )}
                     <td className={`px-5 py-3 text-end ${Number(p.deductions) > 0 ? 'text-red-600' : 'text-surface-400'}`}>
                       {Number(p.deductions) > 0 ? `−${money(p.deductions)}` : money(0)}
                     </td>
@@ -110,14 +115,14 @@ export default function MySalary() {
                   // How this month was worked out, line by line.
                   openId === p.id && (
                     <tr key={`${p.id}-lines`} className="bg-surface-50/70">
-                      <td colSpan={7} className="px-5 py-4"><PayslipLines t={t} lines={p.lines} net={p.net} /></td>
+                      <td colSpan={showAdditions ? 8 : 7} className="px-5 py-4"><PayslipLines t={t} lines={p.lines} net={p.net} /></td>
                     </tr>
                   ),
                 ])}
               </tbody>
               <tfoot className="bg-surface-50 border-t border-surface-200">
                 <tr>
-                  <td colSpan={5} className="px-5 py-3 text-end text-xs font-semibold text-surface-500">{t('portal.total_paid')}</td>
+                  <td colSpan={showAdditions ? 6 : 5} className="px-5 py-3 text-end text-xs font-semibold text-surface-500">{t('portal.total_paid')}</td>
                   <td className="px-5 py-3 text-end font-bold text-surface-900">{money(totalPaid)}</td>
                   <td />
                 </tr>

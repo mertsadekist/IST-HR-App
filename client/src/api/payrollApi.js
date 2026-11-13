@@ -34,3 +34,12 @@ export const getComponentTypes = () => api.get('/payroll/component-types');
 export const getEmployeeComponents = (employeeId) => api.get(`/payroll/employees/${employeeId}/components`);
 export const saveEmployeeComponents = (employeeId, components) =>
   api.put(`/payroll/employees/${employeeId}/components`, { components });
+
+// ── Loans, salary advances and one-time pay items ─────────────────────────────
+export const getLoans = (params) => api.get('/payroll/loans', { params });
+export const createLoan = (data) => api.post('/payroll/loans', data);
+// status: 'Settled' (repaid outside payroll) or 'Cancelled', with a note.
+export const closeLoan = (id, status, note) => api.put(`/payroll/loans/${id}/close`, { status, note });
+export const getAdjustments = (params) => api.get('/payroll/adjustments', { params });
+export const createAdjustment = (data) => api.post('/payroll/adjustments', data);
+export const deleteAdjustment = (id) => api.delete(`/payroll/adjustments/${id}`);

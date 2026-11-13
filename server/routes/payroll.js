@@ -14,7 +14,7 @@ import { renderPayrollExplanationWorkbook } from '../services/payrollExplainerWo
 import { buildWpsWorkbook, wpsReadiness } from '../services/wpsService.js';
 import { notify, notifyRole } from '../services/notificationService.js';
 import {
-  activeComponents, buildPayslipLines, groupLeaveByType, computeVariance, checkRun,
+  activeComponents, buildPayslipLines, groupLeaveByType, computeVariance, checkRun, loanInstalmentsFor,
 } from '../services/payrollV2.js';
 import { sendEmail } from '../services/emailService.js';
 import { getTemplate } from '../services/emailTemplates.js';
@@ -50,6 +50,28 @@ router.get('/runs/:id', authorize('admin', 'hr_manager', 'accountant'), async (r
 });
 
 // ─── Payroll v2 helpers ──────────────────────────────────────────────────────
+
+function groupBy(rows, key) {
+  const map = new Map();
+  for (const r of rows) {
+    if (!map.has(r[key])) map.set(r[key], []);
+    map.get(r[key]).push(r);
+  }
+  return map;
+}
+
+/** Payslip line code of a one-time item (translated on the client). */
+function adjustmentCode(a) {
+  switch (a.category) {
+    case 'Bonus': return 'BONUS';
+    case 'Commission': return 'COMMISSION';
+    case 'Allowance': return 'ONE_TIME_ALLOWANCE';
+    case 'Reimbursement': return 'REIMBURSEMENT';
+    case 'Overtime': return 'OVERTIME';
+    case 'Deduction': return 'DEDUCTION';
+    default: return a.kind === 'earning' ? 'ADDITION' : 'EXTRA';
+  }
+}
 
 /** Adds each item's payslip lines (empty for runs generated before v2). */
 async function attachLines(items) {
@@ -275,6 +297,26 @@ router.post('/runs/generate', authorize('admin', 'hr_manager', 'accountant'), va
     // loaded once. They label the payslip lines; they never change gross.
     const componentsByEmployee = await loadComponents(conn, companyId);
 
+    // One-time items for the month not paid by any existing payroll item. When a
+    // Draft run is regenerated or deleted its items go, item_id is cleared by the
+    // foreign key, and the one-time items become available again.
+    const [adjRows] = await conn.query(
+      `SELECT id, employee_id, kind, category, label, amount, note FROM payroll_adjustments
+        WHERE company_id = ? AND period = ? AND item_id IS NULL
+        ORDER BY id`, [companyId, period]);
+    const adjustmentsByEmployee = groupBy(adjRows, 'employee_id');
+
+    // Active loans with what earlier runs already took. This run's own
+    // repayments went with its old items, so they are not counted twice.
+    const [loanRows] = await conn.query(
+      `SELECT l.id, l.employee_id, l.type, l.principal, l.instalment, l.start_period, l.status,
+              COALESCE((SELECT SUM(r.amount) FROM loan_repayments r
+                         JOIN payroll_runs pr ON pr.id = r.run_id
+                        WHERE r.loan_id = l.id AND pr.status <> 'Cancelled' AND r.run_id <> ?), 0) AS repaid
+         FROM employee_loans l
+        WHERE l.company_id = ? AND l.status = 'Active'`, [runId, companyId]);
+    const loansByEmployee = groupBy(loanRows, 'employee_id');
+
     let totalGross = 0, totalDeductions = 0, totalNet = 0;
     for (const emp of employees) {
       // What leave costs this period, under the company policy.
@@ -375,25 +417,49 @@ router.post('/runs/generate', authorize('admin', 'hr_manager', 'accountant'), va
             ), TRUE) = TRUE`,
         [emp.id, period]);
 
+      // One-time items for this month, and this month's loan instalments.
+      const adj = adjustmentsByEmployee.get(emp.id) || [];
+      const instalments = loanInstalmentsFor(loansByEmployee.get(emp.id) || [], period);
+      const extras = [
+        ...adj.map((a) => ({ kind: a.kind, code: adjustmentCode(a), label: a.label, amount: Number(a.amount), explanation: a.note || '' })),
+        ...instalments.map((i) => ({ kind: 'deduction', code: 'LOAN', label: i.type === 'Advance' ? 'Salary advance repayment' : 'Loan instalment',
+          amount: i.amount, explanation: `Outstanding after this month: ${i.outstanding_after.toFixed(2)}` })),
+      ];
+      const sumOf = (kind) => extras.filter((x) => x.kind === kind).reduce((s, x) => s + x.amount, 0);
+
       const calc = computePayrollItem({
         basicSalary: emp.basic_salary,
         fullSalary: emp.full_salary,
         unpaidLeaveDays: Number(ul.days) || 0,
         absenceDays: Number(ab.days) || 0,
+        extraEarnings: sumOf('earning'),
+        extraDeductions: sumOf('deduction'),
       });
 
       const [itemRes] = await conn.query('INSERT INTO payroll_items SET ?', {
         run_id: runId, company_id: companyId, employee_id: emp.id,
-        basic_salary: calc.basic_salary, allowances: calc.allowances, gross: calc.gross,
+        basic_salary: calc.basic_salary, allowances: calc.allowances, gross: calc.gross, additions: calc.additions,
         unpaid_leave_days: calc.unpaid_leave_days, absence_days: calc.absence_days,
         deductions: calc.deductions, net: calc.net,
       });
+
+      // Record what this item took and paid, so the loan balance and the
+      // one-time items follow the run: regenerating or deleting a Draft undoes them.
+      for (const i of instalments) {
+        await conn.query('INSERT INTO loan_repayments SET ?',
+          { loan_id: i.loan_id, run_id: runId, item_id: itemRes.insertId, period, amount: i.amount });
+      }
+      if (adj.length) {
+        await conn.query('UPDATE payroll_adjustments SET run_id = ?, item_id = ? WHERE id IN (?)',
+          [runId, itemRes.insertId, adj.map((a) => a.id)]);
+      }
 
       // The payslip, line by line: a breakdown of calc, summing to it exactly.
       const lines = buildPayslipLines({
         calc,
         components: activeComponents(componentsByEmployee.get(emp.id), periodStart, periodEndDate),
         leaveByType: groupLeaveByType(leaveCost.lines),
+        extras,
       });
       if (lines.length) {
         await conn.query(
@@ -403,7 +469,9 @@ router.post('/runs/generate', authorize('admin', 'hr_manager', 'accountant'), va
           [lines.map((l) => [itemRes.insertId, runId, emp.id, l.kind, l.code, String(l.label).slice(0, 150),
             l.quantity, l.rate, l.amount, l.explanation ? String(l.explanation).slice(0, 500) : null, l.sort])]);
       }
-      totalGross += calc.gross; totalDeductions += calc.deductions; totalNet += calc.net;
+      // Gross pay on the run includes one-time earnings, so the run reads
+      // gross - deductions = net.
+      totalGross += calc.gross + calc.additions; totalDeductions += calc.deductions; totalNet += calc.net;
     }
 
     await conn.query(
@@ -449,6 +517,14 @@ router.put('/runs/:id/approve', authorize('admin', 'hr_manager', 'accountant'), 
     await pool.query(
       'UPDATE payroll_runs SET status = ?, approved_by = ?, approved_at = NOW(), self_approval_reason = ? WHERE id = ?',
       ['Approved', req.user.id, run.submitted_by === req.user.id ? selfReason.slice(0, 500) : null, run.id]);
+    // A loan whose approved repayments now cover it is closed. Only approved
+    // and paid runs count: a Draft can still be regenerated or deleted.
+    await pool.query(
+      `UPDATE employee_loans l SET status = 'Settled', closed_at = NOW(), close_note = 'Repaid through payroll'
+        WHERE l.company_id = ? AND l.status = 'Active'
+          AND l.principal <= (SELECT COALESCE(SUM(r.amount), 0) FROM loan_repayments r
+                                JOIN payroll_runs pr ON pr.id = r.run_id
+                               WHERE r.loan_id = l.id AND pr.status IN ('Approved', 'Paid'))`, [run.company_id]);
     await addAudit(pool, req.user, 'Payroll', 'Approved', `Payroll run #${req.params.id} approved`
       + (run.submitted_by === req.user.id ? ` by its submitter: ${selfReason}` : ''));
     await notifyRole(pool, run.company_id, ['admin', 'accountant'], { type: 'payroll', title: 'Payroll approved', body: `Payroll ${run.period} approved and ready to mark paid`, link: '/payroll-runs' }, req.user.id);
@@ -622,7 +698,7 @@ async function loadWpsData(req, runId) {
   // before that rule existed must not instruct a salary transfer to somebody who
   // has left. They are reported separately so the difference is explainable.
   const [rows] = await pool.query(
-    `SELECT pi.employee_id, pi.gross, pi.net, pi.absence_days, pi.unpaid_leave_days,
+    `SELECT pi.employee_id, pi.gross, pi.net, pi.absence_days, pi.unpaid_leave_days, pi.additions AS variable,
             e.first_name, e.last_name, e.work_permit_no, e.personal_no,
             e.labour_contract_status, e.status AS employment_status,
             b.bank_name, b.iban, b.verified AS bank_verified
@@ -867,6 +943,155 @@ router.get('/payslips/:employeeId', authorize('admin', 'hr_manager', 'accountant
       [req.params.employeeId, ...co.params]);
     res.json(await attachLines(rows));
   } catch (err) { console.error('GET /payroll/payslips/:employeeId error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// ─── Loans and salary advances ───────────────────────────────────────────────
+// Repaid by payroll in instalments from the start month. "Repaid" counts only
+// approved and paid runs; what a Draft or a run waiting for approval has taken
+// is shown separately as "in progress", because that run can still change.
+const PERIOD_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+router.get('/loans', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
+  try {
+    const co = companyClause(req, 'l.company_id');
+    const params = [...co.params];
+    let where = 'WHERE 1=1' + co.clause;
+    if (req.query.employee_id) { where += ' AND l.employee_id = ?'; params.push(req.query.employee_id); }
+    if (req.query.status) { where += ' AND l.status = ?'; params.push(req.query.status); }
+    const [rows] = await pool.query(
+      `SELECT l.*, TRIM(CONCAT(COALESCE(e.first_name, ''), ' ', COALESCE(e.last_name, ''))) AS employee_name,
+              COALESCE((SELECT SUM(r.amount) FROM loan_repayments r JOIN payroll_runs pr ON pr.id = r.run_id
+                         WHERE r.loan_id = l.id AND pr.status IN ('Approved','Paid')), 0) AS repaid,
+              COALESCE((SELECT SUM(r.amount) FROM loan_repayments r JOIN payroll_runs pr ON pr.id = r.run_id
+                         WHERE r.loan_id = l.id AND pr.status IN ('Draft','Pending Approval')), 0) AS in_progress
+         FROM employee_loans l JOIN employees e ON e.id = l.employee_id
+        ${where}
+        ORDER BY FIELD(l.status, 'Active', 'Settled', 'Cancelled'), l.created_at DESC`, params);
+    res.json(rows.map((r) => ({
+      ...r, principal: Number(r.principal), instalment: Number(r.instalment), repaid: Number(r.repaid),
+      in_progress: Number(r.in_progress), outstanding: Math.round((Number(r.principal) - Number(r.repaid)) * 100) / 100,
+    })));
+  } catch (err) { console.error('GET /payroll/loans error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+router.post('/loans', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
+  try {
+    const { employee_id, type = 'Loan', start_period, reason } = req.body || {};
+    const principal = Math.round(Number(req.body?.principal) * 100) / 100;
+    const instalment = Math.round(Number(req.body?.instalment) * 100) / 100;
+    if (!['Loan', 'Advance'].includes(type)) return res.status(422).json({ error: 'Type must be Loan or Advance' });
+    if (!(principal > 0)) return res.status(422).json({ error: 'The amount must be more than zero' });
+    if (!(instalment > 0) || instalment > principal) return res.status(422).json({ error: 'The monthly instalment must be more than zero and not more than the amount' });
+    if (!PERIOD_RE.test(String(start_period || ''))) return res.status(422).json({ error: 'Choose the first month to deduct' });
+    const emp = await scopedEmployee(req, employee_id);
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+
+    const [r] = await pool.query('INSERT INTO employee_loans SET ?', {
+      company_id: emp.company_id, employee_id: emp.id, type, principal, instalment, start_period,
+      reason: reason ? String(reason).trim().slice(0, 500) : null, created_by: req.user.id,
+    });
+    await addAudit(pool, req.user, 'Payroll', 'Loan Created',
+      `${type} of ${principal.toFixed(2)} to ${emp.first_name} ${emp.last_name}: ${instalment.toFixed(2)} a month from ${start_period}`);
+    res.status(201).json({ id: r.insertId });
+  } catch (err) { console.error('POST /payroll/loans error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// Close a loan early: Settled (repaid outside payroll) or Cancelled (written off).
+// Instalments already taken stay where they are.
+router.put('/loans/:id/close', authorize('admin', 'hr_manager'), async (req, res) => {
+  try {
+    const status = req.body?.status;
+    const note = String(req.body?.note || '').trim();
+    if (!['Settled', 'Cancelled'].includes(status)) return res.status(422).json({ error: 'Status must be Settled or Cancelled' });
+    if (!note) return res.status(422).json({ error: 'A note is required' });
+    const co = companyClause(req, 'company_id');
+    const [[loan]] = await pool.query('SELECT id, status, employee_id FROM employee_loans WHERE id = ?' + co.clause, [req.params.id, ...co.params]);
+    if (!loan) return res.status(404).json({ error: 'Loan not found' });
+    if (loan.status !== 'Active') return res.status(409).json({ error: `The loan is already ${loan.status}` });
+    await pool.query('UPDATE employee_loans SET status = ?, closed_by = ?, closed_at = NOW(), close_note = ? WHERE id = ?',
+      [status, req.user.id, note.slice(0, 500), loan.id]);
+    await addAudit(pool, req.user, 'Payroll', 'Loan Closed', `Loan #${loan.id} marked ${status}: ${note}`);
+    res.json({ success: true });
+  } catch (err) { console.error('PUT /payroll/loans/:id/close error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// ─── One-time pay items (bonus, commission, one-off deduction…) ──────────────
+const ADJ_CATEGORIES = {
+  Bonus: 'earning', Commission: 'earning', Allowance: 'earning', Reimbursement: 'earning', Overtime: 'earning',
+  Deduction: 'deduction', Other: null,
+};
+
+router.get('/adjustments', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
+  try {
+    const co = companyClause(req, 'a.company_id');
+    const params = [...co.params];
+    let where = 'WHERE 1=1' + co.clause;
+    if (req.query.period) { where += ' AND a.period = ?'; params.push(req.query.period); }
+    if (req.query.employee_id) { where += ' AND a.employee_id = ?'; params.push(req.query.employee_id); }
+    const [rows] = await pool.query(
+      `SELECT a.*, TRIM(CONCAT(COALESCE(e.first_name, ''), ' ', COALESCE(e.last_name, ''))) AS employee_name,
+              pr.status AS run_status
+         FROM payroll_adjustments a
+         JOIN employees e ON e.id = a.employee_id
+         LEFT JOIN payroll_items pi ON pi.id = a.item_id
+         LEFT JOIN payroll_runs pr ON pr.id = pi.run_id
+        ${where}
+        ORDER BY a.period DESC, a.created_at DESC`, params);
+    res.json(rows.map((r) => ({ ...r, amount: Number(r.amount),
+      locked: !!r.run_status && r.run_status !== 'Draft' })));
+  } catch (err) { console.error('GET /payroll/adjustments error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+router.post('/adjustments', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
+  try {
+    const { employee_id, period, category = 'Other', label, note } = req.body || {};
+    const amount = Math.round(Number(req.body?.amount) * 100) / 100;
+    if (!(category in ADJ_CATEGORIES)) return res.status(422).json({ error: 'Unknown category' });
+    const kind = ADJ_CATEGORIES[category] || req.body?.kind;
+    if (!['earning', 'deduction'].includes(kind)) return res.status(422).json({ error: 'Choose whether it is paid or deducted' });
+    if (!PERIOD_RE.test(String(period || ''))) return res.status(422).json({ error: 'Choose the payroll month' });
+    if (!(amount > 0)) return res.status(422).json({ error: 'The amount must be more than zero' });
+    if (!String(label || '').trim()) return res.status(422).json({ error: 'A description is required' });
+    const emp = await scopedEmployee(req, employee_id);
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+
+    // A month already submitted or approved cannot take new items: nothing would
+    // regenerate it, and the item would sit unpaid. It goes to next month instead.
+    const [[run]] = await pool.query('SELECT status FROM payroll_runs WHERE company_id = ? AND period = ?', [emp.company_id, period]);
+    if (run && run.status !== 'Draft') {
+      return res.status(409).json({ error: `Payroll for ${period} is already ${run.status}; add it to a later month` });
+    }
+
+    const [r] = await pool.query('INSERT INTO payroll_adjustments SET ?', {
+      company_id: emp.company_id, employee_id: emp.id, period, kind, category,
+      label: String(label).trim().slice(0, 150), amount, note: note ? String(note).trim().slice(0, 500) : null,
+      created_by: req.user.id,
+    });
+    await addAudit(pool, req.user, 'Payroll', 'One-time Item Added',
+      `${kind === 'earning' ? 'Payment' : 'Deduction'} "${label}" ${amount.toFixed(2)} for ${emp.first_name} ${emp.last_name} in ${period}`);
+    res.status(201).json({ id: r.insertId, needs_regenerate: !!run });
+  } catch (err) { console.error('POST /payroll/adjustments error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// Admin only, like every delete. An item a submitted or approved run has paid
+// stays: it is part of that payment's record.
+router.delete('/adjustments/:id', authorize('admin'), async (req, res) => {
+  try {
+    const co = companyClause(req, 'a.company_id');
+    const [[adj]] = await pool.query(
+      `SELECT a.id, a.label, a.amount, a.period, pr.status AS run_status
+         FROM payroll_adjustments a
+         LEFT JOIN payroll_items pi ON pi.id = a.item_id
+         LEFT JOIN payroll_runs pr ON pr.id = pi.run_id
+        WHERE a.id = ?` + co.clause, [req.params.id, ...co.params]);
+    if (!adj) return res.status(404).json({ error: 'Item not found' });
+    if (adj.run_status && adj.run_status !== 'Draft') {
+      return res.status(409).json({ error: `Already in a ${adj.run_status} payroll run` });
+    }
+    await pool.query('DELETE FROM payroll_adjustments WHERE id = ?', [adj.id]);
+    await addAudit(pool, req.user, 'Payroll', 'One-time Item Deleted', `"${adj.label}" ${Number(adj.amount).toFixed(2)} (${adj.period}) deleted`);
+    res.json({ success: true, needs_regenerate: adj.run_status === 'Draft' });
+  } catch (err) { console.error('DELETE /payroll/adjustments/:id error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
 export default router;
