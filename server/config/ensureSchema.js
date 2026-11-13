@@ -102,6 +102,21 @@ const COLUMN_GUARDS = [
   { table: 'payroll_runs', column: 'payslips_notified_at', ddl: 'ALTER TABLE payroll_runs ADD COLUMN payslips_notified_at TIMESTAMP NULL' },
   // One-time earnings paid on top of gross (bonus, commission…): the WPS variable portion.
   { table: 'payroll_items', column: 'additions', ddl: 'ALTER TABLE payroll_items ADD COLUMN additions DECIMAL(12,2) NOT NULL DEFAULT 0 AFTER gross' },
+  // Final settlement (services/settlementService.js): its own status, who
+  // prepared, approved and paid it, and how — paid is final, so it is paid once.
+  { table: 'offboarding_records', column: 'settlement_status', ddl: "ALTER TABLE offboarding_records ADD COLUMN settlement_status ENUM('Not Started','Draft','Approved','Paid') NOT NULL DEFAULT 'Not Started'" },
+  { table: 'offboarding_records', column: 'final_salary', ddl: 'ALTER TABLE offboarding_records ADD COLUMN final_salary DECIMAL(12,2) NULL' },
+  { table: 'offboarding_records', column: 'settlement_inputs', ddl: 'ALTER TABLE offboarding_records ADD COLUMN settlement_inputs JSON NULL' },
+  { table: 'offboarding_records', column: 'settlement_prepared_by', ddl: 'ALTER TABLE offboarding_records ADD COLUMN settlement_prepared_by INT NULL' },
+  { table: 'offboarding_records', column: 'settlement_prepared_at', ddl: 'ALTER TABLE offboarding_records ADD COLUMN settlement_prepared_at TIMESTAMP NULL' },
+  { table: 'offboarding_records', column: 'settlement_approved_by', ddl: 'ALTER TABLE offboarding_records ADD COLUMN settlement_approved_by INT NULL' },
+  { table: 'offboarding_records', column: 'settlement_approved_at', ddl: 'ALTER TABLE offboarding_records ADD COLUMN settlement_approved_at TIMESTAMP NULL' },
+  { table: 'offboarding_records', column: 'settlement_override_reason', ddl: 'ALTER TABLE offboarding_records ADD COLUMN settlement_override_reason VARCHAR(500) NULL' },
+  { table: 'offboarding_records', column: 'settlement_paid_at', ddl: 'ALTER TABLE offboarding_records ADD COLUMN settlement_paid_at DATE NULL' },
+  { table: 'offboarding_records', column: 'settlement_payment_ref', ddl: 'ALTER TABLE offboarding_records ADD COLUMN settlement_payment_ref VARCHAR(120) NULL' },
+  { table: 'offboarding_records', column: 'settlement_paid_by', ddl: 'ALTER TABLE offboarding_records ADD COLUMN settlement_paid_by INT NULL' },
+  // A one-time item paid by a settlement rather than a monthly run.
+  { table: 'payroll_adjustments', column: 'settlement_id', ddl: 'ALTER TABLE payroll_adjustments ADD COLUMN settlement_id INT NULL' },
 ];
 
 // Tiny key/value store for global app settings (e.g. timezone).
@@ -559,6 +574,24 @@ const TABLE_GUARDS = [
      FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE,
      FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
      FOREIGN KEY (item_id) REFERENCES payroll_items(id) ON DELETE SET NULL
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  // The lines of a final settlement. 'auto' lines are rewritten on every
+  // recalculation; 'manual' lines (notice pay, damages…) are HR's and kept.
+  `CREATE TABLE IF NOT EXISTS offboarding_settlement_lines (
+     id             INT AUTO_INCREMENT PRIMARY KEY,
+     offboarding_id INT NOT NULL,
+     kind           ENUM('earning','deduction') NOT NULL,
+     code           VARCHAR(40) NOT NULL,
+     label          VARCHAR(150) NOT NULL,
+     quantity       DECIMAL(8,2) NULL,
+     rate           DECIMAL(12,2) NULL,
+     amount         DECIMAL(12,2) NOT NULL DEFAULT 0,
+     explanation    VARCHAR(500) NULL,
+     source         ENUM('auto','manual') NOT NULL DEFAULT 'auto',
+     ref_id         INT NULL,
+     sort_order     SMALLINT NOT NULL DEFAULT 0,
+     INDEX idx_osl_offboarding (offboarding_id),
+     FOREIGN KEY (offboarding_id) REFERENCES offboarding_records(id) ON DELETE CASCADE
    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 ];
 

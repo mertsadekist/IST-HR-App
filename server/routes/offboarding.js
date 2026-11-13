@@ -7,6 +7,9 @@ import { addAudit } from '../services/auditService.js';
 import { tenantScope, companyClause } from '../middleware/tenant.js';
 import { calculateEOSB } from '../services/eosbService.js';
 import { getEmployeeHoldings, buildClearance } from '../services/holdingsService.js';
+import { buildSettlement } from '../services/settlementService.js';
+import { loadLeavePolicy } from '../services/leavePolicyService.js';
+import { notifyRole } from '../services/notificationService.js';
 
 const router = Router();
 // Module-gated so reads are refused too, not just writes.
@@ -98,6 +101,326 @@ router.get('/:id/clearance', async (req, res) => {
     console.error('GET /offboarding/:id/clearance error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
+});
+
+// ─── Final settlement ────────────────────────────────────────────────────────
+// Draft → Approved → Paid. Paid is final: the person is already off the monthly
+// payroll, and a settlement can be paid once. See services/settlementService.js.
+
+async function loadRecord(req, id) {
+  const co = companyClause(req, 'ob.company_id');
+  const [[rec]] = await pool.query(
+    `SELECT ob.*, DATE_FORMAT(ob.last_working_day, '%Y-%m-%d') AS lwd,
+            e.first_name, e.last_name, e.basic_salary AS emp_basic, e.full_salary AS emp_full,
+            DATE_FORMAT(e.start_date, '%Y-%m-%d') AS emp_start
+       FROM offboarding_records ob JOIN employees e ON e.id = ob.employee_id
+      WHERE ob.id = ?` + co.clause, [id, ...co.params]);
+  return rec || null;
+}
+
+const parseInputs = (rec) => {
+  if (!rec.settlement_inputs) return {};
+  try { return typeof rec.settlement_inputs === 'string' ? JSON.parse(rec.settlement_inputs) : rec.settlement_inputs; }
+  catch { return {}; }
+};
+
+/** Reads everything the calculation needs and runs it. */
+async function computeSettlement(db, rec, hrInputs) {
+  // Last month an approved monthly run paid this person.
+  const [[paid]] = await db.query(
+    `SELECT MAX(pr.period) AS period FROM payroll_items pi JOIN payroll_runs pr ON pr.id = pi.run_id
+      WHERE pi.employee_id = ? AND pr.status IN ('Approved','Paid')`, [rec.employee_id]);
+
+  // Annual leave taken in the leaving year (types drawing on the annual pool too).
+  const policy = await loadLeavePolicy(db);
+  const annualTypes = policy.annualTypeId
+    ? [...policy.poolByType].filter(([, pool]) => pool === policy.annualTypeId).map(([type]) => type).concat(policy.annualTypeId)
+    : [];
+  let taken = 0;
+  if (annualTypes.length && rec.lwd) {
+    const [[t]] = await db.query(
+      `SELECT COALESCE(SUM(days), 0) AS days FROM leave_requests
+        WHERE employee_id = ? AND status = 'Approved' AND leave_type_id IN (?)
+          AND YEAR(start_date) = ? AND start_date <= ?`,
+      [rec.employee_id, [...new Set(annualTypes)], Number(rec.lwd.slice(0, 4)), rec.lwd]);
+    taken = Number(t.days) || 0;
+  }
+
+  // Outstanding loans: only approved and paid runs count as repaid.
+  const [loans] = await db.query(
+    `SELECT l.id, l.type, l.principal - COALESCE((SELECT SUM(r.amount) FROM loan_repayments r
+                JOIN payroll_runs pr ON pr.id = r.run_id
+               WHERE r.loan_id = l.id AND pr.status IN ('Approved','Paid')), 0) AS outstanding
+       FROM employee_loans l WHERE l.employee_id = ? AND l.status = 'Active'`, [rec.employee_id]);
+
+  // One-time items no monthly run ever paid.
+  const [adjustments] = await db.query(
+    `SELECT id, kind, label, amount FROM payroll_adjustments
+      WHERE employee_id = ? AND item_id IS NULL AND (settlement_id IS NULL OR settlement_id = ?)
+      ORDER BY id`, [rec.employee_id, rec.id]);
+
+  const [manual] = await db.query(
+    `SELECT id, kind, label, amount, explanation FROM offboarding_settlement_lines
+      WHERE offboarding_id = ? AND source = 'manual' ORDER BY sort_order, id`, [rec.id]);
+
+  return buildSettlement({
+    employee: { basic_salary: rec.emp_basic, full_salary: rec.emp_full, start_date: rec.emp_start },
+    lastWorkingDay: rec.lwd,
+    departureType: rec.departure_type,
+    lastPaidPeriod: paid?.period || null,
+    unpaidLeaveDays: hrInputs.unpaid_leave_days,
+    annualTakenThisYear: taken,
+    carryForwardDays: hrInputs.carry_forward_days,
+    leaveDaysOverride: hrInputs.leave_days_override,
+    loans: loans.map((l) => ({ ...l, outstanding: Number(l.outstanding) })),
+    adjustments: adjustments.map((a) => ({ ...a, amount: Number(a.amount) })),
+    manualLines: manual.map((m) => ({ ...m, amount: Number(m.amount) })),
+  });
+}
+
+/** Writes the auto lines and totals of a computed settlement onto the record. */
+async function saveSettlement(db, rec, result, hrInputs, userId) {
+  await db.query("DELETE FROM offboarding_settlement_lines WHERE offboarding_id = ? AND source = 'auto'", [rec.id]);
+  const auto = result.lines.filter((l) => l.source === 'auto');
+  if (auto.length) {
+    await db.query(
+      `INSERT INTO offboarding_settlement_lines
+         (offboarding_id, kind, code, label, quantity, rate, amount, explanation, source, ref_id, sort_order) VALUES ?`,
+      [auto.map((l) => [rec.id, l.kind, l.code, String(l.label).slice(0, 150), l.quantity, l.rate, l.amount,
+        l.explanation ? String(l.explanation).slice(0, 500) : null, 'auto', l.ref_id, l.sort])]);
+  }
+  // Manual lines keep their place after the automatic ones.
+  for (const l of result.lines.filter((x) => x.source === 'manual' && x.ref_id)) {
+    await db.query('UPDATE offboarding_settlement_lines SET sort_order = ? WHERE id = ?', [l.sort, l.ref_id]);
+  }
+  await db.query(
+    `UPDATE offboarding_records SET settlement_status = 'Draft', final_salary = ?, leave_encashment = ?,
+            eosb_amount = ?, deductions = ?, total_settlement = ?, settlement_inputs = ?,
+            settlement_prepared_by = ?, settlement_prepared_at = NOW()
+      WHERE id = ?`,
+    [result.totals.final_salary, result.totals.leave_encashment, result.totals.gratuity, result.totals.deductions,
+      result.totals.net, JSON.stringify({ ...hrInputs, facts: result.facts, shortfall: result.totals.shortfall }),
+      userId, rec.id]);
+}
+
+const cleanInputs = (body, prev = {}) => {
+  const num = (v) => (v === '' || v == null ? null : Number(v));
+  const out = { ...prev };
+  for (const k of ['carry_forward_days', 'leave_days_override', 'unpaid_leave_days']) {
+    if (body[k] === undefined) continue;
+    const v = num(body[k]);
+    if (v != null && (!Number.isFinite(v) || v < 0 || v > 3650)) return { error: `Invalid ${k.replace(/_/g, ' ')}` };
+    out[k] = v;
+  }
+  return { inputs: out };
+};
+
+/** Things that stop a settlement being approved. */
+async function settlementBlockers(rec) {
+  const holdings = await getEmployeeHoldings(pool, rec.employee_id);
+  const clearance = buildClearance(holdings);
+  // Still on a monthly run that is not yet approved: paying both would pay the
+  // same days twice. That run must be regenerated (it will leave them out).
+  const [[open]] = await pool.query(
+    `SELECT pr.period FROM payroll_items pi JOIN payroll_runs pr ON pr.id = pi.run_id
+      WHERE pi.employee_id = ? AND pr.status IN ('Draft','Pending Approval') LIMIT 1`, [rec.employee_id]);
+  return { clearance_open: clearance.cleared ? 0 : clearance.counts.total, open_run_period: open?.period || null };
+}
+
+// GET /api/offboarding/:id/settlement
+router.get('/:id/settlement', async (req, res) => {
+  try {
+    const rec = await loadRecord(req, req.params.id);
+    if (!rec) return res.status(404).json({ error: 'Not found' });
+    const [lines] = await pool.query(
+      'SELECT * FROM offboarding_settlement_lines WHERE offboarding_id = ? ORDER BY sort_order, id', [rec.id]);
+    const inputs = parseInputs(rec);
+    const blockers = await settlementBlockers(rec);
+    const today = new Date().toISOString().slice(0, 10);
+    const due = inputs.facts?.due_date || null;
+    res.json({
+      offboarding_id: rec.id,
+      status: rec.settlement_status,
+      inputs: { carry_forward_days: inputs.carry_forward_days ?? null, leave_days_override: inputs.leave_days_override ?? null,
+        unpaid_leave_days: inputs.unpaid_leave_days ?? null },
+      facts: inputs.facts || null,
+      lines: lines.map((l) => ({ ...l, amount: Number(l.amount), quantity: l.quantity == null ? null : Number(l.quantity),
+        rate: l.rate == null ? null : Number(l.rate) })),
+      totals: {
+        final_salary: Number(rec.final_salary || 0), leave_encashment: Number(rec.leave_encashment || 0),
+        gratuity: Number(rec.eosb_amount || 0), deductions: Number(rec.deductions || 0),
+        net: Number(rec.total_settlement || 0), shortfall: Number(inputs.shortfall || 0),
+      },
+      due_date: due,
+      overdue: !!due && rec.settlement_status !== 'Paid' && today > due,
+      prepared_by: rec.settlement_prepared_by, prepared_at: rec.settlement_prepared_at,
+      approved_by: rec.settlement_approved_by, approved_at: rec.settlement_approved_at,
+      override_reason: rec.settlement_override_reason,
+      paid_at: rec.settlement_paid_at, payment_ref: rec.settlement_payment_ref,
+      blockers,
+    });
+  } catch (err) { console.error('GET /offboarding/:id/settlement error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// POST /api/offboarding/:id/settlement/calculate — (re)calculate the Draft.
+router.post('/:id/settlement/calculate', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
+  try {
+    const rec = await loadRecord(req, req.params.id);
+    if (!rec) return res.status(404).json({ error: 'Not found' });
+    if (!['Not Started', 'Draft'].includes(rec.settlement_status)) {
+      return res.status(409).json({ error: `The settlement is already ${rec.settlement_status}` });
+    }
+    const { inputs, error } = cleanInputs(req.body || {}, parseInputs(rec));
+    if (error) return res.status(422).json({ error });
+    delete inputs.facts; delete inputs.shortfall;
+    const result = await computeSettlement(pool, rec, inputs);
+    await saveSettlement(pool, rec, result, inputs, req.user.id);
+    await addAudit(pool, req.user, 'Offboarding', 'Settlement Calculated',
+      `Final settlement for ${rec.first_name} ${rec.last_name}: net ${result.totals.net.toFixed(2)}`
+      + (result.totals.shortfall ? `, shortfall ${result.totals.shortfall.toFixed(2)}` : ''));
+    res.json({ success: true, totals: result.totals });
+  } catch (err) { console.error('POST /offboarding/:id/settlement/calculate error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// POST /api/offboarding/:id/settlement/lines — a manual line (notice pay, damages…)
+router.post('/:id/settlement/lines', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
+  try {
+    const rec = await loadRecord(req, req.params.id);
+    if (!rec) return res.status(404).json({ error: 'Not found' });
+    if (rec.settlement_status !== 'Draft') return res.status(409).json({ error: 'Calculate the settlement first; only a Draft can change' });
+    const { kind, label, explanation } = req.body || {};
+    const amount = Math.round(Number(req.body?.amount) * 100) / 100;
+    if (!['earning', 'deduction'].includes(kind)) return res.status(422).json({ error: 'Choose whether it is paid or deducted' });
+    if (!String(label || '').trim()) return res.status(422).json({ error: 'A description is required' });
+    if (!(amount > 0)) return res.status(422).json({ error: 'The amount must be more than zero' });
+    await pool.query('INSERT INTO offboarding_settlement_lines SET ?', {
+      offboarding_id: rec.id, kind, code: 'MANUAL', label: String(label).trim().slice(0, 150), amount,
+      explanation: explanation ? String(explanation).trim().slice(0, 500) : null, source: 'manual', sort_order: 999,
+    });
+    const inputs = parseInputs(rec); delete inputs.facts; delete inputs.shortfall;
+    await saveSettlement(pool, rec, await computeSettlement(pool, rec, inputs), inputs, req.user.id);
+    await addAudit(pool, req.user, 'Offboarding', 'Settlement Line Added', `"${label}" ${amount.toFixed(2)} (${kind}) on the settlement of ${rec.first_name} ${rec.last_name}`);
+    res.status(201).json({ success: true });
+  } catch (err) { console.error('POST /offboarding/:id/settlement/lines error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// DELETE /api/offboarding/:id/settlement/lines/:lineId — admin only, like every delete.
+router.delete('/:id/settlement/lines/:lineId', authorize('admin'), async (req, res) => {
+  try {
+    const rec = await loadRecord(req, req.params.id);
+    if (!rec) return res.status(404).json({ error: 'Not found' });
+    if (rec.settlement_status !== 'Draft') return res.status(409).json({ error: 'Only a Draft settlement can change' });
+    const [r] = await pool.query("DELETE FROM offboarding_settlement_lines WHERE id = ? AND offboarding_id = ? AND source = 'manual'",
+      [req.params.lineId, rec.id]);
+    if (!r.affectedRows) return res.status(404).json({ error: 'Line not found' });
+    const inputs = parseInputs(rec); delete inputs.facts; delete inputs.shortfall;
+    await saveSettlement(pool, rec, await computeSettlement(pool, rec, inputs), inputs, req.user.id);
+    await addAudit(pool, req.user, 'Offboarding', 'Settlement Line Deleted', `Manual line removed from the settlement of ${rec.first_name} ${rec.last_name}`);
+    res.json({ success: true });
+  } catch (err) { console.error('DELETE /offboarding/:id/settlement/lines/:lineId error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// PUT /api/offboarding/:id/settlement/approve
+//
+// Four eyes, like payroll: whoever prepared it does not approve it (an admin can,
+// with a reason). Unreturned assets and open access block approval unless an
+// admin records why it goes ahead anyway. The figures are recomputed first: if
+// anything moved since the Draft was prepared, the approver must look again.
+router.put('/:id/settlement/approve', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
+  try {
+    const rec = await loadRecord(req, req.params.id);
+    if (!rec) return res.status(404).json({ error: 'Not found' });
+    if (rec.settlement_status !== 'Draft') return res.status(409).json({ error: 'Only a Draft settlement can be approved' });
+
+    const reason = String(req.body?.override_reason || '').trim();
+    const isAdmin = req.user.role === 'admin';
+    if (rec.settlement_prepared_by === req.user.id) {
+      if (!isAdmin) return res.status(403).json({ error: 'The person who prepared the settlement cannot approve it', code: 'SAME_PERSON' });
+      if (reason.length < 10) return res.status(422).json({ error: 'You prepared this settlement: give a reason of at least 10 characters to approve it yourself', code: 'SAME_PERSON' });
+    }
+    const blockers = await settlementBlockers(rec);
+    if (blockers.open_run_period) {
+      return res.status(409).json({ error: `Still in the ${blockers.open_run_period} payroll run that is not approved yet. Regenerate that run first so the same days are not paid twice.`, code: 'IN_OPEN_RUN' });
+    }
+    if (blockers.clearance_open) {
+      if (!isAdmin) return res.status(409).json({ error: `${blockers.clearance_open} item(s) still to return or revoke`, code: 'CLEARANCE_OPEN' });
+      if (reason.length < 10) return res.status(422).json({ error: 'Items are still to return or revoke: give a reason of at least 10 characters', code: 'CLEARANCE_OPEN' });
+    }
+
+    const inputs = parseInputs(rec); delete inputs.facts; delete inputs.shortfall;
+    const fresh = await computeSettlement(pool, rec, inputs);
+    if (Math.abs(fresh.totals.net - Number(rec.total_settlement || 0)) > 0.009
+        || Math.abs(fresh.totals.deductions - Number(rec.deductions || 0)) > 0.009) {
+      await saveSettlement(pool, rec, fresh, inputs, rec.settlement_prepared_by);
+      return res.status(409).json({ error: 'The figures changed since the Draft was prepared. They have been recalculated: review them and approve again.', code: 'CHANGED' });
+    }
+
+    await pool.query(
+      `UPDATE offboarding_records SET settlement_status = 'Approved', settlement_approved_by = ?, settlement_approved_at = NOW(),
+              settlement_override_reason = ? WHERE id = ?`, [req.user.id, reason ? reason.slice(0, 500) : null, rec.id]);
+    await addAudit(pool, req.user, 'Offboarding', 'Settlement Approved',
+      `Final settlement for ${rec.first_name} ${rec.last_name} approved: net ${Number(rec.total_settlement).toFixed(2)}`
+      + (reason ? ` — ${reason}` : ''));
+    await notifyRole(pool, rec.company_id, ['admin', 'accountant'], {
+      type: 'payroll', title: 'Final settlement approved',
+      body: `${rec.first_name} ${rec.last_name}: ${Number(rec.total_settlement).toFixed(2)} to pay`, link: '/offboarding',
+    }, req.user.id);
+    res.json({ success: true });
+  } catch (err) { console.error('PUT /offboarding/:id/settlement/approve error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// PUT /api/offboarding/:id/settlement/reopen — Approved → back to Draft, with a reason.
+router.put('/:id/settlement/reopen', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
+  try {
+    const reason = String(req.body?.reason || '').trim();
+    if (!reason) return res.status(422).json({ error: 'A reason is required' });
+    const rec = await loadRecord(req, req.params.id);
+    if (!rec) return res.status(404).json({ error: 'Not found' });
+    if (rec.settlement_status !== 'Approved') return res.status(409).json({ error: 'Only an approved, unpaid settlement can be reopened' });
+    await pool.query(
+      `UPDATE offboarding_records SET settlement_status = 'Draft', settlement_approved_by = NULL,
+              settlement_approved_at = NULL, settlement_override_reason = NULL WHERE id = ?`, [rec.id]);
+    await addAudit(pool, req.user, 'Offboarding', 'Settlement Reopened', `Settlement of ${rec.first_name} ${rec.last_name} reopened: ${reason}`);
+    res.json({ success: true });
+  } catch (err) { console.error('PUT /offboarding/:id/settlement/reopen error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// PUT /api/offboarding/:id/settlement/paid — Approved → Paid. Final.
+// The outstanding loans it deducted are closed, and the one-time items it paid
+// are marked so no later run picks them up.
+router.put('/:id/settlement/paid', authorize('admin', 'accountant'), async (req, res) => {
+  const conn = await pool.getConnection();
+  try {
+    const rec = await loadRecord(req, req.params.id);
+    if (!rec) return res.status(404).json({ error: 'Not found' });
+    if (rec.settlement_status !== 'Approved') return res.status(409).json({ error: 'Only an approved settlement can be marked paid' });
+    const paidAt = String(req.body?.paid_at || '').slice(0, 10);
+    const ref = String(req.body?.payment_ref || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(paidAt)) return res.status(422).json({ error: 'Enter the payment date' });
+    if (!ref) return res.status(422).json({ error: 'Enter the payment reference (transfer or cheque number)' });
+
+    const [lines] = await conn.query("SELECT code, ref_id FROM offboarding_settlement_lines WHERE offboarding_id = ? AND source = 'auto' AND ref_id IS NOT NULL", [rec.id]);
+    await conn.beginTransaction();
+    await conn.query(
+      `UPDATE offboarding_records SET settlement_status = 'Paid', settlement_paid_at = ?, settlement_payment_ref = ?,
+              settlement_paid_by = ? WHERE id = ? AND settlement_status = 'Approved'`, [paidAt, ref.slice(0, 120), req.user.id, rec.id]);
+    const loanIds = lines.filter((l) => l.code === 'LOAN').map((l) => l.ref_id);
+    if (loanIds.length) {
+      await conn.query(
+        `UPDATE employee_loans SET status = 'Settled', closed_by = ?, closed_at = NOW(), close_note = 'Deducted in the final settlement'
+          WHERE id IN (?) AND status = 'Active'`, [req.user.id, loanIds]);
+    }
+    const adjIds = lines.filter((l) => l.code === 'ONE_TIME').map((l) => l.ref_id);
+    if (adjIds.length) await conn.query('UPDATE payroll_adjustments SET settlement_id = ? WHERE id IN (?)', [rec.id, adjIds]);
+    await conn.commit();
+    await addAudit(pool, req.user, 'Offboarding', 'Settlement Paid',
+      `Final settlement for ${rec.first_name} ${rec.last_name} paid on ${paidAt} (ref ${ref}): ${Number(rec.total_settlement).toFixed(2)}`);
+    res.json({ success: true });
+  } catch (err) {
+    try { await conn.rollback(); } catch { /* not in a transaction */ }
+    console.error('PUT /offboarding/:id/settlement/paid error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  } finally { conn.release(); }
 });
 
 // POST /api/offboarding — Initiate offboarding (employee must be in caller's company)

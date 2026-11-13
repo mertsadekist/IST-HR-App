@@ -15,6 +15,7 @@ import { UserMinus, Check, Lock, ChevronRight, Loader2, Plus, DollarSign, Calend
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import EmailButton from '@components/email/EmailButton';
+import SettlementPanel from './components/SettlementPanel';
 
 const STAGE_TEMPLATE_MAP = {
   resignation: 'offboarding_resignation',
@@ -283,6 +284,10 @@ export default function Offboarding() {
                 )}
               </div>
             )}
+
+            {/* Final settlement: last salary, unused leave, gratuity, loans. */}
+            <SettlementPanel offboardingId={detail.id} companyId={detail.company_id} employeeName={`${detail.first_name} ${detail.last_name}`}
+              t={t} onChanged={loadRecords} />
 
             <div className="flex justify-between items-center bg-brand-50 border border-brand-200 p-3 rounded-xl">
               <div className="flex flex-col">
