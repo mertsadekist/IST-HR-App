@@ -16,6 +16,7 @@ function lineLabel(t, l) {
     case 'FINAL_SALARY': return t('settlement.line_final_salary');
     case 'LEAVE_ENCASHMENT': return t('settlement.line_leave');
     case 'GRATUITY': return t('settlement.line_gratuity');
+    case 'OVERTIME': return t('settlement.line_overtime');
     case 'LOAN': return /advance/i.test(l.label) ? t('settlement.line_advance') : t('settlement.line_loan');
     default: return l.label;
   }

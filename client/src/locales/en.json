@@ -54,7 +54,8 @@
     "work_schedules": "Work Schedules",
     "attendance_exceptions": "Attendance Checks",
     "document_radar": "Document Radar",
-    "payroll_items": "Loans & One-time Items"
+    "payroll_items": "Loans & One-time Items",
+    "overtime": "Overtime"
   },
   "topbar": {
     "search_placeholder": "Search across HR system...",
@@ -3077,7 +3078,8 @@
     "working": "{{qty}} day(s) × {{rate}}",
     "line_other_additions": "Other additions",
     "line_loan": "Loan instalment",
-    "line_advance": "Salary advance repayment"
+    "line_advance": "Salary advance repayment",
+    "line_overtime": "Overtime"
   },
   "pay_components": {
     "tab": "Salary breakdown",
@@ -3210,6 +3212,44 @@
     "marked_paid": "Settlement marked paid",
     "paid_date": "Payment date",
     "payment_ref": "Transfer or cheque reference",
-    "pdf_failed": "Could not create the PDF"
+    "pdf_failed": "Could not create the PDF",
+    "line_overtime": "Approved overtime"
+  },
+  "overtime": {
+    "title": "Overtime",
+    "subtitle": "Found in the door attendance or entered by HR. Nothing is paid until approved; approved overtime is paid by the payroll run of its month.",
+    "detect": "Detect from attendance",
+    "add": "Add overtime",
+    "select_company": "Select a company first",
+    "detected": "{{created}} new day(s) with overtime found in {{scanned}} attendance day(s)",
+    "month": "Month",
+    "all": "All",
+    "st_pending": "Pending",
+    "st_approved": "Approved",
+    "st_rejected": "Rejected",
+    "summary": "{{pending}} pending · approved {{hours}} h · {{amount}}",
+    "rates_note": "Paid on basic salary / 30 / 8 per hour × {{normal}} normal, {{night}} night (22:00–04:00), {{rest}} rest day or holiday.",
+    "none": "No overtime recorded for {{period}}.",
+    "employee": "Employee",
+    "choose_employee": "Choose an employee",
+    "date": "Date",
+    "punches": "In – out",
+    "normal": "Normal (h:mm)",
+    "night": "Night (h:mm)",
+    "rest": "Rest day (h:mm)",
+    "amount": "Amount",
+    "status": "Status",
+    "manual": "manual",
+    "reason": "Reason",
+    "note": "Note",
+    "approve": "Approve",
+    "reject": "Reject",
+    "approve_title": "Approve overtime",
+    "approve_hint": "{{name}} on {{date}}. Lower the time if part of it was not work.",
+    "time_format": "Enter time as h:mm (1:30) or as hours (1.5).",
+    "approved": "Overtime approved",
+    "rejected": "Overtime rejected",
+    "added": "Overtime added as Pending",
+    "done_regenerate": "Saved. Regenerate this month’s Draft payroll run to include the change."
   }
 }

@@ -18,6 +18,8 @@ import {
 } from '../services/payrollV2.js';
 import { sendEmail } from '../services/emailService.js';
 import { getTemplate } from '../services/emailTemplates.js';
+import { overtimePay, effectiveRates } from '../services/overtimeService.js';
+import { getAppSetting } from '../services/appSettings.js';
 
 const router = Router();
 router.use(auth, tenantScope);
@@ -317,6 +319,15 @@ router.post('/runs/generate', authorize('admin', 'hr_manager', 'accountant'), va
         WHERE l.company_id = ? AND l.status = 'Active'`, [runId, companyId]);
     const loansByEmployee = groupBy(loanRows, 'employee_id');
 
+    // Approved overtime up to the end of this month that no run or settlement
+    // has paid yet (a late approval of last month's overtime is paid now).
+    const [otRows] = await conn.query(
+      `SELECT id, employee_id, approved_normal, approved_night, approved_rest FROM overtime_records
+        WHERE company_id = ? AND status = 'Approved' AND item_id IS NULL AND settlement_id IS NULL AND work_date <= ?`,
+      [companyId, periodEndDate]);
+    const overtimeByEmployee = groupBy(otRows, 'employee_id');
+    const otRates = effectiveRates(await getAppSetting('overtime_rates'));
+
     let totalGross = 0, totalDeductions = 0, totalNet = 0;
     for (const emp of employees) {
       // What leave costs this period, under the company policy.
@@ -425,6 +436,21 @@ router.post('/runs/generate', authorize('admin', 'hr_manager', 'accountant'), va
         ...instalments.map((i) => ({ kind: 'deduction', code: 'LOAN', label: i.type === 'Advance' ? 'Salary advance repayment' : 'Loan instalment',
           amount: i.amount, explanation: `Outstanding after this month: ${i.outstanding_after.toFixed(2)}` })),
       ];
+      // Approved overtime: one payslip line, priced per day at the legal rates.
+      const ot = (overtimeByEmployee.get(emp.id) || []).map((o) => ({
+        id: o.id,
+        ...overtimePay({ normal_minutes: o.approved_normal || 0, night_minutes: o.approved_night || 0, rest_minutes: o.approved_rest || 0 },
+          emp.basic_salary, otRates),
+        minutes: (o.approved_normal || 0) + (o.approved_night || 0) + (o.approved_rest || 0),
+      }));
+      if (ot.length) {
+        const otTotal = Math.round(ot.reduce((s, o) => s + o.amount, 0) * 100) / 100;
+        const otHours = Math.round(ot.reduce((s, o) => s + o.minutes, 0) / 60 * 100) / 100;
+        if (otTotal > 0) {
+          extras.push({ kind: 'earning', code: 'OVERTIME_PAY', label: 'Overtime', amount: otTotal,
+            explanation: `${ot.length} day(s), ${otHours} h at ${ot[0].hourly_rate.toFixed(2)}/h (basic / 30 / 8) x ${otRates.normal} normal, ${otRates.night} night, ${otRates.rest} rest day` });
+        }
+      }
       const sumOf = (kind) => extras.filter((x) => x.kind === kind).reduce((s, x) => s + x.amount, 0);
 
       const calc = computePayrollItem({
@@ -448,6 +474,10 @@ router.post('/runs/generate', authorize('admin', 'hr_manager', 'accountant'), va
       for (const i of instalments) {
         await conn.query('INSERT INTO loan_repayments SET ?',
           { loan_id: i.loan_id, run_id: runId, item_id: itemRes.insertId, period, amount: i.amount });
+      }
+      for (const o of ot) {
+        await conn.query('UPDATE overtime_records SET item_id = ?, run_id = ?, amount = ? WHERE id = ?',
+          [itemRes.insertId, runId, o.amount, o.id]);
       }
       if (adj.length) {
         await conn.query('UPDATE payroll_adjustments SET run_id = ?, item_id = ? WHERE id IN (?)',

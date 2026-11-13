@@ -9,7 +9,7 @@ import {
   BarChart3, ClipboardList, Trophy, Network, UserCog, Settings,
   Sparkles, ChevronDown, X, Package, Shield, Mail, Send,
   CalendarDays, Clock, Banknote, Inbox, HelpCircle, KeyRound, Share2, Globe,
-  Boxes, Layers, Fingerprint, ScanEye, Radar, HandCoins
+  Boxes, Layers, Fingerprint, ScanEye, Radar, HandCoins, Timer
 } from 'lucide-react';
 import { cn } from '@utils/cn';
 
@@ -60,6 +60,7 @@ const buildMenuGroups = (t) => [
         { path: '/attendance', icon: Clock, label: t('nav.attendance', 'Attendance'), roles: HR_ONLY },
         { path: '/attendance/sync', icon: Fingerprint, label: t('nav.attendance_sync'), roles: HR_ONLY },
         { path: '/attendance/exceptions', icon: ScanEye, label: t('nav.attendance_exceptions'), roles: HR_ONLY },
+        { path: '/overtime', icon: Timer, label: t('nav.overtime'), roles: HR_AND_FINANCE },
         { path: '/payroll-runs', icon: Banknote, label: t('nav.payroll_runs', 'Payroll Runs'), roles: HR_AND_FINANCE },
         { path: '/payroll-items', icon: HandCoins, label: t('nav.payroll_items'), roles: HR_AND_FINANCE },
         { path: '/salary-reviews', icon: TrendingUp, label: t('nav.salary_reviews', 'Salary Reviews'), roles: HR_ONLY },

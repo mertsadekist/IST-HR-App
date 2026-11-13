@@ -14,6 +14,16 @@ All notable changes to the IST HR System. Dates are ISO (YYYY‑MM‑DD). The ap
 - Google Drive attendance sync, its CSV parser, `GOOGLE_DRIVE_SA_*` / `ATTENDANCE_DRIVE_FOLDER_ID` variables and the `google-auth-library` dependency. Existing `Drive Sync` attendance rows and the `attendance_sync_*` ledger tables are kept as history.
 
 ### Added
+- **Overtime** (new page *Overtime*, `/overtime`; `services/overtimeService.js`):
+  - **Detect from attendance** scans a month of door punches against each person's work schedule.
+    - On a working day, overtime is time present beyond the scheduled span, from 30 minutes; arriving late offsets staying late.
+    - The part after the scheduled end that falls between 22:00 and 04:00 is night overtime.
+    - Every minute on a rest day or a full holiday is rest-day overtime.
+    - Owners are skipped, today is never judged, and re-running is safe.
+  - HR can also add a day manually, with a reason.
+  - **Nothing is paid until approved**, and the approver can lower the time. Approved overtime up to the month's end goes into that month's payroll run as one "Overtime" line. Each record remembers the payroll item that paid it; a regenerated or deleted Draft releases it, and a submitted run locks it. A leaver's approved, unpaid overtime goes into the final settlement.
+  - **Pay** (Decree-Law 33/2021 art. 19) is on basic: basic/30/8 per hour × 1.25 normal, 1.5 night, 1.5 rest day or holiday. The multipliers are the legal minimums; they can be raised in app settings (`overtime_rates`) but never lowered.
+  - Schema at boot through `ensureSchema`: `overtime_records`.
 - **Final settlement** (a panel in each offboarding record, `services/settlementService.js`):
   - **What it adds up.** Final salary from the day after the last approved monthly run to the last working day, at gross/30, with a whole calendar month counting as 30 days. Unused annual leave, accrued pro rata in the leaving year, minus leave taken, plus any carry-forward HR confirms; paid on **basic**/30. End-of-service gratuity from the existing engine. One-time items no monthly run paid. Minus outstanding loans and advances. Plus or minus manual lines (notice pay in lieu, notice not served, damages). Every line shows its working.
   - **Never negative.** Deductions beyond the dues are reported as a shortfall to recover separately, not paid as a negative amount.

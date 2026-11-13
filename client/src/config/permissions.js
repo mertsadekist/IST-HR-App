@@ -64,6 +64,7 @@ const ROUTE_MODULES = [
   ['/quick-offer', MODULES.HR],
   ['/leave', MODULES.HR],
   ['/attendance', MODULES.HR],
+  ['/overtime', MODULES.HR],
   ['/performance', MODULES.HR],
   ['/offboarding', MODULES.HR],
   ['/org-chart', MODULES.HR],
