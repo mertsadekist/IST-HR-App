@@ -14,6 +14,11 @@ All notable changes to the IST HR System. Dates are ISO (YYYY‑MM‑DD). The ap
 - Google Drive attendance sync, its CSV parser, `GOOGLE_DRIVE_SA_*` / `ATTENDANCE_DRIVE_FOLDER_ID` variables and the `google-auth-library` dependency. Existing `Drive Sync` attendance rows and the `attendance_sync_*` ledger tables are kept as history.
 
 ### Added
+- **Loans, salary advances and one-time pay items** (new page *Loans & One-time Items*, `/payroll-items`):
+  - **Loans and advances.** Repaid in equal monthly instalments from a chosen start month; the last instalment is whatever is left. Each instalment is recorded against the payroll item that took it (`loan_repayments`), so regenerating or deleting a Draft gives it back. "Repaid" counts only approved and paid runs. A loan is settled automatically when an approved run covers it. Admin and HR manager can close one early as Settled or Cancelled, with a note.
+  - **One-time items.** Bonus, commission, one-off allowance, reimbursement, overtime, deduction or other, for a given month. Earnings are paid on top of gross through `payroll_items.additions`, never through the daily rate, and fill the WPS file's *Variable Portion*. Deductions add to the deductions. Each item shows on the payslip under the description HR typed. Items are locked once their run is submitted; a month that is already submitted takes no new items.
+  - The salary explanation workbook reconciles leave and absence only, so loans and one-time deductions no longer show as mismatches.
+  - Schema at boot through `ensureSchema`: `employee_loans`, `loan_repayments`, `payroll_adjustments`, and `payroll_items.additions`.
 - **Payroll v2** (no change to how any figure is calculated):
   - **Payslip lines.** Each payroll item now stores its lines: basic, each allowance, leave deductions by leave type, and absence, with the working (days × daily rate). They add up exactly to gross and deductions. HR sees them by expanding an employee in the run; the employee sees them in My Salary.
   - **Salary breakdown.** A new tab on the employee profile records what the allowances are made of (housing, transport, food, phone, other). It only labels the payslip: `full_salary` stays the contract total, and any difference shows as its own line and as a warning.

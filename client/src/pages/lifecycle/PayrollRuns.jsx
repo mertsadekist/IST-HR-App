@@ -104,6 +104,8 @@ export default function PayrollRuns() {
     if (openRun) { const { data } = await payApi.getRun(openRun.id); setDetail(data); loadReview(openRun.id); }
     load();
   };
+  // One-time earnings get their own column, only when a run has any.
+  const showAdditions = (detail?.items || []).some((it) => Number(it.additions) > 0);
   const toggleRow = (id) => setExpanded((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const askReason = (dlg) => { setReasonText(''); setReasonDlg(dlg); };
 
@@ -350,7 +352,7 @@ export default function PayrollRuns() {
               <Card className="!p-0 overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-surface-50 text-surface-500 text-xs"><tr>
-                    <th className="text-start p-3">{t('payroll_runs.th_employee')}</th><th className="p-3">{t('payroll_runs.th_basic')}</th><th className="p-3">{t('payroll_runs.th_allowances')}</th><th className="p-3">{t('payroll_runs.th_gross')}</th>
+                    <th className="text-start p-3">{t('payroll_runs.th_employee')}</th><th className="p-3">{t('payroll_runs.th_basic')}</th><th className="p-3">{t('payroll_runs.th_allowances')}</th><th className="p-3">{t('payroll_runs.th_gross')}</th>{showAdditions && <th className="p-3">{t('payroll_runs.th_additions')}</th>}
                     <th className="p-3">{t('payroll_runs.th_unpaid')}</th><th className="p-3">{t('payroll_runs.th_absence')}</th><th className="p-3">{t('payroll_runs.th_deductions')}</th><th className="p-3">{t('payroll_runs.th_net')}</th></tr></thead>
                   <tbody>{(detail.items || []).map((it) => {
                     const open = expanded.has(it.id);
@@ -363,13 +365,13 @@ export default function PayrollRuns() {
                             {it.first_name} {it.last_name}
                           </span>
                         </td>
-                        <td className="p-3 text-center">{it.basic_salary}</td><td className="p-3 text-center">{it.allowances}</td><td className="p-3 text-center">{it.gross}</td>
+                        <td className="p-3 text-center">{it.basic_salary}</td><td className="p-3 text-center">{it.allowances}</td><td className="p-3 text-center">{it.gross}</td>{showAdditions && <td className="p-3 text-center text-emerald-700">{Number(it.additions) > 0 ? it.additions : '—'}</td>}
                         <td className="p-3 text-center">{it.unpaid_leave_days}</td><td className="p-3 text-center">{it.absence_days}</td>
                         <td className="p-3 text-center text-red-500">{it.deductions}</td><td className="p-3 text-center font-semibold text-brand-600">{it.net}</td>
                       </tr>,
                       open && (
                         <tr key={`${it.id}-lines`} className="bg-surface-50/70">
-                          <td colSpan={8} className="px-6 py-3"><PayslipLines t={t} lines={it.lines} net={it.net} /></td>
+                          <td colSpan={showAdditions ? 9 : 8} className="px-6 py-3"><PayslipLines t={t} lines={it.lines} net={it.net} /></td>
                         </tr>
                       ),
                     ];

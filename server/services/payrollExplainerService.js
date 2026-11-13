@@ -56,6 +56,11 @@ export async function buildPayrollExplanation(db, runId) {
   const [items] = await db.query(
     `SELECT pi.employee_id, pi.basic_salary, pi.allowances, pi.gross,
             pi.unpaid_leave_days, pi.absence_days, pi.deductions, pi.net,
+            -- Loan instalments and one-time deductions: real deductions, but not
+            -- ones this document derives from leave and attendance, so they are
+            -- set aside before the reconciliation below.
+            (SELECT COALESCE(SUM(l.amount), 0) FROM payroll_item_lines l
+              WHERE l.item_id = pi.id AND l.kind = 'deduction' AND l.code NOT IN ('LEAVE', 'ABSENCE')) AS other_deductions,
             CONCAT(e.first_name, ' ', e.last_name) AS name, e.attendance_id, e.is_owner,
             DATE_FORMAT(e.start_date, '%Y-%m-%d') AS start_date,
             d.name AS department, COALESCE(jt.title, e.job_title_text) AS job_title
@@ -202,7 +207,7 @@ export async function buildPayrollExplanation(db, runId) {
 
     const lines = [...leaveLines, ...absenceLines].sort((a, b) => a.date.localeCompare(b.date));
     const recomputed = round2(lines.reduce((s, l) => s + l.amount, 0));
-    const stored = round2(it.deductions);
+    const stored = round2(Number(it.deductions) - Number(it.other_deductions || 0));
     const leaveDeduction = round2(leaveLines.reduce((s, l) => s + l.amount, 0));
     const absenceDeduction = round2(absenceLines.reduce((s, l) => s + l.amount, 0));
 

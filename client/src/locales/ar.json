@@ -53,7 +53,8 @@
     "attendance_sync": "مزامنة Hik Central",
     "work_schedules": "جداول الدوام",
     "attendance_exceptions": "فحص الحضور",
-    "document_radar": "رادار المستندات"
+    "document_radar": "رادار المستندات",
+    "payroll_items": "القروض والبنود المؤقتة"
   },
   "topbar": {
     "search_placeholder": "ابحث في نظام الموارد البشرية...",
@@ -1400,7 +1401,8 @@
     "req_cancelled": "تم سحب الطلب",
     "withdraw": "سحب هذا الطلب",
     "reason": "السبب",
-    "reason_ph": "اختياري — أي شيء يجب أن تعرفه الموارد البشرية..."
+    "reason_ph": "اختياري — أي شيء يجب أن تعرفه الموارد البشرية...",
+    "additions": "الإضافات"
   },
   "send_doc": {
     "attach_note": "سيُرفق المستند كملف PDF.",
@@ -1740,7 +1742,8 @@
     "payslips_sent": "أُرسلت رسائل القسائم: {{sent}} ({{missing}} بلا بريد إلكتروني)",
     "payslips_failed": "تعذّر إرسال {{count}} رسالة — راجع سجل البريد",
     "payslips_already": "أُرسلت سابقاً في {{at}}",
-    "email_payslips_confirm": "إرسال بريد لكل موظف من {{count}} في هذه الدورة بأن قسيمته جاهزة؟ يُتخطّى من ليس لديه بريد إلكتروني."
+    "email_payslips_confirm": "إرسال بريد لكل موظف من {{count}} في هذه الدورة بأن قسيمته جاهزة؟ يُتخطّى من ليس لديه بريد إلكتروني.",
+    "th_additions": "الإضافات"
   },
   "salary_reviews": {
     "title": "مراجعة الرواتب السنوية",
@@ -3071,7 +3074,10 @@
     "comp_food": "بدل الطعام",
     "comp_phone": "بدل الهاتف",
     "comp_other": "بدل آخر",
-    "working": "{{qty}} يوم × {{rate}}"
+    "working": "{{qty}} يوم × {{rate}}",
+    "line_other_additions": "إضافات أخرى",
+    "line_loan": "قسط قرض",
+    "line_advance": "سداد سلفة راتب"
   },
   "pay_components": {
     "tab": "تفصيل الراتب",
@@ -3091,5 +3097,64 @@
     "add": "إضافة بدل",
     "matches": "البدلات المدرجة تساوي ما في العقد: {{total}}",
     "mismatch": "مجموع البدلات المدرجة {{listed}} لكن بدلات العقد {{allowances}}. يظهر الفرق كسطر مستقل في القسيمة."
+  },
+  "payroll_items": {
+    "title": "القروض والبنود المؤقتة",
+    "subtitle": "القروض وسلف الرواتب التي تُسدَّد عبر الرواتب، والمدفوعات أو الخصومات لمرة واحدة في شهر معيّن.",
+    "tab_loans": "القروض والسلف",
+    "tab_items": "بنود لمرة واحدة",
+    "new_loan": "قرض أو سلفة جديدة",
+    "new_item": "بند جديد لمرة واحدة",
+    "no_loans": "لا توجد قروض أو سلف بعد.",
+    "no_items": "لا توجد بنود لمرة واحدة في {{period}}.",
+    "employee": "الموظف",
+    "choose_employee": "اختر موظفاً",
+    "type": "النوع",
+    "type_loan": "قرض",
+    "type_advance": "سلفة راتب",
+    "amount": "المبلغ",
+    "instalment": "القسط الشهري",
+    "months": "{{count}} شهر",
+    "from_month": "أول شهر يُخصم فيه",
+    "repaid": "المسدَّد",
+    "outstanding": "المتبقي",
+    "in_progress": "{{amount}} في دورة لم تُعتمد بعد",
+    "status": "الحالة",
+    "loan_active": "نشط",
+    "loan_settled": "مُسدَّد",
+    "loan_cancelled": "ملغى",
+    "reason": "السبب",
+    "note": "ملاحظة",
+    "plan_preview": "يُسدَّد على {{count}} شهر، وآخر قسط في {{last}}.",
+    "loan_created": "تم إنشاء القرض. يُخصم من رواتب الشهر الأول المحدد.",
+    "close": "إغلاق",
+    "close_title": "إغلاق القرض مبكراً",
+    "close_hint": "ما زال على {{name}} مبلغ {{amount}}. الإغلاق يوقف الخصم الشهري؛ وما خُصم سابقاً يبقى.",
+    "close_settled": "مُسدَّد (سُدّد خارج الرواتب)",
+    "close_cancelled": "ملغى (شُطب)",
+    "loan_closed": "تم إغلاق القرض",
+    "month": "شهر الرواتب",
+    "category": "الفئة",
+    "description": "الوصف",
+    "description_ph": "مثال: مكافأة مبيعات الربع الثالث",
+    "kind": "دفع أم خصم",
+    "kind_earning": "يُدفع للموظف",
+    "kind_deduction": "يُخصم من الراتب",
+    "cat_bonus": "مكافأة",
+    "cat_commission": "عمولة",
+    "cat_allowance": "بدل لمرة واحدة",
+    "cat_reimbursement": "استرداد مصروف",
+    "cat_overtime": "عمل إضافي",
+    "cat_deduction": "خصم",
+    "cat_other": "أخرى",
+    "item_hint": "يُدفع أو يُخصم في دورة رواتب هذا الشهر. إن كانت دورة الشهر مسودة بالفعل، أعد إنشاءها ليُضاف البند.",
+    "adj_added": "أُضيف البند إلى رواتب الشهر",
+    "adj_added_regenerate": "أُضيف البند. أعد إنشاء مسودة رواتب هذا الشهر ليُحتسب.",
+    "adj_deleted_regenerate": "حُذف البند. أعد إنشاء مسودة رواتب هذا الشهر ليُزال منها.",
+    "total_paid": "المدفوع",
+    "total_deducted": "المخصوم",
+    "waiting_run": "بانتظار دورة الرواتب",
+    "in_draft": "في مسودة الدورة",
+    "in_run": "في دورة: {{status}}"
   }
 }
