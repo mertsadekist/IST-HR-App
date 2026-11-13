@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
-import { Stamp, Loader2, Check, X, CalendarDays, Timer } from 'lucide-react';
+import { Stamp, Loader2, Check, X, CalendarDays, Timer, Receipt, HandCoins } from 'lucide-react';
 import Card from '@components/ui/Card';
 import Button from '@components/ui/Button';
 import EmptyState from '@components/ui/EmptyState';
@@ -9,6 +9,8 @@ import PortalShell from './PortalShell';
 import ApprovalProgress from '@components/approvals/ApprovalProgress';
 import * as approvalsApi from '@api/approvalsApi';
 
+const ICONS = { leave: CalendarDays, overtime: Timer, expense: Receipt, advance: HandCoins };
+const money = (n) => Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const hm = (m) => `${Math.floor((m || 0) / 60)}:${String((m || 0) % 60).padStart(2, '0')}`;
 
 /**
@@ -58,13 +60,23 @@ export default function MyApprovals() {
             return (
               <Card key={it.id} className="!p-4 space-y-3">
                 <div className="flex items-start gap-3 flex-wrap">
-                  <div className="p-2 rounded-xl bg-brand-50 text-brand-700">{it.process === 'leave' ? <CalendarDays size={18} /> : <Timer size={18} />}</div>
+                  <div className="p-2 rounded-xl bg-brand-50 text-brand-700">{(() => { const Icon = ICONS[it.process] || Stamp; return <Icon size={18} />; })()}</div>
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-surface-900">{it.employee?.name}
                       <span className="text-xs font-normal text-surface-500 ms-2">{it.employee?.job_title}</span></p>
                     {it.process === 'leave' ? (
                       <p className="text-sm text-surface-700">
                         {d.leave_type}: {d.start_date}{d.end_date !== d.start_date ? ` → ${d.end_date}` : ''} · {t('approvals.days', { count: Number(d.days) })}
+                      </p>
+                    ) : it.process === 'expense' ? (
+                      <p className="text-sm text-surface-700">
+                        {t('approvals.expense_line', { amount: money(d.amount), category: t(`requests.expense_cat.${d.details?.category}`), date: d.details?.expense_date })}
+                        <span className="block text-xs text-surface-500 mt-0.5">{d.details?.description}</span>
+                      </p>
+                    ) : it.process === 'advance' ? (
+                      <p className="text-sm text-surface-700">
+                        {t('approvals.advance_line', { amount: money(d.amount), months: d.details?.months, instalment: money(d.details?.instalment) })}
+                        <span className="block text-xs text-surface-500 mt-0.5">{d.details?.reason}</span>
                       </p>
                     ) : (
                       <p className="text-sm text-surface-700">

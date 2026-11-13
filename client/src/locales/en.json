@@ -58,7 +58,9 @@
     "overtime": "Overtime",
     "my_team": "My Team",
     "approval_chains": "Approval chains",
-    "my_approvals": "My Approvals"
+    "my_approvals": "My Approvals",
+    "employee_requests": "Employee Requests",
+    "my_requests": "My Requests"
   },
   "topbar": {
     "search_placeholder": "Search across HR system...",
@@ -3335,6 +3337,156 @@
     "you_rejected": "Rejected",
     "chain_running": "The approval chain has not finished yet.",
     "override_hint": "The approval chain has not finished. As an admin you can decide now: say why (at least 10 characters).",
-    "override_ph": "Why it is decided before the chain finishes"
+    "override_ph": "Why it is decided before the chain finishes",
+    "process_expense": "Expenses",
+    "process_advance": "Salary advances",
+    "expense_line": "{{amount}} · {{category}} on {{date}}",
+    "advance_line": "Advance of {{amount}}, repaid over {{months}} month(s) at {{instalment}}"
+  },
+  "requests": {
+    "my_title": "My Requests",
+    "my_subtitle": "Letters, expenses, salary advances and questions for HR",
+    "open": "Open",
+    "total": "All requests",
+    "new": {
+      "letter": "Request a letter",
+      "expense": "Claim an expense",
+      "advance": "Ask for a salary advance",
+      "case": "Raise a case with HR"
+    },
+    "new_desc": {
+      "letter": "Salary certificate, NOC, employment or experience letter",
+      "expense": "Paid for work? Get it back with your salary",
+      "advance": "Paid now, deducted from your salary in instalments",
+      "case": "A question or a problem for HR to look into"
+    },
+    "after": {
+      "letter": "HR prepares the letter and uploads it here for you to download.",
+      "expense": "Once approved, it is paid back with your salary in the next payroll.",
+      "advance": "Once approved, it is paid and then deducted from your salary each month.",
+      "case": "HR will reply here. You get a notification when they do."
+    },
+    "none": "No requests yet",
+    "none_desc": "Choose one of the cards above to ask HR for something.",
+    "ready_to_download": "ready to download",
+    "purpose_ph": "e.g. Bank account, visa application",
+    "to_whom": "To whom it may concern",
+    "instalment_preview": "{{amount}} a month for {{months}} month(s)",
+    "receipt": "Receipt",
+    "attachment_optional": "Attachment (optional)",
+    "send": "Send request",
+    "sent": "Request sent to HR",
+    "sent_chain": "Request sent for approval",
+    "type": {
+      "letter": "Letter",
+      "expense": "Expense",
+      "advance": "Salary advance",
+      "case": "HR case"
+    },
+    "status": {
+      "pending": "Pending",
+      "in_progress": "In progress",
+      "approved": "Approved",
+      "completed": "Completed",
+      "resolved": "Resolved",
+      "closed": "Closed",
+      "rejected": "Declined",
+      "cancelled": "Withdrawn"
+    },
+    "letter_type": {
+      "salary_certificate": "Salary certificate",
+      "noc": "No-objection certificate (NOC)",
+      "employment_confirmation": "Employment confirmation",
+      "experience_certificate": "Experience certificate"
+    },
+    "expense_cat": {
+      "Travel": "Travel",
+      "Transport": "Transport",
+      "Meals": "Meals",
+      "Supplies": "Supplies",
+      "Phone": "Phone",
+      "Training": "Training",
+      "Other": "Other"
+    },
+    "case_cat": {
+      "Payroll": "Payroll",
+      "Leave": "Leave",
+      "Attendance": "Attendance",
+      "Documents": "Documents",
+      "Workplace": "Workplace",
+      "IT": "IT",
+      "Other": "Other"
+    },
+    "lang": {
+      "en": "English",
+      "ar": "Arabic",
+      "both": "English and Arabic"
+    },
+    "f": {
+      "letter_type": "Letter",
+      "language": "Language",
+      "addressed_to": "Addressed to",
+      "purpose": "Purpose",
+      "amount": "Amount",
+      "category": "Category",
+      "expense_date": "Date of the expense",
+      "description": "Description",
+      "months": "Repay over (months)",
+      "instalment": "Monthly instalment",
+      "reason": "Reason",
+      "assigned_to": "Owner",
+      "due_date": "Due date",
+      "decision": "HR note",
+      "status": "Status",
+      "reimburse_in": "Reimburse in payroll month",
+      "start_period": "First month deducted",
+      "subject": "Subject"
+    },
+    "request": "Request",
+    "not_found": "This request could not be found.",
+    "files": "Files",
+    "attach": "Attach",
+    "upload_letter": "Upload issued letter",
+    "no_files": "No files yet.",
+    "issued_document": "Issued",
+    "conversation": "Conversation",
+    "no_comments": "No messages yet.",
+    "comment_ph": "Write a message…",
+    "withdraw": "Withdraw request",
+    "hr_decision": "HR decision",
+    "unassigned": "Unassigned",
+    "chain_pending": "This request is still going through its approval chain. HR decides once it is approved.",
+    "override_reason": "Admin: approve anyway — reason (at least 10 characters)",
+    "reimburse_hint": "Leave empty for next month. The payroll for that month must still be a Draft.",
+    "letter_hint": "Upload the signed letter, then issue it — the employee is notified and can download it.",
+    "start_work": "Mark in progress",
+    "reason_ph": "Reason (needed to decline)",
+    "reject": "Decline",
+    "issue": "Issue letter",
+    "approve": "Approve",
+    "file_added": "File added",
+    "letter_issued": "Letter issued",
+    "approved_msg": "Approved and booked into payroll",
+    "reason_required": "Give a reason to decline",
+    "rejected_msg": "Request declined",
+    "cancelled_msg": "Request withdrawn",
+    "updated_msg": "Saved",
+    "hr_title": "Employee Requests",
+    "hr_subtitle": "Letters, expenses, salary advances and cases raised from the portal",
+    "stat": {
+      "open": "Open",
+      "ready_for_hr": "Ready for HR",
+      "in_chain": "In approval chain"
+    },
+    "all_types": "All",
+    "filter_open": "Open",
+    "filter_all": "All statuses",
+    "queue_empty": "Nothing here.",
+    "due": "due {{date}}",
+    "col": {
+      "employee": "Employee",
+      "request": "Request",
+      "raised": "Raised"
+    }
   }
 }

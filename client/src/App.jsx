@@ -82,6 +82,8 @@ const MySalary = lazy(() => import('@pages/portal/MySalary'));
 const MyLeave = lazy(() => import('@pages/portal/MyLeave'));
 const MyTeam = lazy(() => import('@pages/portal/MyTeam'));
 const MyApprovals = lazy(() => import('@pages/portal/MyApprovals'));
+const MyRequests = lazy(() => import('@pages/portal/MyRequests'));
+const EmployeeRequestsPage = lazy(() => import('@pages/lifecycle/EmployeeRequests'));
 
 // Legal
 const LegalLetters = lazy(() => import('@pages/legal/LegalLetters'));
@@ -138,6 +140,7 @@ export default function App() {
                 <Route path="/attendance/sync" element={<AttendanceSync />} />
                 <Route path="/attendance/exceptions" element={<AttendanceExceptions />} />
                 <Route path="/overtime" element={<OvertimePage />} />
+                <Route path="/requests" element={<EmployeeRequestsPage />} />
                 <Route path="/payroll-runs" element={<PayrollRunsPage />} />
                 <Route path="/payroll-items" element={<PayrollItemsPage />} />
                 <Route path="/salary-reviews" element={<SalaryReviewsPage />} />
@@ -156,6 +159,7 @@ export default function App() {
                 <Route path="/portal/leave" element={<MyLeave />} />
                 <Route path="/portal/team" element={<MyTeam />} />
                 <Route path="/portal/approvals" element={<MyApprovals />} />
+                <Route path="/portal/requests" element={<MyRequests />} />
 
                 {/* Legal */}
                 <Route path="/legal-letters" element={<LegalLetters />} />

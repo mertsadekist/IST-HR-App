@@ -660,6 +660,54 @@ const TABLE_GUARDS = [
      INDEX idx_action_request (request_id),
      FOREIGN KEY (request_id) REFERENCES approval_requests(id) ON DELETE CASCADE
    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  // ── Portal requests (services/employeeRequestService.js) ────────────────────
+  `CREATE TABLE IF NOT EXISTS employee_requests (
+     id            INT AUTO_INCREMENT PRIMARY KEY,
+     company_id    INT NOT NULL,
+     employee_id   INT NOT NULL,
+     type          ENUM('letter','expense','advance','case') NOT NULL,
+     status        ENUM('Pending','In Progress','Approved','Rejected','Completed','Resolved','Closed','Cancelled') NOT NULL DEFAULT 'Pending',
+     title         VARCHAR(200) NOT NULL,
+     amount        DECIMAL(12,2) NULL,
+     details       JSON NULL,
+     assigned_to   INT NULL,
+     due_date      DATE NULL,
+     result_type   VARCHAR(30) NULL,
+     result_id     INT NULL,
+     decision_note VARCHAR(500) NULL,
+     decided_by    INT NULL,
+     decided_at    TIMESTAMP NULL,
+     created_by    INT NULL,
+     created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+     INDEX idx_ereq_company_status (company_id, status),
+     INDEX idx_ereq_employee (employee_id),
+     FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE,
+     FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  // 'attachment' from the employee (a receipt); 'result' from HR (the issued letter).
+  `CREATE TABLE IF NOT EXISTS employee_request_files (
+     id          INT AUTO_INCREMENT PRIMARY KEY,
+     request_id  INT NOT NULL,
+     kind        ENUM('attachment','result') NOT NULL DEFAULT 'attachment',
+     file_name   VARCHAR(255) NOT NULL,
+     file_type   VARCHAR(120) NULL,
+     file_size   INT NULL,
+     storage_key VARCHAR(255) NOT NULL,
+     uploaded_by INT NULL,
+     uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     INDEX idx_ereqf_request (request_id),
+     FOREIGN KEY (request_id) REFERENCES employee_requests(id) ON DELETE CASCADE
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  `CREATE TABLE IF NOT EXISTS employee_request_comments (
+     id         INT AUTO_INCREMENT PRIMARY KEY,
+     request_id INT NOT NULL,
+     user_id    INT NULL,
+     body       VARCHAR(2000) NOT NULL,
+     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     INDEX idx_ereqc_request (request_id),
+     FOREIGN KEY (request_id) REFERENCES employee_requests(id) ON DELETE CASCADE
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   `CREATE TABLE IF NOT EXISTS offboarding_settlement_lines (
      id             INT AUTO_INCREMENT PRIMARY KEY,
      offboarding_id INT NOT NULL,

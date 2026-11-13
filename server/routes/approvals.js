@@ -66,7 +66,14 @@ router.get('/mine', async (req, res) => {
     const pending = await pendingForUser(pool, req.user.id);
     const ids = (p) => pending.filter((r) => r.process === p).map((r) => r.entity_id);
     const leaveIds = ids('leave'), otIds = ids('overtime');
-    const leave = new Map(), ot = new Map();
+    const reqIds = [...ids('expense'), ...ids('advance')];
+    const leave = new Map(), ot = new Map(), reqs = new Map();
+    if (reqIds.length) {
+      const [rows] = await pool.query('SELECT id, type, title, amount, details, created_at FROM employee_requests WHERE id IN (?)', [reqIds]);
+      for (const r of rows) {
+        reqs.set(r.id, { ...r, amount: Number(r.amount), details: typeof r.details === 'string' ? JSON.parse(r.details) : (r.details || {}) });
+      }
+    }
     if (leaveIds.length) {
       const [rows] = await pool.query(
         `SELECT lr.id, lr.days, lr.reason, lt.name AS leave_type,
@@ -93,11 +100,15 @@ router.get('/mine', async (req, res) => {
       ...(await approvalSummaries(pool, 'leave', leaveIds)).entries(),
     ]);
     const otChains = await approvalSummaries(pool, 'overtime', otIds);
+    const reqChains = new Map([
+      ...(await approvalSummaries(pool, 'expense', ids('expense'))).entries(),
+      ...(await approvalSummaries(pool, 'advance', ids('advance'))).entries(),
+    ]);
     res.json(pending.map((r) => ({
       id: r.id, process: r.process, entity_id: r.entity_id, created_at: r.created_at,
       employee: names.get(r.employee_id) || null,
-      details: r.process === 'leave' ? leave.get(r.entity_id) || null : ot.get(r.entity_id) || null,
-      chain: (r.process === 'leave' ? chains : otChains).get(r.entity_id) || null,
+      details: (r.process === 'leave' ? leave : r.process === 'overtime' ? ot : reqs).get(r.entity_id) || null,
+      chain: (r.process === 'leave' ? chains : r.process === 'overtime' ? otChains : reqChains).get(r.entity_id) || null,
     })).filter((x) => x.details));
   } catch (err) { console.error('GET /approvals/mine error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
@@ -127,13 +138,19 @@ router.post('/:id/act', async (req, res) => {
         await pool.query(
           `UPDATE overtime_records SET status = 'Rejected', decision_note = ?, decided_by = ?, decided_at = NOW()
             WHERE id = ? AND status = 'Pending'`, [note.slice(0, 500), req.user.id, ar.entity_id]);
+      } else if (ar.process === 'expense' || ar.process === 'advance') {
+        await pool.query(
+          `UPDATE employee_requests SET status = 'Rejected', decision_note = ?, decided_by = ?, decided_at = NOW()
+            WHERE id = ? AND status IN ('Pending', 'In Progress')`, [note.slice(0, 500), req.user.id, ar.entity_id]);
+        await notify(pool, { userId: empUser, companyId: ar.company_id, type: 'request', title: 'Request declined', body: note, link: '/portal/requests' });
       }
     } else if (result.status === 'Approved') {
       // The chain is done; the final decision is HR's, as before.
-      const link = ar.process === 'leave' ? '/leave' : '/overtime';
-      const what = ar.process === 'leave' ? 'Leave request' : 'Overtime';
-      await notifyRole(pool, ar.company_id, ['admin', 'hr_manager'], {
-        type: ar.process, title: `${what} ready for HR approval`, body: `Approved through the chain by ${req.user.name || 'the approver'}`, link,
+      const link = { leave: '/leave', overtime: '/overtime' }[ar.process] || '/requests';
+      const what = { leave: 'Leave request', overtime: 'Overtime', expense: 'Expense', advance: 'Salary advance' }[ar.process];
+      const hrRoles = ['expense', 'advance'].includes(ar.process) ? ['admin', 'hr_manager', 'accountant'] : ['admin', 'hr_manager'];
+      await notifyRole(pool, ar.company_id, hrRoles, {
+        type: link === '/requests' ? 'request' : ar.process, title: `${what} ready for HR approval`, body: `Approved through the chain by ${req.user.name || 'the approver'}`, link,
       }, req.user.id);
       if (ar.process === 'leave') {
         await notify(pool, { userId: empUser, companyId: ar.company_id, type: 'leave', title: 'Leave approved by your manager', body: 'Waiting for HR', link: '/portal/leave' });
