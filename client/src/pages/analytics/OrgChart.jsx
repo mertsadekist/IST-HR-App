@@ -7,6 +7,7 @@ import EmptyState from '@components/ui/EmptyState';
 import { toast } from 'react-toastify';
 import { Network, Building2, Users, Maximize, Minus, Plus, Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import PeopleOrgChart from './PeopleOrgChart';
 
 export default function OrgChart() {
   const { t } = useTranslation();
@@ -24,6 +25,7 @@ export default function OrgChart() {
 
   // Side Panel state
   const [selectedNode, setSelectedNode] = useState(null);
+  const [view, setView] = useState('people');
 
   useEffect(() => {
     const company = currentCompanyId
@@ -108,6 +110,31 @@ export default function OrgChart() {
     </div>
   );
 
+  // People (reporting lines) or departments (structure).
+  const viewToggle = (
+    <div className="flex gap-1 bg-surface-50 p-1 rounded-xl">
+      {['people', 'departments'].map((v) => (
+        <button key={v} type="button" onClick={() => setView(v)}
+          className={`px-3 py-2 rounded-lg text-xs font-medium ${view === v ? 'bg-brand-600 text-white' : 'text-surface-600 hover:bg-surface-100'}`}>
+          {v === 'people' ? t('org.view_people') : t('org.view_departments')}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (view === 'people') {
+    return (
+      <div className="space-y-4 animate-fade-in">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div><h1 className="text-2xl font-bold text-surface-900">{t('org_chart.title')}</h1>
+            <p className="text-surface-500 mt-0.5 text-sm">{t('org.people_subtitle')}</p></div>
+          {viewToggle}
+        </div>
+        <PeopleOrgChart t={t} />
+      </div>
+    );
+  }
+
   return (
     <div className="h-[calc(100vh-100px)] flex flex-col animate-fade-in">
       <style dangerouslySetInnerHTML={{__html: `
@@ -128,6 +155,7 @@ export default function OrgChart() {
           <p className="text-surface-500 mt-0.5 text-sm">{t('org_chart.subtitle')}</p></div>
         
         <div className="flex items-center gap-4">
+          {viewToggle}
           <div className="flex gap-1 bg-surface-50 p-1 rounded-xl">
             {companies.map(c => (
               <button key={c.id} onClick={() => { setSelectedCompany(c); loadDepartments(c.id); }}

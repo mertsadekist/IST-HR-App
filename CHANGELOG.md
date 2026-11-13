@@ -14,6 +14,10 @@ All notable changes to the IST HR System. Dates are ISO (YYYY‑MM‑DD). The ap
 - Google Drive attendance sync, its CSV parser, `GOOGLE_DRIVE_SA_*` / `ATTENDANCE_DRIVE_FOLDER_ID` variables and the `google-auth-library` dependency. Existing `Drive Sync` attendance rows and the `attendance_sync_*` ledger tables are kept as history.
 
 ### Added
+- **Direct manager, people org chart and My Team** (`services/orgService.js`):
+  - **Direct manager.** Each employee can have one (`employees.manager_employee_id`), set from the profile under Employment details → Edit. The manager can sit in another company of the group. A choice that would loop (the person themselves, or anyone below them) is refused.
+  - **Org chart → By people.** The new default view draws who reports to whom as an expandable tree with search, with direct and total report counts. It also shows how many people still have no manager; they appear at the top level until one is set. The department view is unchanged.
+  - **My Team** (`/portal/team`). For anyone with reports, direct or indirect: today's status (in, late, absent, on leave, no punch), the month so far, and pending or approved leave for the next 30 days. Attendance and leave only, never pay, documents or bank details. The menu entry appears only for people who manage someone.
 - **Overtime** (new page *Overtime*, `/overtime`; `services/overtimeService.js`):
   - **Detect from attendance** scans a month of door punches against each person's work schedule.
     - On a working day, overtime is time present beyond the scheduled span, from 30 minutes; arriving late offsets staying late.

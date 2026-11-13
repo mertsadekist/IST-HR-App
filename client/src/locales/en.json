@@ -55,7 +55,8 @@
     "attendance_exceptions": "Attendance Checks",
     "document_radar": "Document Radar",
     "payroll_items": "Loans & One-time Items",
-    "overtime": "Overtime"
+    "overtime": "Overtime",
+    "my_team": "My Team"
   },
   "topbar": {
     "search_placeholder": "Search across HR system...",
@@ -3251,5 +3252,40 @@
     "rejected": "Overtime rejected",
     "added": "Overtime added as Pending",
     "done_regenerate": "Saved. Regenerate this month’s Draft payroll run to include the change."
+  },
+  "org": {
+    "manager": "Direct manager",
+    "no_manager": "No manager",
+    "view_people": "By people",
+    "view_departments": "By department",
+    "people_subtitle": "Who reports to whom, from each employee’s direct manager.",
+    "search": "Search by name",
+    "coverage": "{{managed}} of {{total}} people have a direct manager",
+    "coverage_hint": "People without a manager appear at the top level. Set the manager on each profile (Employment details → Edit).",
+    "none": "No current employees in this company.",
+    "reports_count": "{{direct}} direct · {{total}} in total"
+  },
+  "team": {
+    "title": "My Team",
+    "subtitle": "Your direct reports and everyone below them: who is in, who is away, and the month so far.",
+    "stat_size": "People",
+    "stat_in": "In today",
+    "stat_away": "On leave",
+    "stat_pending": "Pending leave",
+    "empty": "No one reports to you",
+    "empty_desc": "When HR sets you as someone’s direct manager, they appear here.",
+    "not_tracked": "Not tracked",
+    "in_at": "In at {{time}}",
+    "late_at": "Late, in at {{time}}",
+    "absent": "Absent",
+    "on_leave": "On leave: {{type}}",
+    "no_punch": "No punch yet",
+    "via": "Reports to {{name}}",
+    "m_present": "On time",
+    "m_late": "Late",
+    "m_absent": "Absent",
+    "pending": "Pending",
+    "approved": "Approved",
+    "privacy_note": "This page shows attendance and leave only. Pay, documents and bank details stay with HR."
   }
 }

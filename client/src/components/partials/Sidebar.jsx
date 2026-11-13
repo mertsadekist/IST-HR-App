@@ -12,6 +12,7 @@ import {
   Boxes, Layers, Fingerprint, ScanEye, Radar, HandCoins, Timer
 } from 'lucide-react';
 import { cn } from '@utils/cn';
+import * as portalApi from '@api/portalApi';
 
 // Audiences, named so the intent survives the next role that gets added.
 // These mirror server/config/permissions.js — the menu only decides what is
@@ -124,6 +125,8 @@ const buildMenuGroups = (t) => [
         { path: '/portal/attendance', icon: Clock, label: t('nav.my_attendance') },
         { path: '/portal/salary', icon: Banknote, label: t('nav.my_salary') },
         { path: '/portal/leave', icon: CalendarDays, label: t('nav.my_leave') },
+        // Only for people who manage someone (see hasTeam in Sidebar).
+        { path: '/portal/team', icon: Users, label: t('nav.my_team'), requiresTeam: true },
       ],
     },
     {
@@ -170,6 +173,18 @@ export default function Sidebar({ isOpen, onClose }) {
       if (!valid) dispatch(setCurrentCompany(companies[0].id));
     }
   }, [companies, currentCompanyId, dispatch]);
+
+  // Whether this person manages anyone: "My Team" is shown only then, rather
+  // than as an empty page for everyone else. Asked once per signed-in user.
+  const [hasTeam, setHasTeam] = useState(false);
+  useEffect(() => {
+    let off = false;
+    if (!user?.id) return undefined;
+    portalApi.hasTeam()
+      .then(({ data }) => { if (!off) setHasTeam(!!data.has_team); })
+      .catch(() => { if (!off) setHasTeam(false); });
+    return () => { off = true; };
+  }, [user?.id]);
 
   const localizedMenuGroups = buildMenuGroups(t);
 
@@ -248,7 +263,7 @@ export default function Sidebar({ isOpen, onClose }) {
           {localizedMenuGroups
             .filter(group => !group.roles || group.roles.includes(user?.role))
             .map((group, gi) => {
-            const items = group.items.filter(item => !item.roles || item.roles.includes(user?.role));
+            const items = group.items.filter(item => (!item.roles || item.roles.includes(user?.role)) && (!item.requiresTeam || hasTeam));
             if (!items.length) return null;
 
             const isItemActive = (item) => location.pathname === item.path

@@ -115,6 +115,13 @@ const COLUMN_GUARDS = [
   { table: 'offboarding_records', column: 'settlement_paid_at', ddl: 'ALTER TABLE offboarding_records ADD COLUMN settlement_paid_at DATE NULL' },
   { table: 'offboarding_records', column: 'settlement_payment_ref', ddl: 'ALTER TABLE offboarding_records ADD COLUMN settlement_payment_ref VARCHAR(120) NULL' },
   { table: 'offboarding_records', column: 'settlement_paid_by', ddl: 'ALTER TABLE offboarding_records ADD COLUMN settlement_paid_by INT NULL' },
+  // Direct manager (services/orgService.js). Self-referencing; removing the
+  // manager's record leaves their reports with no manager, never deletes them.
+  {
+    table: 'employees', column: 'manager_employee_id',
+    ddl: 'ALTER TABLE employees ADD COLUMN manager_employee_id INT NULL, ADD INDEX idx_emp_manager (manager_employee_id), '
+      + 'ADD CONSTRAINT fk_emp_manager FOREIGN KEY (manager_employee_id) REFERENCES employees(id) ON DELETE SET NULL',
+  },
   // A one-time item paid by a settlement rather than a monthly run.
   { table: 'payroll_adjustments', column: 'settlement_id', ddl: 'ALTER TABLE payroll_adjustments ADD COLUMN settlement_id INT NULL' },
 ];

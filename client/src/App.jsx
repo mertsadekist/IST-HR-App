@@ -79,6 +79,7 @@ const MyAssets = lazy(() => import('@pages/portal/MyAssets'));
 const MyAttendance = lazy(() => import('@pages/portal/MyAttendance'));
 const MySalary = lazy(() => import('@pages/portal/MySalary'));
 const MyLeave = lazy(() => import('@pages/portal/MyLeave'));
+const MyTeam = lazy(() => import('@pages/portal/MyTeam'));
 
 // Legal
 const LegalLetters = lazy(() => import('@pages/legal/LegalLetters'));
@@ -151,6 +152,7 @@ export default function App() {
                 <Route path="/portal/attendance" element={<MyAttendance />} />
                 <Route path="/portal/salary" element={<MySalary />} />
                 <Route path="/portal/leave" element={<MyLeave />} />
+                <Route path="/portal/team" element={<MyTeam />} />
 
                 {/* Legal */}
                 <Route path="/legal-letters" element={<LegalLetters />} />
