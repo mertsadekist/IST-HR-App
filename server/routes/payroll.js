@@ -9,6 +9,7 @@ import { computePayrollItem } from '../services/payrollService.js';
 import {
   loadLeavePolicy, leaveDeductionForPeriod, annualEntitlement,
 } from '../services/leavePolicyService.js';
+import { ledgerTotals, capsWithLedger } from '../services/leaveBalanceStore.js';
 import { buildPayrollExplanation } from '../services/payrollExplainerService.js';
 import { renderPayrollExplanationWorkbook } from '../services/payrollExplainerWorkbook.js';
 import { buildWpsWorkbook, wpsReadiness } from '../services/wpsService.js';
@@ -69,6 +70,7 @@ function adjustmentCode(a) {
     case 'Commission': return 'COMMISSION';
     case 'Allowance': return 'ONE_TIME_ALLOWANCE';
     case 'Reimbursement': return 'REIMBURSEMENT';
+    case 'Leave Encashment': return 'LEAVE_ENCASHMENT';
     case 'Overtime': return 'OVERTIME';
     case 'Deduction': return 'DEDUCTION';
     default: return a.kind === 'earning' ? 'ADDITION' : 'EXTRA';
@@ -329,6 +331,9 @@ router.post('/runs/generate', authorize('admin', 'hr_manager', 'accountant'), va
     const otRates = effectiveRates(await getAppSetting('overtime_rates'));
 
     let totalGross = 0, totalDeductions = 0, totalNet = 0;
+    // Days opened, carried, lapsed or encashed (leave_adjustments) move each
+    // employee's yearly caps, so carried days are paid when taken.
+    const leaveLedger = await ledgerTotals(conn, employees.map((e) => e.id), Number(year)).catch(() => new Map());
     for (const emp of employees) {
       // What leave costs this period, under the company policy.
       //
@@ -352,7 +357,7 @@ router.post('/runs/generate', authorize('admin', 'hr_manager', 'accountant'), va
           ORDER BY lr.start_date`,
         [emp.id, `${year}-01-01`, `${year}-12-31`]);
 
-      const capByType = new Map(policy.capByType);
+      let capByType = new Map(policy.capByType);
       // Annual leave is capped by service, so the cap differs per employee.
       //
       // With no start date on the record there is no service to measure, and the
@@ -365,6 +370,7 @@ router.post('/runs/generate', authorize('admin', 'hr_manager', 'accountant'), va
           ? annualEntitlement(emp.start_date, periodEndDate)
           : policy.defaultDaysByType.get(policy.annualTypeId) ?? null);
       }
+      capByType = capsWithLedger(capByType, leaveLedger, emp.id);
       // A company owner keeps their own hours and is never charged for leave or
       // absence: no requests are fed to the leave calculation and the absence
       // count below is skipped. Their salary line is unchanged.

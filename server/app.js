@@ -48,6 +48,7 @@ import domainRoutes from './routes/domains.js';
 import portalRoutes from './routes/portal.js';
 import emailRoutes from './routes/email.js';
 import leaveRoutes from './routes/leave.js';
+import leaveBalancesRoutes from './routes/leaveBalances.js';
 import attendanceRoutes from './routes/attendance.js';
 import workSchedulesRoutes from './routes/workSchedules.js';
 import attendanceEvaluationRoutes from './routes/attendanceEvaluation.js';
@@ -155,6 +156,7 @@ app.use('/api/social', socialRoutes);
 app.use('/api/domains', domainRoutes);
 app.use('/api/portal', portalRoutes);
 app.use('/api/email', emailRoutes);
+app.use('/api/leave', leaveBalancesRoutes); // ledger, preview, context, calendar
 app.use('/api/leave', leaveRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/work-schedules', workSchedulesRoutes);

@@ -25,6 +25,7 @@ function categoryLabel(t, c) {
     case 'Reimbursement': return t('payroll_items.cat_reimbursement');
     case 'Overtime': return t('payroll_items.cat_overtime');
     case 'Deduction': return t('payroll_items.cat_deduction');
+    case 'Leave Encashment': return t('payroll_items.cat_leave_encashment');
     default: return t('payroll_items.cat_other');
   }
 }

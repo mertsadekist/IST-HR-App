@@ -15,6 +15,7 @@ export function lineLabel(t, line, lang) {
     case 'EXTRA': return t('payslip.line_extra');
     case 'ADDITION': return t('payslip.line_other_additions');
     case 'OVERTIME_PAY': return t('payslip.line_overtime');
+    case 'LEAVE_ENCASHMENT': return t('payslip.line_leave_encashment');
     case 'LOAN': return /advance/i.test(line.label || '') ? t('payslip.line_advance') : t('payslip.line_loan');
     // One-time items carry the description HR typed for them.
     case 'BONUS': case 'COMMISSION': case 'ONE_TIME_ALLOWANCE': case 'REIMBURSEMENT':

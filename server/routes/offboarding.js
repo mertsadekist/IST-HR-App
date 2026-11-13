@@ -147,6 +147,14 @@ async function computeSettlement(db, rec, hrInputs) {
       [rec.employee_id, [...new Set(annualTypes)], Number(rec.lwd.slice(0, 4)), rec.lwd]);
     taken = Number(t.days) || 0;
   }
+  // The annual pool's ledger for the leaving year.
+  let ledgerDays = 0;
+  if (policy.annualTypeId && rec.lwd) {
+    const [[l]] = await db.query(
+      'SELECT COALESCE(SUM(days), 0) AS days FROM leave_adjustments WHERE employee_id = ? AND leave_type_id = ? AND year = ?',
+      [rec.employee_id, policy.annualTypeId, Number(rec.lwd.slice(0, 4))]).catch(() => [[{ days: 0 }]]);
+    ledgerDays = Number(l.days) || 0;
+  }
 
   // Outstanding loans: only approved and paid runs count as repaid.
   const [loans] = await db.query(
@@ -186,6 +194,7 @@ async function computeSettlement(db, rec, hrInputs) {
     unpaidLeaveDays: hrInputs.unpaid_leave_days,
     annualTakenThisYear: taken,
     carryForwardDays: hrInputs.carry_forward_days,
+    ledgerDays,
     leaveDaysOverride: hrInputs.leave_days_override,
     loans: loans.map((l) => ({ ...l, outstanding: Number(l.outstanding) })),
     adjustments: adjustments.map((a) => ({ ...a, amount: Number(a.amount) })),

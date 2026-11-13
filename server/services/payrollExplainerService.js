@@ -22,6 +22,7 @@
  * up defending from memory.
  */
 import { loadLeavePolicy, leaveDeductionForPeriod, annualEntitlement } from './leavePolicyService.js';
+import { ledgerTotals, capsWithLedger } from './leaveBalanceStore.js';
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -74,6 +75,7 @@ export async function buildPayrollExplanation(db, runId) {
   const policy = await loadLeavePolicy(db);
   const typeNames = new Map(policy.types.map((t) => [t.id, t.name]));
 
+  const leaveLedger = await ledgerTotals(db, items.map((i) => i.employee_id), year).catch(() => new Map());
   const employees = [];
   for (const it of items) {
     const gross = round2(it.gross);
@@ -91,7 +93,7 @@ export async function buildPayrollExplanation(db, runId) {
     // A company owner is charged nothing for leave or absence (see ownerExemption.js).
     const yearLeave = it.is_owner ? [] : yearLeaveAll;
 
-    const capByType = new Map(policy.capByType);
+    let capByType = new Map(policy.capByType);
     let annualCap = null;
     if (policy.annualTypeId) {
       annualCap = it.start_date
@@ -99,6 +101,7 @@ export async function buildPayrollExplanation(db, runId) {
         : policy.defaultDaysByType.get(policy.annualTypeId) ?? null;
       capByType.set(policy.annualTypeId, annualCap);
     }
+    capByType = capsWithLedger(capByType, leaveLedger, it.employee_id);
 
     const leave = leaveDeductionForPeriod({
       requests: yearLeave,
