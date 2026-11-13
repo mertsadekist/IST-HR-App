@@ -11,6 +11,7 @@ import EmptyState from '@components/ui/EmptyState';
 import { toast } from 'react-toastify';
 import { CalendarDays, Plus, RefreshCw, Check, X, Upload } from 'lucide-react';
 import dayjs from 'dayjs';
+import ApprovalProgress from '@components/approvals/ApprovalProgress';
 
 const apiErr = (e, f) => e?.response?.data?.error || (e?.response?.data?.errors?.[0]?.message) || f;
 const statusVariant = (s) => ({ Approved: 'success', Rejected: 'danger', Cancelled: 'danger', Pending: 'warning' }[s] || 'info');
@@ -21,6 +22,7 @@ export default function Leave() {
   const { user } = useSelector((s) => s.auth);
   const { currentCompanyId } = useSelector((s) => s.entity);
   const isHR = ['admin', 'hr_manager'].includes(user?.role);
+  const isAdminUser = user?.role === 'admin';
   const [tab, setTab] = useState('requests');
   const [requests, setRequests] = useState([]);
   const [balances, setBalances] = useState([]);
@@ -101,10 +103,15 @@ export default function Leave() {
                         <Badge variant={statusVariant(r.status)} className="text-[10px]">{stLabel(t, r.status)}</Badge>
                       </div>
                       <p className="text-xs text-surface-400 mt-0.5">{dayjs(r.start_date).format('MMM D')} → {dayjs(r.end_date).format('MMM D, YYYY')} · {r.days} {t('leave.days')}{r.reason ? ` · ${r.reason}` : ''}</p>
+                      {r.approval && <div className="mt-1.5"><ApprovalProgress t={t} approval={r.approval} /></div>}
                     </div>
                     {isHR && r.status === 'Pending' && (
                       <div className="flex gap-1.5">
-                        <Button size="sm" onClick={() => decide(r, 'approve')}><Check size={13} /> {t('common.approve')}</Button>
+                        <Button size="sm" onClick={() => decide(r, 'approve')}
+                          disabled={r.approval?.status === 'Pending' && !isAdminUser}
+                          title={r.approval?.status === 'Pending' ? t('approvals.chain_running') : undefined}>
+                          <Check size={13} /> {t('common.approve')}
+                        </Button>
                         <Button size="sm" variant="danger" onClick={() => decide(r, 'reject')}><X size={13} /> {t('common.reject')}</Button>
                       </div>
                     )}
@@ -430,9 +437,15 @@ function DecisionModal({ decision, onClose, onDone }) {
   const [saving, setSaving] = useState(false);
   const req = decision?.request;
   const isApprove = decision?.action === 'approve';
+  const isAdminUser = useSelector((s) => s.auth.user?.role) === 'admin';
+  const [overrideChain, setOverrideChain] = useState('');
+  const chainRunning = req?.approval?.status === 'Pending';
 
   useEffect(() => {
-    setApproverName(''); setNote(''); setRequestProof(null); setApprovalProof(null); setExisting([]);
+    // Where a chain approved it, the last person who approved is the deciding
+    // manager the form asks for.
+    const lastApprover = [...(req?.approval?.steps || [])].reverse().find((s) => s.state === 'approved')?.by_name || '';
+    setApproverName(lastApprover); setNote(''); setRequestProof(null); setApprovalProof(null); setExisting([]); setOverrideChain('');
     if (!req) return;
     leaveApi.getRequestFiles(req.id).then(({ data }) => setExisting(data || [])).catch(() => setExisting([]));
   }, [req]);
@@ -451,7 +464,7 @@ function DecisionModal({ decision, onClose, onDone }) {
         fd.append('kind', kind);
         await leaveApi.uploadRequestFile(req.id, fd);
       }
-      const body = { approver_name: approverName.trim(), note };
+      const body = { approver_name: approverName.trim(), note, ...(isApprove && chainRunning ? { override_chain: overrideChain.trim() } : {}) };
       if (isApprove) await leaveApi.approveRequest(req.id, body);
       else await leaveApi.rejectRequest(req.id, body);
       toast.success(t('common.updated'));
@@ -469,6 +482,16 @@ function DecisionModal({ decision, onClose, onDone }) {
             <span className="font-semibold text-surface-800">{req.first_name} {req.last_name}</span>
             <span className="text-surface-500"> · {req.leave_type_name} · {dayjs(req.start_date).format('MMM D')} → {dayjs(req.end_date).format('MMM D, YYYY')} · {req.days} {t('leave.days')}</span>
           </div>
+          {req.approval && <ApprovalProgress t={t} approval={req.approval} />}
+          {isApprove && chainRunning && (
+            <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-1.5">
+              <p>{isAdminUser ? t('approvals.override_hint') : t('approvals.chain_running')}</p>
+              {isAdminUser && (
+                <input value={overrideChain} onChange={(e) => setOverrideChain(e.target.value)} placeholder={t('approvals.override_ph')}
+                  className="w-full text-sm border border-amber-200 rounded-lg px-3 py-1.5 bg-white" />
+              )}
+            </div>
+          )}
 
           <div>
             <label className="text-xs font-semibold text-surface-700">{t('leave.f_approver_name')} *</label>

@@ -12,6 +12,7 @@ import * as otApi from '@api/overtimeApi';
 import * as employeesApi from '@api/employeesApi';
 import { confirmDelete } from '@utils/confirm';
 import { money } from '@utils/payslipLines';
+import ApprovalProgress from '@components/approvals/ApprovalProgress';
 
 const apiErr = (e, f) => e?.response?.data?.error || f;
 const hm = (m) => (m ? `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}` : '—');
@@ -170,6 +171,7 @@ export default function Overtime() {
                       {r.locked && <Lock size={10} />} {r.status === 'Pending' ? t('overtime.st_pending') : r.status === 'Approved' ? t('overtime.st_approved') : t('overtime.st_rejected')}
                     </Badge>
                     {r.decision_note && <span className="block text-[10px] text-surface-400">{r.decision_note}</span>}
+                    {r.approval && r.status === 'Pending' && <div className="mt-1"><ApprovalProgress t={t} approval={r.approval} compact /></div>}
                   </td>
                   <td className="p-3 text-end whitespace-nowrap">
                     {canDecide && !r.locked && r.status !== 'Approved' && (

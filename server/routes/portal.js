@@ -5,6 +5,7 @@ import { decrypt } from '../services/cryptoService.js';
 import { decryptSecret } from '../services/envelopeCrypto.js';
 import { addAudit } from '../services/auditService.js';
 import { teamOf } from '../services/orgService.js';
+import { pendingForUser } from '../services/approvalService.js';
 
 const router = Router();
 
@@ -139,10 +140,13 @@ async function myTeamIds(employeeId) {
 
 router.get('/has-team', auth, async (req, res) => {
   try {
+    // Approvals waiting for this user: anyone can be an approver (a named person
+    // or a role step), team or not.
+    const pending = (await pendingForUser(pool, req.user.id).catch(() => [])).length;
     const me = await getEmployeeId(req.user.id);
-    if (!me) return res.json({ has_team: false, size: 0 });
+    if (!me) return res.json({ has_team: false, size: 0, pending_approvals: pending });
     const team = await myTeamIds(me);
-    res.json({ has_team: team.size > 0, size: team.size });
+    res.json({ has_team: team.size > 0, size: team.size, pending_approvals: pending });
   } catch (err) { console.error('GET /portal/has-team error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 

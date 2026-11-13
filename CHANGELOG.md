@@ -14,6 +14,15 @@ All notable changes to the IST HR System. Dates are ISO (YYYY‑MM‑DD). The ap
 - Google Drive attendance sync, its CSV parser, `GOOGLE_DRIVE_SA_*` / `ATTENDANCE_DRIVE_FOLDER_ID` variables and the `google-auth-library` dependency. Existing `Drive Sync` attendance rows and the `attendance_sync_*` ledger tables are kept as history.
 
 ### Added
+- **Approval chains** (Settings → *Approval chains*; `services/approvalService.js`):
+  - **What a chain is.** The steps a leave request or an overtime day goes through *before* HR's final decision: the direct manager, the manager's manager, everyone with a role, or one specific person. There is one chain per process for the whole group, optionally overridden per company. With no chain, nothing changes.
+  - **How it runs.** The chain is frozen when a request starts, with its approvers resolved at that moment. A step with nobody to approve it is skipped and says why, and the requester is removed from every step.
+  - **Decisions.** A rejection at any step rejects the request. When the chain finishes, HR is notified and makes the final decision exactly as before (documents, balance, attendance re-check, payroll). HR's final approval is refused while the chain is running; an admin can decide anyway with a written reason, recorded on the chain.
+  - **My Approvals** (`/portal/approvals`). Whatever is waiting for the signed-in user, with approve or reject (a reason is required to reject). The menu entry appears for managers and anyone with something waiting, with a count.
+  - **Notifications.** A whole month of detected overtime sends one notification per approver, not one per day.
+  - **Where progress shows:** the chain's steps appear on the Leave page, on Overtime and in My Leave. The leave decision form pre-fills the deciding manager from the chain.
+  - **Fix:** leave approve and cancel no longer release their database connection twice on early returns.
+  - Schema at boot through `ensureSchema`: `approval_chains`, `approval_requests`, `approval_actions`.
 - **Direct manager, people org chart and My Team** (`services/orgService.js`):
   - **Direct manager.** Each employee can have one (`employees.manager_employee_id`), set from the profile under Employment details → Edit. The manager can sit in another company of the group. A choice that would loop (the person themselves, or anyone below them) is refused.
   - **Org chart → By people.** The new default view draws who reports to whom as an expandable tree with search, with direct and total report counts. It also shows how many people still have no manager; they appear at the top level until one is set. The department view is unchanged.
