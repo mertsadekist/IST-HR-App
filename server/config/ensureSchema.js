@@ -619,6 +619,47 @@ const TABLE_GUARDS = [
      FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
      FOREIGN KEY (item_id) REFERENCES payroll_items(id) ON DELETE SET NULL
    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  // ── Approval chains (services/approvalService.js) ───────────────────────────
+  // company_id 0 = the group-wide chain, used where a company has none of its own.
+  `CREATE TABLE IF NOT EXISTS approval_chains (
+     id         INT AUTO_INCREMENT PRIMARY KEY,
+     company_id INT NOT NULL DEFAULT 0,
+     process    VARCHAR(30) NOT NULL,
+     steps      JSON NOT NULL,
+     active     BOOLEAN NOT NULL DEFAULT TRUE,
+     updated_by INT NULL,
+     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+     UNIQUE KEY uq_chain_company_process (company_id, process)
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  // One per request under a chain; the chain is frozen into `steps` when it starts.
+  `CREATE TABLE IF NOT EXISTS approval_requests (
+     id           INT AUTO_INCREMENT PRIMARY KEY,
+     process      VARCHAR(30) NOT NULL,
+     entity_id    INT NOT NULL,
+     company_id   INT NOT NULL,
+     employee_id  INT NOT NULL,
+     chain_id     INT NULL,
+     status       ENUM('Pending','Approved','Rejected','Cancelled') NOT NULL DEFAULT 'Pending',
+     current_step SMALLINT NOT NULL DEFAULT 0,
+     steps        JSON NOT NULL,
+     created_by   INT NULL,
+     created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     decided_at   TIMESTAMP NULL,
+     UNIQUE KEY uq_approval_entity (process, entity_id),
+     INDEX idx_approval_status (status)
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  `CREATE TABLE IF NOT EXISTS approval_actions (
+     id            INT AUTO_INCREMENT PRIMARY KEY,
+     request_id    INT NOT NULL,
+     step_index    SMALLINT NOT NULL,
+     actor_user_id INT NULL,
+     decision      ENUM('Approved','Rejected','Skipped') NOT NULL,
+     note          VARCHAR(500) NULL,
+     on_behalf     BOOLEAN NOT NULL DEFAULT FALSE,
+     acted_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     INDEX idx_action_request (request_id),
+     FOREIGN KEY (request_id) REFERENCES approval_requests(id) ON DELETE CASCADE
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   `CREATE TABLE IF NOT EXISTS offboarding_settlement_lines (
      id             INT AUTO_INCREMENT PRIMARY KEY,
      offboarding_id INT NOT NULL,

@@ -36,6 +36,7 @@ const DepartmentSettings = lazy(() => import('@pages/settings/DepartmentSettings
 const SkillsSettings = lazy(() => import('@pages/settings/SkillsSettings'));
 const AssetCatalog = lazy(() => import('@pages/settings/AssetCatalog'));
 const WorkSchedules = lazy(() => import('@pages/settings/WorkSchedules'));
+const ApprovalChains = lazy(() => import('@pages/settings/ApprovalChains'));
 const SystemConfig = lazy(() => import('@pages/settings/SystemConfig'));
 
 // Admin
@@ -80,6 +81,7 @@ const MyAttendance = lazy(() => import('@pages/portal/MyAttendance'));
 const MySalary = lazy(() => import('@pages/portal/MySalary'));
 const MyLeave = lazy(() => import('@pages/portal/MyLeave'));
 const MyTeam = lazy(() => import('@pages/portal/MyTeam'));
+const MyApprovals = lazy(() => import('@pages/portal/MyApprovals'));
 
 // Legal
 const LegalLetters = lazy(() => import('@pages/legal/LegalLetters'));
@@ -153,6 +155,7 @@ export default function App() {
                 <Route path="/portal/salary" element={<MySalary />} />
                 <Route path="/portal/leave" element={<MyLeave />} />
                 <Route path="/portal/team" element={<MyTeam />} />
+                <Route path="/portal/approvals" element={<MyApprovals />} />
 
                 {/* Legal */}
                 <Route path="/legal-letters" element={<LegalLetters />} />
@@ -174,6 +177,7 @@ export default function App() {
                   <Route path="skills" element={<SkillsSettings />} />
                   <Route path="catalog" element={<AssetCatalog />} />
                   <Route path="work-schedules" element={<WorkSchedules />} />
+                  <Route path="approvals" element={<ApprovalChains />} />
                   <Route path="system" element={<SystemConfig />} />
                   <Route path="email" element={<EmailSettings />} />
                   <Route path="templates" element={<TemplateManager />} />

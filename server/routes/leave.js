@@ -8,6 +8,7 @@ import { validate } from '../middleware/validate.js';
 import { notify, notifyRole, userIdForEmployee } from '../services/notificationService.js';
 import { annualEntitlement, completedMonths } from '../services/leavePolicyService.js';
 import { resolveEffectiveSchedule } from '../services/workScheduleService.js';
+import { startApproval, cancelApproval, approvalSummaries } from '../services/approvalService.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -222,7 +223,9 @@ router.get('/requests', async (req, res) => {
     if (req.query.status) { sql += ' AND lr.status = ?'; params.push(req.query.status); }
     sql += ' ORDER BY lr.created_at DESC';
     const [rows] = await pool.query(sql, params);
-    res.json(rows);
+    // Where a request is going through an approval chain, its progress.
+    const chains = await approvalSummaries(pool, 'leave', rows.map((r) => r.id)).catch(() => new Map());
+    res.json(rows.map((r) => ({ ...r, approval: chains.get(r.id) || null })));
   } catch (err) { console.error('GET /leave/requests error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
@@ -379,9 +382,23 @@ router.post('/requests', validate({
       status: 'Pending', created_by: req.user.id,
     });
     await addAudit(pool, req.user, 'Leave', 'Requested', `Leave request #${r.insertId} (${days} day(s)) for employee #${employeeId}`);
-    await notifyRole(pool, emp.company_id, ['admin', 'hr_manager'],
-      { type: 'leave', title: 'New leave request', body: `${days} day(s) requested (employee #${employeeId})`, link: '/leave' }, req.user.id);
-    res.status(201).json({ id: r.insertId, days, status: 'Pending' });
+
+    // An approval chain, where one is configured, runs before HR's decision.
+    // The employee's own account is excluded from every step of it.
+    let approvalId = null;
+    try {
+      approvalId = await startApproval(pool, {
+        process: 'leave', entityId: r.insertId, companyId: emp.company_id, employeeId,
+        requesterUserId: await userIdForEmployee(pool, employeeId), title: `Leave request to approve (${days} day(s))`,
+      });
+    } catch (e) { console.error('leave approval chain could not start (HR decides directly):', e.message); }
+    // HR hears about it now only when there is no chain; otherwise when the
+    // chain has finished and the request is theirs to decide.
+    if (!approvalId) {
+      await notifyRole(pool, emp.company_id, ['admin', 'hr_manager'],
+        { type: 'leave', title: 'New leave request', body: `${days} day(s) requested (employee #${employeeId})`, link: '/leave' }, req.user.id);
+    }
+    res.status(201).json({ id: r.insertId, days, status: 'Pending', in_approval_chain: !!approvalId });
   } catch (err) { console.error('POST /leave/requests error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
@@ -463,14 +480,27 @@ router.put('/requests/:id/approve', authorize('admin', 'hr_manager'), async (req
   const conn = await pool.getConnection();
   try {
     const co = companyClause(req, 'company_id');
+    // Early returns leave the connection to the finally below, which releases it once.
     const [[lr]] = await conn.query('SELECT * FROM leave_requests WHERE id = ?' + co.clause, [req.params.id, ...co.params]);
-    if (!lr) { conn.release(); return res.status(404).json({ error: 'Request not found' }); }
-    if (lr.status !== 'Pending') { conn.release(); return res.status(409).json({ error: `Request is already ${lr.status}` }); }
+    if (!lr) return res.status(404).json({ error: 'Request not found' });
+    if (lr.status !== 'Pending') return res.status(409).json({ error: `Request is already ${lr.status}` });
 
     const problem = await assertDecisionDocumented(lr.id, req.body.approver_name);
-    if (problem) { conn.release(); return res.status(422).json({ error: problem }); }
+    if (problem) return res.status(422).json({ error: problem });
+
+    // An approval chain still running comes first. An admin can decide anyway,
+    // with a written reason that closes the chain on the record.
+    const [[chain]] = await conn.query("SELECT id, status FROM approval_requests WHERE process = 'leave' AND entity_id = ?", [lr.id]);
+    const overrideWhy = String(req.body.override_chain || '').trim();
+    if (chain?.status === 'Pending' && (req.user.role !== 'admin' || overrideWhy.length < 10)) {
+      return res.status(409).json({ error: 'The approval chain has not finished yet', code: 'CHAIN_PENDING' });
+    }
 
     await conn.beginTransaction();
+    if (chain?.status === 'Pending') {
+      await conn.query("UPDATE approval_requests SET status = 'Approved', decided_at = NOW() WHERE id = ?", [chain.id]);
+      await conn.query('INSERT INTO approval_actions SET ?', { request_id: chain.id, step_index: 99, actor_user_id: req.user.id, decision: 'Approved', note: overrideWhy.slice(0, 500), on_behalf: 1 });
+    }
     const year = new Date(lr.start_date).getFullYear();
 
     // Ensure a balance row exists (seed entitlement from the leave type default)
@@ -489,7 +519,7 @@ router.put('/requests/:id/approve', authorize('admin', 'hr_manager'), async (req
     // Paid leave types are capped by entitlement; unpaid leave is never blocked.
     const remaining = Number(bal.entitled) - Number(bal.used);
     if (type?.is_paid && Number(lr.days) > remaining) {
-      await conn.rollback(); conn.release();
+      await conn.rollback();
       return res.status(400).json({ error: `Insufficient balance: ${remaining} day(s) remaining, ${lr.days} requested` });
     }
 
@@ -544,6 +574,7 @@ router.put('/requests/:id/reject', authorize('admin', 'hr_manager'), async (req,
 
     await pool.query('UPDATE leave_requests SET status = ?, decided_by = ?, decided_at = NOW(), decision_note = ?, approver_name = ? WHERE id = ?',
       ['Rejected', req.user.id, req.body.note || null, String(req.body.approver_name).trim(), req.params.id]);
+    await cancelApproval(pool, 'leave', Number(req.params.id));
     await addAudit(pool, req.user, 'Leave', 'Rejected', `Leave request #${req.params.id} rejected (decision by ${String(req.body.approver_name).trim()})`);
     const [[lrRow]] = await pool.query('SELECT employee_id, company_id, days FROM leave_requests WHERE id = ?', [req.params.id]);
     if (lrRow) {
@@ -561,14 +592,15 @@ router.put('/requests/:id/cancel', async (req, res) => {
     // Same reasoning as getScopedRequest: the ownership check below is the gate,
     // so a self-service caller is not held to their user account's company.
     const co = isHR(req) ? companyClause(req, 'company_id') : ownRecordsClause();
+    // Early returns leave the connection to the finally below, which releases it once.
     const [[lr]] = await conn.query('SELECT * FROM leave_requests WHERE id = ?' + co.clause, [req.params.id, ...co.params]);
-    if (!lr) { conn.release(); return res.status(404).json({ error: 'Request not found' }); }
+    if (!lr) return res.status(404).json({ error: 'Request not found' });
 
     if (!isHR(req)) {
       const empId = await myEmployeeId(req.user.id);
-      if (empId !== lr.employee_id) { conn.release(); return res.status(403).json({ error: 'You can only cancel your own request' }); }
+      if (empId !== lr.employee_id) return res.status(403).json({ error: 'You can only cancel your own request' });
     }
-    if (lr.status === 'Cancelled') { conn.release(); return res.status(409).json({ error: 'Already cancelled' }); }
+    if (lr.status === 'Cancelled') return res.status(409).json({ error: 'Already cancelled' });
 
     await conn.beginTransaction();
     if (lr.status === 'Approved') {
@@ -578,6 +610,7 @@ router.put('/requests/:id/cancel', async (req, res) => {
     }
     await conn.query("UPDATE leave_requests SET status = 'Cancelled' WHERE id = ?", [lr.id]);
     await conn.commit();
+    await cancelApproval(pool, 'leave', lr.id);
     await addAudit(pool, req.user, 'Leave', 'Cancelled', `Leave request #${lr.id} cancelled`);
     res.json({ success: true });
   } catch (err) {

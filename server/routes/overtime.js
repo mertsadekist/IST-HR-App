@@ -8,6 +8,8 @@ import { addAudit } from '../services/auditService.js';
 import { getAppSetting } from '../services/appSettings.js';
 import { resolveScheduleId, getScheduleWithDays, resolveDayRule, holidaysBetween } from '../services/workScheduleService.js';
 import { detectOvertime, overtimePay, effectiveRates } from '../services/overtimeService.js';
+import { startApproval, cancelApproval, approvalSummaries } from '../services/approvalService.js';
+import { notify, userIdForEmployee } from '../services/notificationService.js';
 
 // Overtime: detected from attendance or entered by HR, approved or rejected,
 // then paid by the payroll run of its month (services/overtimeService.js).
@@ -15,6 +17,24 @@ const router = Router();
 router.use(auth, tenantScope, requireModule(MODULES.HR));
 
 const PERIOD_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+/** Start the overtime approval chain for one record, collecting who to notify. */
+async function chainFor(recordId, companyId, employeeId, toConfirm) {
+  try {
+    const started = await startApproval(pool, {
+      process: 'overtime', entityId: recordId, companyId, employeeId,
+      requesterUserId: await userIdForEmployee(pool, employeeId), notify: false,
+    });
+    for (const id of started?.approvers || []) toConfirm.set(id, (toConfirm.get(id) || 0) + 1);
+  } catch (e) { console.error('overtime approval chain could not start (HR decides directly):', e.message); }
+}
+
+/** One message per approver, however many days are waiting for them. */
+async function notifyChainApprovers(toConfirm, companyId) {
+  for (const [userId, count] of toConfirm) {
+    await notify(pool, { userId, companyId, type: 'approval', title: `${count} overtime day(s) to confirm`, body: null, link: '/portal/approvals' });
+  }
+}
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const minutes = (r, approved) => (approved && r.status === 'Approved'
   ? { normal_minutes: r.approved_normal ?? 0, night_minutes: r.approved_night ?? 0, rest_minutes: r.approved_rest ?? 0 }
@@ -56,9 +76,11 @@ router.get('/', authorize('admin', 'hr_manager', 'accountant'), async (req, res)
         ${where}
         ORDER BY o.work_date DESC, employee_name`, params);
     const rates = effectiveRates(await getAppSetting('overtime_rates'));
+    const chains = await approvalSummaries(pool, 'overtime', rows.map((r) => r.id)).catch(() => new Map());
     res.json({
       rates,
       rows: rows.map((r) => {
+        r.approval = chains.get(r.id) || null;
         // What it pays: the stored amount once a run has taken it, else a preview.
         const preview = overtimePay(minutes(r, true), r.basic_salary, rates);
         const { basic_salary: _omit, ...rest } = r;
@@ -92,6 +114,7 @@ router.post('/detect', authorize('admin', 'hr_manager'), async (req, res) => {
 
     const holidays = new Map((await holidaysBetween(req.companyId, from, last)).map((h) => [h.holiday_date, h]));
     const schedules = new Map();
+    const toConfirm = new Map(); // approver user id → days waiting for them
     let created = 0;
     for (const r of rows) {
       const resolved = await resolveScheduleId(r.employee_id, r.work_date);
@@ -110,7 +133,9 @@ router.post('/detect', authorize('admin', 'hr_manager'), async (req, res) => {
         check_in: r.check_in, check_out: r.check_out, ...found, created_by: req.user.id,
       });
       created += ins.affectedRows;
+      if (ins.affectedRows) await chainFor(ins.insertId, req.companyId, r.employee_id, toConfirm);
     }
+    await notifyChainApprovers(toConfirm, req.companyId);
     await addAudit(pool, req.user, 'Overtime', 'Detected', `Overtime detection for ${period}: ${created} new day(s) from ${rows.length} attendance row(s)`);
     res.json({ success: true, created, scanned: rows.length });
   } catch (err) { console.error('POST /overtime/detect error:', err); res.status(500).json({ error: 'Internal server error' }); }
@@ -139,10 +164,13 @@ router.post('/', authorize('admin', 'hr_manager'), async (req, res) => {
     if (!emp) return res.status(404).json({ error: 'Employee not found' });
     const [[exists]] = await pool.query('SELECT id FROM overtime_records WHERE employee_id = ? AND work_date = ?', [emp.id, work_date]);
     if (exists) return res.status(409).json({ error: 'There is already an overtime record for that day; edit it instead' });
-    await pool.query('INSERT INTO overtime_records SET ?', {
+    const [ins] = await pool.query('INSERT INTO overtime_records SET ?', {
       company_id: emp.company_id, employee_id: emp.id, work_date, source: 'Manual', ...m,
       reason: String(reason).trim().slice(0, 500), created_by: req.user.id,
     });
+    const toConfirm = new Map();
+    await chainFor(ins.insertId, emp.company_id, emp.id, toConfirm);
+    await notifyChainApprovers(toConfirm, emp.company_id);
     await addAudit(pool, req.user, 'Overtime', 'Added', `Overtime on ${work_date} for ${emp.first_name} ${emp.last_name}: ${reason}`);
     res.status(201).json({ success: true });
   } catch (err) { console.error('POST /overtime error:', err); res.status(500).json({ error: 'Internal server error' }); }
@@ -159,6 +187,17 @@ router.put('/:id/approve', authorize('admin', 'hr_manager'), async (req, res) =>
     const given = req.body && ['normal_minutes', 'night_minutes', 'rest_minutes'].some((k) => req.body[k] !== undefined);
     const m = given ? cleanMinutes(req.body) : { normal_minutes: r.normal_minutes, night_minutes: r.night_minutes, rest_minutes: r.rest_minutes };
     if (!m || !(m.normal_minutes + m.night_minutes + m.rest_minutes > 0)) return res.status(422).json({ error: 'Approve at least one minute, or reject it' });
+    // An approval chain still running (the manager confirming the work) comes
+    // first; an admin can approve anyway with a note of 10 characters or more.
+    const [[chain]] = await pool.query("SELECT id, status FROM approval_requests WHERE process = 'overtime' AND entity_id = ?", [r.id]);
+    if (chain?.status === 'Pending') {
+      const why = String(req.body?.note || '').trim();
+      if (req.user.role !== 'admin' || why.length < 10) {
+        return res.status(409).json({ error: 'The approval chain has not finished yet', code: 'CHAIN_PENDING' });
+      }
+      await pool.query("UPDATE approval_requests SET status = 'Approved', decided_at = NOW() WHERE id = ?", [chain.id]);
+      await pool.query('INSERT INTO approval_actions SET ?', { request_id: chain.id, step_index: 99, actor_user_id: req.user.id, decision: 'Approved', note: why.slice(0, 500), on_behalf: 1 });
+    }
     await pool.query(
       `UPDATE overtime_records SET status = 'Approved', approved_normal = ?, approved_night = ?, approved_rest = ?,
               decision_note = ?, decided_by = ?, decided_at = NOW() WHERE id = ?`,
@@ -178,6 +217,7 @@ router.put('/:id/reject', authorize('admin', 'hr_manager'), async (req, res) => 
       `UPDATE overtime_records SET status = 'Rejected', approved_normal = NULL, approved_night = NULL, approved_rest = NULL,
               decision_note = ?, decided_by = ?, decided_at = NOW() WHERE id = ?`,
       [req.body?.note ? String(req.body.note).slice(0, 500) : null, req.user.id, r.id]);
+    await cancelApproval(pool, 'overtime', r.id);
     await addAudit(pool, req.user, 'Overtime', 'Rejected', `Overtime of ${r.employee_name} on ${r.work_date} rejected`);
     res.json({ success: true, needs_regenerate: r.run_status === 'Draft' });
   } catch (err) { console.error('PUT /overtime/:id/reject error:', err); res.status(500).json({ error: 'Internal server error' }); }
@@ -190,6 +230,7 @@ router.delete('/:id', authorize('admin'), async (req, res) => {
     if (!r) return res.status(404).json({ error: 'Not found' });
     if (r.locked) return res.status(409).json({ error: 'Already paid by a payroll run or settlement' });
     await pool.query('DELETE FROM overtime_records WHERE id = ?', [r.id]);
+    await cancelApproval(pool, 'overtime', r.id);
     await addAudit(pool, req.user, 'Overtime', 'Deleted', `Overtime record of ${r.employee_name} on ${r.work_date} deleted`);
     res.json({ success: true, needs_regenerate: r.run_status === 'Draft' });
   } catch (err) { console.error('DELETE /overtime/:id error:', err); res.status(500).json({ error: 'Internal server error' }); }

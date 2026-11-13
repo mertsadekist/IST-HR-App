@@ -10,6 +10,7 @@ import Input from '@components/ui/Input';
 import Select from '@components/ui/Select';
 import EmptyState from '@components/ui/EmptyState';
 import PortalShell from './PortalShell';
+import ApprovalProgress from '@components/approvals/ApprovalProgress';
 import { useMyCompany } from './useMyCompany';
 import LeaveReport from './components/LeaveReport';
 import { printElementWithLetterhead, waitForPaint } from '@utils/printDoc';
@@ -216,6 +217,8 @@ export default function MyLeave() {
                           : r.status === 'Cancelled' ? 'inactive' : 'warning'}>
                         {t(`portal.lv_${String(r.status || '').toLowerCase()}`, r.status)}
                       </Badge>
+                      {/* Where it is in the approval chain, while still pending. */}
+                      {r.status === 'Pending' && r.approval && <div className="mt-1"><ApprovalProgress t={t} approval={r.approval} compact /></div>}
                     </td>
                     <td className="px-5 py-3 text-surface-500 text-xs">{r.approver_name || r.decided_by_name || '—'}</td>
                     <td className="px-5 py-3 text-end">

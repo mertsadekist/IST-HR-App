@@ -9,7 +9,7 @@ import {
   BarChart3, ClipboardList, Trophy, Network, UserCog, Settings,
   Sparkles, ChevronDown, X, Package, Shield, Mail, Send,
   CalendarDays, Clock, Banknote, Inbox, HelpCircle, KeyRound, Share2, Globe,
-  Boxes, Layers, Fingerprint, ScanEye, Radar, HandCoins, Timer
+  Boxes, Layers, Fingerprint, ScanEye, Radar, HandCoins, Timer, Stamp
 } from 'lucide-react';
 import { cn } from '@utils/cn';
 import * as portalApi from '@api/portalApi';
@@ -127,6 +127,8 @@ const buildMenuGroups = (t) => [
         { path: '/portal/leave', icon: CalendarDays, label: t('nav.my_leave') },
         // Only for people who manage someone (see hasTeam in Sidebar).
         { path: '/portal/team', icon: Users, label: t('nav.my_team'), requiresTeam: true },
+        // For anyone who is an approver: a manager, or named in a chain step.
+        { path: '/portal/approvals', icon: Stamp, label: t('nav.my_approvals'), requiresApprover: true },
       ],
     },
     {
@@ -177,11 +179,12 @@ export default function Sidebar({ isOpen, onClose }) {
   // Whether this person manages anyone: "My Team" is shown only then, rather
   // than as an empty page for everyone else. Asked once per signed-in user.
   const [hasTeam, setHasTeam] = useState(false);
+  const [pendingApprovals, setPendingApprovals] = useState(0);
   useEffect(() => {
     let off = false;
     if (!user?.id) return undefined;
     portalApi.hasTeam()
-      .then(({ data }) => { if (!off) setHasTeam(!!data.has_team); })
+      .then(({ data }) => { if (!off) { setHasTeam(!!data.has_team); setPendingApprovals(Number(data.pending_approvals) || 0); } })
       .catch(() => { if (!off) setHasTeam(false); });
     return () => { off = true; };
   }, [user?.id]);
@@ -263,7 +266,9 @@ export default function Sidebar({ isOpen, onClose }) {
           {localizedMenuGroups
             .filter(group => !group.roles || group.roles.includes(user?.role))
             .map((group, gi) => {
-            const items = group.items.filter(item => (!item.roles || item.roles.includes(user?.role)) && (!item.requiresTeam || hasTeam));
+            const items = group.items.filter(item => (!item.roles || item.roles.includes(user?.role))
+              && (!item.requiresTeam || hasTeam)
+              && (!item.requiresApprover || hasTeam || pendingApprovals > 0));
             if (!items.length) return null;
 
             const isItemActive = (item) => location.pathname === item.path
@@ -326,6 +331,9 @@ export default function Sidebar({ isOpen, onClose }) {
                     >
                       <Icon size={18} className={isActive ? 'text-brand-600' : 'text-surface-400'} />
                       {item.label}
+                      {item.requiresApprover && pendingApprovals > 0 && (
+                        <span className="ms-auto text-[10px] font-semibold bg-amber-500 text-white rounded-full px-1.5 py-0.5">{pendingApprovals}</span>
+                      )}
                     </NavLink>
                   );
                 })}
