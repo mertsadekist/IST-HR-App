@@ -61,6 +61,7 @@ const LeavePage = lazy(() => import('@pages/lifecycle/Leave'));
 const AttendancePage = lazy(() => import('@pages/lifecycle/Attendance'));
 const AttendanceSync = lazy(() => import('@pages/lifecycle/AttendanceSync'));
 const AttendanceExceptions = lazy(() => import('@pages/lifecycle/AttendanceExceptions'));
+const OvertimePage = lazy(() => import('@pages/lifecycle/Overtime'));
 const PayrollRunsPage = lazy(() => import('@pages/lifecycle/PayrollRuns'));
 const PayrollItemsPage = lazy(() => import('@pages/lifecycle/PayrollItems'));
 const SalaryReviewsPage = lazy(() => import('@pages/lifecycle/SalaryReviews'));
@@ -133,6 +134,7 @@ export default function App() {
                 <Route path="/attendance" element={<AttendancePage />} />
                 <Route path="/attendance/sync" element={<AttendanceSync />} />
                 <Route path="/attendance/exceptions" element={<AttendanceExceptions />} />
+                <Route path="/overtime" element={<OvertimePage />} />
                 <Route path="/payroll-runs" element={<PayrollRunsPage />} />
                 <Route path="/payroll-items" element={<PayrollItemsPage />} />
                 <Route path="/salary-reviews" element={<SalaryReviewsPage />} />

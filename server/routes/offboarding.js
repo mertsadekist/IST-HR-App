@@ -10,6 +10,8 @@ import { getEmployeeHoldings, buildClearance } from '../services/holdingsService
 import { buildSettlement } from '../services/settlementService.js';
 import { loadLeavePolicy } from '../services/leavePolicyService.js';
 import { notifyRole } from '../services/notificationService.js';
+import { overtimePay, effectiveRates } from '../services/overtimeService.js';
+import { getAppSetting } from '../services/appSettings.js';
 
 const router = Router();
 // Module-gated so reads are refused too, not just writes.
@@ -159,6 +161,19 @@ async function computeSettlement(db, rec, hrInputs) {
       WHERE employee_id = ? AND item_id IS NULL AND (settlement_id IS NULL OR settlement_id = ?)
       ORDER BY id`, [rec.employee_id, rec.id]);
 
+  // Approved overtime no monthly run paid, priced at today's basic and rates.
+  const [otRows] = await db.query(
+    `SELECT id, DATE_FORMAT(work_date, '%Y-%m-%d') AS work_date, approved_normal, approved_night, approved_rest
+       FROM overtime_records
+      WHERE employee_id = ? AND status = 'Approved' AND item_id IS NULL AND (settlement_id IS NULL OR settlement_id = ?)`,
+    [rec.employee_id, rec.id]);
+  const otRates = effectiveRates(await getAppSetting('overtime_rates'));
+  const overtime = otRows.map((o) => {
+    const p = overtimePay({ normal_minutes: o.approved_normal || 0, night_minutes: o.approved_night || 0, rest_minutes: o.approved_rest || 0 },
+      rec.emp_basic, otRates);
+    return { id: o.id, amount: p.amount, explanation: `${o.work_date}: ${p.explanation}` };
+  });
+
   const [manual] = await db.query(
     `SELECT id, kind, label, amount, explanation FROM offboarding_settlement_lines
       WHERE offboarding_id = ? AND source = 'manual' ORDER BY sort_order, id`, [rec.id]);
@@ -174,6 +189,7 @@ async function computeSettlement(db, rec, hrInputs) {
     leaveDaysOverride: hrInputs.leave_days_override,
     loans: loans.map((l) => ({ ...l, outstanding: Number(l.outstanding) })),
     adjustments: adjustments.map((a) => ({ ...a, amount: Number(a.amount) })),
+    overtime,
     manualLines: manual.map((m) => ({ ...m, amount: Number(m.amount) })),
   });
 }
@@ -412,6 +428,8 @@ router.put('/:id/settlement/paid', authorize('admin', 'accountant'), async (req,
     }
     const adjIds = lines.filter((l) => l.code === 'ONE_TIME').map((l) => l.ref_id);
     if (adjIds.length) await conn.query('UPDATE payroll_adjustments SET settlement_id = ? WHERE id IN (?)', [rec.id, adjIds]);
+    const otIds = lines.filter((l) => l.code === 'OVERTIME').map((l) => l.ref_id);
+    if (otIds.length) await conn.query('UPDATE overtime_records SET settlement_id = ? WHERE id IN (?)', [rec.id, otIds]);
     await conn.commit();
     await addAudit(pool, req.user, 'Offboarding', 'Settlement Paid',
       `Final settlement for ${rec.first_name} ${rec.last_name} paid on ${paidAt} (ref ${ref}): ${Number(rec.total_settlement).toFixed(2)}`);

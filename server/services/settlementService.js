@@ -169,6 +169,12 @@ export function buildSettlement(input) {
     add(a.kind === 'deduction' ? 'deduction' : 'earning', 'ONE_TIME', a.label, a.amount, { ref_id: a.id });
   }
 
+  // Approved overtime no monthly run paid
+  for (const o of input.overtime || []) {
+    if (!(Number(o.amount) > 0)) continue;
+    add('earning', 'OVERTIME', 'Approved overtime', o.amount, { ref_id: o.id, explanation: o.explanation || '' });
+  }
+
   // Outstanding loans
   for (const l of input.loans || []) {
     if (!(Number(l.outstanding) > 0)) continue;

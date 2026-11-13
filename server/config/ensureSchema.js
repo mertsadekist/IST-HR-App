@@ -577,6 +577,41 @@ const TABLE_GUARDS = [
    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   // The lines of a final settlement. 'auto' lines are rewritten on every
   // recalculation; 'manual' lines (notice pay, damages…) are HR's and kept.
+  // Overtime (services/overtimeService.js). One record per employee-day:
+  // detected or entered as Pending, approved (possibly for fewer minutes) or
+  // rejected, then paid by the payroll item — or final settlement — that took it.
+  `CREATE TABLE IF NOT EXISTS overtime_records (
+     id               INT AUTO_INCREMENT PRIMARY KEY,
+     company_id       INT NOT NULL,
+     employee_id      INT NOT NULL,
+     work_date        DATE NOT NULL,
+     source           ENUM('Detected','Manual') NOT NULL DEFAULT 'Detected',
+     check_in         VARCHAR(8) NULL,
+     check_out        VARCHAR(8) NULL,
+     normal_minutes   SMALLINT NOT NULL DEFAULT 0,
+     night_minutes    SMALLINT NOT NULL DEFAULT 0,
+     rest_minutes     SMALLINT NOT NULL DEFAULT 0,
+     status           ENUM('Pending','Approved','Rejected') NOT NULL DEFAULT 'Pending',
+     approved_normal  SMALLINT NULL,
+     approved_night   SMALLINT NULL,
+     approved_rest    SMALLINT NULL,
+     reason           VARCHAR(500) NULL,
+     decision_note    VARCHAR(500) NULL,
+     decided_by       INT NULL,
+     decided_at       TIMESTAMP NULL,
+     amount           DECIMAL(12,2) NULL,
+     run_id           INT NULL,
+     item_id          INT NULL,
+     settlement_id    INT NULL,
+     created_by       INT NULL,
+     created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     UNIQUE KEY uq_ot_employee_date (employee_id, work_date),
+     INDEX idx_ot_company_date (company_id, work_date),
+     INDEX idx_ot_status (status),
+     FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE,
+     FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+     FOREIGN KEY (item_id) REFERENCES payroll_items(id) ON DELETE SET NULL
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   `CREATE TABLE IF NOT EXISTS offboarding_settlement_lines (
      id             INT AUTO_INCREMENT PRIMARY KEY,
      offboarding_id INT NOT NULL,
