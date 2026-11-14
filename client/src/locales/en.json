@@ -3003,6 +3003,13 @@
     "reset_done": "Cleared {{cleared}} case(s) and re-checked {{days}} day(s): {{opened}} case(s) raised",
     "today_note": "Today is not checked until the day is closed"
   },
+  "softWarn": {
+    "title": "Please check this entry",
+    "confirm": "Save anyway",
+    "cancel": "Go back and fix it",
+    "generic": "This entry looks unusual.",
+    "expiry_before_issue": "The expiry date ({{expiry}}) is before the issue date ({{issue}}). This can be normal for some documents."
+  },
   "empDocs": {
     "type_passport": "Passport",
     "type_residence_visa": "Residence visa",

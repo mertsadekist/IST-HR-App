@@ -7,6 +7,7 @@ import { addAudit } from '../services/auditService.js';
 import { upload } from '../middleware/upload.js';
 import { tenantScope, companyClause, resolveWriteCompanyId } from '../middleware/tenant.js';
 import { checkDocumentExpiry, DOC_EXPIRY_THRESHOLDS } from '../services/documentExpiryService.js';
+import { holdForConfirmation, expiryBeforeIssue, overrideNote } from '../services/softWarnings.js';
 
 const router = Router();
 // Module-gated so reads are refused too, not just writes.
@@ -43,7 +44,15 @@ function readExpiryFields(body) {
 
   const expiry = (body.expiry_date || '').trim();
   if (!isDate(expiry)) return { data: {}, error: 'An expiry date is required when the document has an expiry' };
-  if (issue && expiry < issue) return { data: {}, error: 'The expiry date cannot be before the issue date' };
+
+  // Not an error: an expiry before the issue date is unusual but real for some
+  // papers. The caller asks the person and proceeds on confirmation (softWarnings.js).
+  // Only raised when a date is actually being changed, so re-saving the name of a
+  // document the person already confirmed does not ask again.
+  const datesChanged = issue !== (body.current_issue_date ?? null) || expiry !== (body.current_expiry_date ?? null);
+  const warnings = [];
+  const order = datesChanged ? expiryBeforeIssue(issue, expiry) : null;
+  if (order) warnings.push(order);
 
   let reminder = null;
   if (body.reminder_days != null && String(body.reminder_days).trim() !== '') {
@@ -52,7 +61,7 @@ function readExpiryFields(body) {
       return { data: {}, error: 'reminder_days must be between 1 and 365' };
     }
   }
-  return { data: { expiry_mode: mode, expiry_date: expiry, issue_date: issue, reminder_days: reminder } };
+  return { data: { expiry_mode: mode, expiry_date: expiry, issue_date: issue, reminder_days: reminder }, warnings };
 }
 
 router.get('/categories', async (req, res) => {
@@ -131,6 +140,7 @@ router.post('/', authorize('admin', 'hr_manager', 'accountant'), upload.single('
 
     const expiry = readExpiryFields(req.body);
     if (expiry.error) return res.status(422).json({ error: expiry.error });
+    if (holdForConfirmation(req, res, expiry.warnings)) return;
 
     const [result] = await pool.query('INSERT INTO company_documents SET ?', {
       company_id, category: category || 'General',
@@ -145,7 +155,8 @@ router.post('/', authorize('admin', 'hr_manager', 'accountant'), upload.single('
     await addAudit(pool, req.user, 'Documents', 'Uploaded',
       `Document "${req.file.originalname}" uploaded`
       + (expiry.data.expiry_mode === 'Has Expiry' ? ` — expires ${expiry.data.expiry_date}` : '')
-      + (expiry.data.expiry_mode === 'No Expiry' ? ' — marked as never expiring' : ''));
+      + (expiry.data.expiry_mode === 'No Expiry' ? ' — marked as never expiring' : '')
+      + overrideNote(req, expiry.warnings));
     res.status(201).json({ id: result.insertId, file_name: req.file.originalname, file_size: req.file.size });
   } catch (err) { console.error('POST /documents error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
@@ -195,12 +206,16 @@ router.put('/:id', authorize('admin', 'hr_manager', 'accountant'), async (req, r
     const co = companyClause(req, 'company_id');
     const [[doc]] = await pool.query(
       `SELECT id, category, expiry_mode, DATE_FORMAT(expiry_date, '%Y-%m-%d') AS expiry_date,
+              DATE_FORMAT(issue_date, '%Y-%m-%d') AS issue_date,
               COALESCE(document_name, file_name) AS label
          FROM company_documents WHERE id = ?` + co.clause, [req.params.id, ...co.params]);
     if (!doc) return res.status(404).json({ error: 'Document not found' });
 
-    const expiry = readExpiryFields({ ...doc, ...req.body });
+    const expiry = readExpiryFields({
+      ...doc, ...req.body, current_issue_date: doc.issue_date, current_expiry_date: doc.expiry_date,
+    });
     if (expiry.error) return res.status(422).json({ error: expiry.error });
+    if (holdForConfirmation(req, res, expiry.warnings)) return;
 
     const data = { ...expiry.data };
     if (req.body.category !== undefined) data.category = req.body.category || 'General';
@@ -215,7 +230,8 @@ router.put('/:id', authorize('admin', 'hr_manager', 'accountant'), async (req, r
     await pool.query('UPDATE company_documents SET ? WHERE id = ?', [data, doc.id]);
     await addAudit(pool, req.user, 'Documents', 'Updated',
       `Document "${doc.label}" updated`
-      + (data.expiry_date !== doc.expiry_date ? ` — expiry ${doc.expiry_date || 'unset'} → ${data.expiry_date || 'unset'}` : ''));
+      + (data.expiry_date !== doc.expiry_date ? ` — expiry ${doc.expiry_date || 'unset'} → ${data.expiry_date || 'unset'}` : '')
+      + overrideNote(req, expiry.warnings));
     res.json({ success: true });
   } catch (err) { console.error('PUT /documents/:id error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });

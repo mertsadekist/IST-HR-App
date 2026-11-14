@@ -51,8 +51,8 @@ describe('expiryState', () => {
 
 describe('readEmployeeDocFields', () => {
   it('keeps only the fields that were sent', () => {
-    expect(readEmployeeDocFields({ expiry_date: '2027-03-01' })).toEqual({ data: { expiry_date: '2027-03-01' } });
-    expect(readEmployeeDocFields({})).toEqual({ data: {} });
+    expect(readEmployeeDocFields({ expiry_date: '2027-03-01' })).toEqual({ data: { expiry_date: '2027-03-01' }, warnings: [] });
+    expect(readEmployeeDocFields({})).toEqual({ data: {}, warnings: [] });
   });
   it('turns empty values into NULL, so a date can be cleared', () => {
     expect(readEmployeeDocFields({ doc_type: '', doc_number: '  ', expiry_date: '' }).data)
@@ -66,9 +66,27 @@ describe('readEmployeeDocFields', () => {
     expect(readEmployeeDocFields({ expiry_date: '01/03/2027' }).error).toBeTruthy();
     expect(readEmployeeDocFields({ expiry_date: '2027-13-45' }).error).toBeTruthy();
   });
-  it('refuses an expiry before the issue date, including against the stored one', () => {
-    expect(readEmployeeDocFields({ issue_date: '2026-05-01', expiry_date: '2026-04-01' }).error).toBeTruthy();
-    expect(readEmployeeDocFields({ expiry_date: '2026-04-01', current_issue_date: '2026-05-01' }).error).toBeTruthy();
-    expect(readEmployeeDocFields({ expiry_date: '2028-04-01', current_issue_date: '2026-05-01' }).error).toBeUndefined();
+  it('warns, rather than refuses, an expiry before the issue date', () => {
+    const r = readEmployeeDocFields({ issue_date: '2026-05-01', expiry_date: '2026-04-01' });
+    expect(r.error).toBeUndefined();
+    expect(r.data).toEqual({ issue_date: '2026-05-01', expiry_date: '2026-04-01' });
+    expect(r.warnings.map((w) => w.code)).toEqual(['expiry_before_issue']);
+  });
+  it('also warns against the stored issue date', () => {
+    const r = readEmployeeDocFields({ expiry_date: '2026-04-01', current_issue_date: '2026-05-01' });
+    expect(r.warnings.map((w) => w.code)).toEqual(['expiry_before_issue']);
+    expect(readEmployeeDocFields({ expiry_date: '2028-04-01', current_issue_date: '2026-05-01' }).warnings).toEqual([]);
+  });
+  it('does not ask again when the dates are unchanged from what is stored', () => {
+    // A document the person already confirmed keeps its odd dates; saving an
+    // unrelated field (the client resends all four) must not re-raise the warning.
+    const r = readEmployeeDocFields({
+      doc_number: 'X1', issue_date: '2026-05-01', expiry_date: '2026-04-01',
+      current_issue_date: '2026-05-01', current_expiry_date: '2026-04-01',
+    });
+    expect(r.warnings).toEqual([]);
+  });
+  it('still refuses what cannot be stored', () => {
+    expect(readEmployeeDocFields({ expiry_date: 'nonsense' }).error).toBeTruthy();
   });
 });

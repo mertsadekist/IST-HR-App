@@ -14,6 +14,7 @@ import { toast } from 'react-toastify';
 import { FolderOpen, Upload, Download, Trash2, Search, Plus, FileIcon, File, Book, FileText, Shield, LifeBuoy, FormInput, ClipboardList, PenTool, AlertTriangle, CalendarClock, CalendarOff, Infinity as InfinityIcon, Pencil, BellRing } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
+import { sendWithWarnings } from '@utils/softWarnings';
 
 const formatSize = (bytes) => {
   if (!bytes) return '0 B';
@@ -215,13 +216,17 @@ export default function CompanyDocs() {
     if (editForm.expiry_mode === 'Has Expiry' && !editForm.expiry_date) { toast.error(t('docs.expiry_date_required')); return; }
     setSavingEdit(true);
     try {
-      await documentsApi.updateDocument(editDoc.id, {
+      await sendWithWarnings((confirmed) => documentsApi.updateDocument(editDoc.id, {
         ...editForm,
         reminder_days: editForm.reminder_days || null,
-      }, currentCompanyId ? { company_id: currentCompanyId } : {});
+        ...(confirmed ? { confirm_warnings: true } : {}),
+      }, currentCompanyId ? { company_id: currentCompanyId } : {}), t);
       toast.success(t('toasts.t_document_updated'));
       setEditDoc(null); loadAll();
-    } catch (err) { toast.error(err?.response?.data?.error || t('common.error')); }
+    } catch (err) {
+      if (err.cancelled) return; // keep the form open so the dates can be corrected
+      toast.error(err?.response?.data?.error || t('common.error'));
+    }
     finally { setSavingEdit(false); }
   };
 
@@ -243,10 +248,16 @@ export default function CompanyDocs() {
         if (uploadForm.issue_date) formData.append('issue_date', uploadForm.issue_date);
         if (uploadForm.reminder_days) formData.append('reminder_days', uploadForm.reminder_days);
       }
-      await documentsApi.uploadDocument(formData);
+      await sendWithWarnings((confirmed) => {
+        if (confirmed) formData.set('confirm_warnings', 'true');
+        return documentsApi.uploadDocument(formData);
+      }, t);
       toast.success(t('toasts.t_document_uploaded'));
       setUploadModal(false); setFile(null); loadAll();
-    } catch { toast.error(t('toasts.t_failed_to_upload')); }
+    } catch (err) {
+      if (err.cancelled) return; // keep the form open so the dates can be corrected
+      toast.error(t('toasts.t_failed_to_upload'));
+    }
     finally { setUploading(false); }
   };
 
