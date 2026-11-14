@@ -104,3 +104,28 @@ export const confirmAction = (title, text) =>
       cancelButton: 'rounded-xl',
     },
   });
+
+/**
+ * A warning the person may overrule — "this looks unusual, save anyway?".
+ * Unlike confirmDelete the default is to go back and fix it, and the texts are
+ * passed in so the caller can translate them.
+ */
+export const confirmWarning = ({ title, text, confirmText, cancelText }) =>
+  Swal.fire({
+    title,
+    text,
+    icon: 'warning',
+    showCancelButton: true,
+    focusCancel: true,
+    confirmButtonColor: '#D97706',
+    cancelButtonColor: '#737373',
+    confirmButtonText: confirmText,
+    cancelButtonText: cancelText,
+    heightAuto: false,
+    didOpen: escapeModalLock,
+    customClass: {
+      popup: 'rounded-2xl',
+      confirmButton: 'rounded-xl',
+      cancelButton: 'rounded-xl',
+    },
+  });

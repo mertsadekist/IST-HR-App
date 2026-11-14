@@ -15,6 +15,7 @@
 import { notifyRole } from './notificationService.js';
 import { thresholdFor, alreadyAlerted } from './expiryAlerts.js';
 import { DOC_EXPIRY_THRESHOLDS } from './documentExpiryService.js';
+import { expiryBeforeIssue } from './softWarnings.js';
 
 export const EMPLOYEE_DOC_TYPES = [
   'Passport', 'Residence Visa', 'Emirates ID', 'Labour Card', 'Health Insurance', 'Other ID',
@@ -63,7 +64,8 @@ export function expiryState(daysLeft) {
 
 /**
  * Check and validate the expiry fields of a create/update body.
- * Returns { data } with only the fields present in the body, or { error }.
+ * Returns { data, warnings } with only the fields present in the body, or { error }.
+ * `error` is for what cannot be stored; `warnings` is for what the person may overrule.
  */
 export function readEmployeeDocFields(body) {
   const data = {};
@@ -87,8 +89,17 @@ export function readEmployeeDocFields(body) {
   }
   const issue = data.issue_date !== undefined ? data.issue_date : body.current_issue_date;
   const expiry = data.expiry_date !== undefined ? data.expiry_date : body.current_expiry_date;
-  if (issue && expiry && expiry < issue) return { error: 'Expiry date is before the issue date' };
-  return { data };
+
+  // An expiry before the issue date is unusual but real for some papers, so it is
+  // a warning the person can overrule, not an error (see softWarnings.js). Only
+  // raised when a date is actually being changed: re-saving an unrelated field on
+  // a document the person already confirmed must not ask again.
+  const datesChanged = (data.issue_date !== undefined && data.issue_date !== body.current_issue_date)
+    || (data.expiry_date !== undefined && data.expiry_date !== body.current_expiry_date);
+  const warnings = [];
+  const order = datesChanged ? expiryBeforeIssue(issue, expiry) : null;
+  if (order) warnings.push(order);
+  return { data, warnings };
 }
 
 /**

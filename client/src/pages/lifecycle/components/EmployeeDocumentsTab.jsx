@@ -5,6 +5,7 @@ import dayjs from 'dayjs';
 import Badge from '@components/ui/Badge';
 import * as employeesApi from '@api/employeesApi';
 import { EMPLOYEE_DOC_TYPES, docTypeLabel, expiryBadge } from '@utils/employeeDocs';
+import { sendWithWarnings } from '@utils/softWarnings';
 
 const CATEGORIES = ['General', 'ID/Passport', 'Certificate', 'Handover Sheet', 'Other'];
 const EMPTY_META = { doc_type: '', doc_number: '', issue_date: '', expiry_date: '' };
@@ -78,13 +79,22 @@ export default function EmployeeDocumentsTab({ employee, t, canEdit }) {
     formData.append('category', category);
     for (const [k, v] of Object.entries(meta)) if (v) formData.append(k, v);
 
-    const toastId = toast.loading(t('toasts.t_uploading_document'));
+    let toastId = toast.loading(t('toasts.t_uploading_document'));
     try {
-      await employeesApi.uploadEmployeeDocument(employee.id, formData);
+      // Unusual dates (e.g. expiry before issue) are the uploader's call: they are
+      // asked, and the same upload is repeated if they confirm.
+      await sendWithWarnings((confirmed) => {
+        if (confirmed) formData.set('confirm_warnings', 'true');
+        return employeesApi.uploadEmployeeDocument(employee.id, formData);
+      }, t, {
+        onAsk: () => toast.dismiss(toastId),
+        onConfirmed: () => { toastId = toast.loading(t('toasts.t_uploading_document')); },
+      });
       toast.update(toastId, { render: t('empDocs.uploaded'), type: 'success', isLoading: false, autoClose: 3000 });
       setMeta(EMPTY_META);
       await load();
     } catch (err) {
+      if (err.cancelled) { toast.dismiss(toastId); return; } // the person chose to go back and fix it
       toast.update(toastId, { render: err.response?.data?.error || t('empDocs.upload_failed'), type: 'error', isLoading: false, autoClose: 4000 });
     } finally {
       setUploading(false);
@@ -118,11 +128,15 @@ export default function EmployeeDocumentsTab({ employee, t, canEdit }) {
   const saveEdit = async () => {
     setSaving(true);
     try {
-      await employeesApi.updateEmployeeDocument(employee.id, editingId, editMeta);
+      await sendWithWarnings(
+        (confirmed) => employeesApi.updateEmployeeDocument(employee.id, editingId,
+          confirmed ? { ...editMeta, confirm_warnings: true } : editMeta),
+        t);
       toast.success(t('empDocs.saved'));
       setEditingId(null);
       await load();
     } catch (err) {
+      if (err.cancelled) return; // stay in edit mode so the dates can be corrected
       toast.error(err.response?.data?.error || t('empDocs.save_failed'));
     } finally {
       setSaving(false);

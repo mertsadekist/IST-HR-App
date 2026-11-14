@@ -17,6 +17,7 @@ import { extractTextFromFile } from '../services/cvParserService.js';
 import { ensureUploadDir, uploadPath } from '../config/storage.js';
 import { getEmployeeHoldings, buildClearance } from '../services/holdingsService.js';
 import { waiveOpenCasesFor } from '../services/ownerExemption.js';
+import { holdForConfirmation, overrideNote } from '../services/softWarnings.js';
 import { buildRadar, readEmployeeDocFields, expiryState } from '../services/employeeDocumentExpiryService.js';
 import { wouldCreateCycle } from '../services/orgService.js';
 
@@ -807,6 +808,8 @@ router.post('/:id/documents', authorize('admin', 'hr_manager', 'hr_specialist'),
     // so a passport scan lands on the expiry radar without a second edit.
     const fields = readEmployeeDocFields(req.body);
     if (fields.error) return res.status(422).json({ error: fields.error });
+    // Unusual dates are the uploader's call: ask, and go ahead once they confirm.
+    if (holdForConfirmation(req, res, fields.warnings)) return;
 
     // Enforce that destination folder exists
     ensureUploadDir('employee_docs');
@@ -821,7 +824,8 @@ router.post('/:id/documents', authorize('admin', 'hr_manager', 'hr_specialist'),
     }]);
 
     await addAudit(pool, req.user, 'Employees', 'Document Uploaded', `Uploaded document "${req.file.originalname}" for employee #${employeeId}`
-      + (fields.data.doc_type ? ` (${fields.data.doc_type}${fields.data.expiry_date ? `, expires ${fields.data.expiry_date}` : ''})` : ''));
+      + (fields.data.doc_type ? ` (${fields.data.doc_type}${fields.data.expiry_date ? `, expires ${fields.data.expiry_date}` : ''})` : '')
+      + overrideNote(req, fields.warnings));
     res.status(201).json({ id: result.insertId, file_name: req.file.originalname, file_url: req.file.filename, success: true });
   } catch (err) {
     console.error('POST /employees/:id/documents error:', err);
@@ -851,6 +855,7 @@ router.put('/:id/documents/:docId', authorize('admin', 'hr_manager'), async (req
       ...req.body, current_issue_date: doc.issue_date, current_expiry_date: doc.expiry_date,
     });
     if (fields.error) return res.status(422).json({ error: fields.error });
+    if (holdForConfirmation(req, res, fields.warnings)) return;
     const data = { ...fields.data };
     if (req.body.category !== undefined) data.category = req.body.category || 'General';
     if (!Object.keys(data).length) return res.status(400).json({ error: 'Nothing to update' });
@@ -863,7 +868,8 @@ router.put('/:id/documents/:docId', authorize('admin', 'hr_manager'), async (req
     await pool.query('UPDATE employee_documents SET ? WHERE id = ?', [data, doc.id]);
     await addAudit(pool, req.user, 'Employees', 'Document Updated',
       `Document "${doc.file_name}" of employee #${employeeId} updated`
-      + (expiryChanged ? ` — expiry ${doc.expiry_date || 'unset'} → ${data.expiry_date || 'unset'}` : ''));
+      + (expiryChanged ? ` — expiry ${doc.expiry_date || 'unset'} → ${data.expiry_date || 'unset'}` : '')
+      + overrideNote(req, fields.warnings));
     res.json({ success: true });
   } catch (err) {
     console.error('PUT /employees/:id/documents/:docId error:', err);
