@@ -19,3 +19,9 @@ export const syncFinalize = (data) => api.post('/attendance/hik-sync/finalize', 
 export const syncBackfill = (data) => api.post('/attendance/hik-sync/backfill', data);
 export const syncIgnore = (data) => api.post('/attendance/hik-sync/ignore', data);
 export const syncUnignore = (deviceId) => api.delete(`/attendance/hik-sync/ignore/${encodeURIComponent(deviceId)}`);
+
+// ─── Live board, roster and shifts ───────────────────────────────────────────
+export const live = () => api.get('/attendance/live');
+export const roster = (month) => api.get('/attendance/roster', { params: { month } });
+// value: a schedule id, 'off', or null to go back to the weekly schedule
+export const setShifts = (data) => api.put('/attendance/shifts', data);

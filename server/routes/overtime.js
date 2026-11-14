@@ -6,7 +6,7 @@ import { requireModule, MODULES } from '../config/permissions.js';
 import { tenantScope, companyClause } from '../middleware/tenant.js';
 import { addAudit } from '../services/auditService.js';
 import { getAppSetting } from '../services/appSettings.js';
-import { resolveScheduleId, getScheduleWithDays, resolveDayRule, holidaysBetween } from '../services/workScheduleService.js';
+import { resolveEffectiveSchedule, holidaysBetween } from '../services/workScheduleService.js';
 import { detectOvertime, overtimePay, effectiveRates } from '../services/overtimeService.js';
 import { startApproval, cancelApproval, approvalSummaries } from '../services/approvalService.js';
 import { notify, userIdForEmployee } from '../services/notificationService.js';
@@ -113,16 +113,12 @@ router.post('/detect', authorize('admin', 'hr_manager'), async (req, res) => {
       [req.companyId, from, last]);
 
     const holidays = new Map((await holidaysBetween(req.companyId, from, last)).map((h) => [h.holiday_date, h]));
-    const schedules = new Map();
     const toConfirm = new Map(); // approver user id → days waiting for them
     let created = 0;
     for (const r of rows) {
-      const resolved = await resolveScheduleId(r.employee_id, r.work_date);
-      let dayRule = null;
-      if (resolved) {
-        if (!schedules.has(resolved.schedule_id)) schedules.set(resolved.schedule_id, await getScheduleWithDays(resolved.schedule_id));
-        dayRule = resolveDayRule(schedules.get(resolved.schedule_id), r.work_date);
-      }
+      // Weekly schedule, or the shift / day off set for that date.
+      const resolved = await resolveEffectiveSchedule(r.employee_id, r.work_date).catch(() => null);
+      const dayRule = resolved?.dayRule || null;
       // No schedule at all: nothing to measure against, so nothing is assumed.
       if (!resolved) continue;
       const holiday = holidays.get(r.work_date);

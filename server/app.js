@@ -50,6 +50,7 @@ import emailRoutes from './routes/email.js';
 import leaveRoutes from './routes/leave.js';
 import leaveBalancesRoutes from './routes/leaveBalances.js';
 import attendanceRoutes from './routes/attendance.js';
+import attendanceBoardRoutes from './routes/attendanceBoard.js';
 import workSchedulesRoutes from './routes/workSchedules.js';
 import attendanceEvaluationRoutes from './routes/attendanceEvaluation.js';
 import payrollRoutes from './routes/payroll.js';
@@ -158,6 +159,7 @@ app.use('/api/portal', portalRoutes);
 app.use('/api/email', emailRoutes);
 app.use('/api/leave', leaveBalancesRoutes); // ledger, preview, context, calendar
 app.use('/api/leave', leaveRoutes);
+app.use('/api/attendance', attendanceBoardRoutes); // live board, roster, shifts (before PUT /:id)
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/work-schedules', workSchedulesRoutes);
 app.use('/api/attendance-evaluation', attendanceEvaluationRoutes);
