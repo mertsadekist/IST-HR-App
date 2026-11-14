@@ -730,6 +730,24 @@ const TABLE_GUARDS = [
      INDEX idx_osl_offboarding (offboarding_id),
      FOREIGN KEY (offboarding_id) REFERENCES offboarding_records(id) ON DELETE CASCADE
    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  // A shift for one person on one date, over their weekly schedule
+  // (services/shiftService.js): another schedule's hours, or a day off.
+  `CREATE TABLE IF NOT EXISTS shift_assignments (
+     id          INT AUTO_INCREMENT PRIMARY KEY,
+     company_id  INT NOT NULL,
+     employee_id INT NOT NULL,
+     work_date   DATE NOT NULL,
+     schedule_id INT NULL,
+     is_off      BOOLEAN NOT NULL DEFAULT FALSE,
+     note        VARCHAR(300) NULL,
+     assigned_by INT NULL,
+     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+     UNIQUE KEY uq_shift_emp_date (employee_id, work_date),
+     INDEX idx_shift_company_date (company_id, work_date),
+     FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE,
+     FOREIGN KEY (schedule_id) REFERENCES work_schedules(id) ON DELETE CASCADE
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   // The leave balance ledger (services/leaveBalanceService.js). Signed days on
   // top of the yearly entitlement, each with a reason. source_year is set on
   // the rows a year-end run writes, so running it again updates, not repeats.

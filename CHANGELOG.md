@@ -14,6 +14,16 @@ All notable changes to the IST HR System. Dates are ISO (YYYY‑MM‑DD). The ap
 - Google Drive attendance sync, its CSV parser, `GOOGLE_DRIVE_SA_*` / `ATTENDANCE_DRIVE_FOLDER_ID` variables and the `google-auth-library` dependency. Existing `Drive Sync` attendance rows and the `attendance_sync_*` ledger tables are kept as history.
 
 ### Added
+- **Live board, roster and shifts by date** (`services/shiftService.js`, `routes/attendanceBoard.js`):
+  - **Shifts by date.** A shift (another schedule's hours) or a day off can be set for one person on one date, overriding their weekly schedule for that day only (`shift_assignments`). The attendance evaluator, the door sync, overtime detection and working-day leave counting all use it, because the override is resolved where the schedule is.
+  - **Roster** (Attendance → *Roster*, `/attendance/roster`). The month per person and day.
+    - *Attendance* view: present, late, half day, absent, leave (faded while pending), public holidays, and working days with no record.
+    - *Shifts* view: the weekly schedule (faded), date overrides (solid) and shifts that end the next day (moon). Admins and HR managers paint shifts by picking one and clicking or dragging over days, then saving. *Day off* and *Weekly schedule* are brushes too. Days already over are re-evaluated against the new shift.
+  - **Live board** (Attendance → *Live board*, `/attendance/board`). Today's counts and list: not in yet (shift started, past grace, no punch), late, in, expected later, on leave, absent, rest day or holiday, no schedule. It refreshes every minute.
+    - The door feed keeps first and latest punch without in/out direction, so anyone who punched is shown as in, with the time last seen. Owners are left out.
+  - Overtime detection now resolves the day through the same path, so a shift or day off set for a date applies there too.
+  - **Not in this change:** clocking in from the portal on a phone (needs a decision on location and geofencing), and pairing punches after midnight with the previous day's night shift in the door sync. A night shift is flagged on the roster, but its punches are still grouped by calendar date.
+  - Schema at boot through `ensureSchema`: `shift_assignments`.
 - **Leave balances, carry-forward and the approver’s view** (`services/leaveBalanceService.js`, `services/leaveBalanceStore.js`, `routes/leaveBalances.js`):
   - **Balance ledger.** Days on top of the yearly entitlement, each with a reason: opening balances, corrections either way, carried-forward days, lapsed days and encashed days. Remaining = entitlement + ledger − used. Payroll, the payslip explainer, HR's approval check and the final settlement all use the same figure, so carried or opened days are paid when taken, and encashed days are not.
   - **Leave → Balances** now shows what everyone has left of each yearly type, with the ledger underneath. HR can adjust a balance, **import opening balances from CSV** (employee by email, attendance ID or number; checked first, and a re-import replaces rather than adds), and **encash** days. Encashed days are paid at basic / 30 per day as a *Leave encashment* item in a Draft payroll month. An admin can remove a ledger row; an encashment can only be removed while its payroll item is unpaid.

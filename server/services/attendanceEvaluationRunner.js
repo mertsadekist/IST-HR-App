@@ -13,7 +13,8 @@
  * day would be two thousand round trips for data that fits in a Map.
  */
 import pool from '../config/db.js';
-import { listSchedules, resolveDayRule, scheduleSnapshot } from './workScheduleService.js';
+import { listSchedules, resolveDayRule, scheduleSnapshot, loadShiftOverrides } from './workScheduleService.js';
+import { withShiftOverride } from './shiftService.js';
 import { evaluateDay, eachDate, diffAgainstStored } from './attendanceEvaluator.js';
 import { OPEN_STATUSES, EVALUATION_VERSION } from '../config/attendanceExceptions.js';
 import { getAppSetting, setAppSetting } from './appSettings.js';
@@ -78,14 +79,21 @@ export async function loadScheduleIndex(employees, db) {
     }
   }
 
+  // A shift or day off set for one date wins over the weekly schedule.
+  const overrides = await loadShiftOverrides(employees.map((e) => e.id), db);
+
   /** @returns {{schedule: object, source: string}|null} */
   return function resolve(employee, date) {
     const own = assignments.get(employee.id) || [];
     // Sorted newest-first, so the first match is the one in force.
     const hit = own.find((a) => a.effective_from <= date && (!a.effective_to || a.effective_to >= date));
-    if (hit && byId.has(hit.schedule_id)) return { schedule: byId.get(hit.schedule_id), source: 'assignment' };
-    const def = defaults.get(employee.company_id);
-    return def && byId.has(def) ? { schedule: byId.get(def), source: 'company_default' } : null;
+    let base = null;
+    if (hit && byId.has(hit.schedule_id)) base = { schedule: byId.get(hit.schedule_id), source: 'assignment' };
+    else {
+      const def = defaults.get(employee.company_id);
+      base = def && byId.has(def) ? { schedule: byId.get(def), source: 'company_default' } : null;
+    }
+    return withShiftOverride(base, overrides.get(`${employee.id}|${date}`), byId, date);
   };
 }
 
