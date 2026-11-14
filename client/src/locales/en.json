@@ -60,7 +60,9 @@
     "approval_chains": "Approval chains",
     "my_approvals": "My Approvals",
     "employee_requests": "Employee Requests",
-    "my_requests": "My Requests"
+    "my_requests": "My Requests",
+    "attendance_board": "Live board",
+    "attendance_roster": "Roster"
   },
   "topbar": {
     "search_placeholder": "Search across HR system...",
@@ -3592,5 +3594,71 @@
     "never": "Never",
     "hours_required": "Enter the number of hours",
     "add_to_calendar": "Add to calendar"
+  },
+  "att_board": {
+    "title": "Live board",
+    "subtitle": "Who is in, late, not in yet, on leave or resting today. Refreshes every minute.",
+    "as_of": "{{date}} at {{time}}",
+    "search": "Search people or departments",
+    "empty": "Nobody matches.",
+    "override": "set for today",
+    "min": "min",
+    "state": {
+      "not_in": "Not in yet",
+      "late": "Late",
+      "in": "In",
+      "expected": "Expected later",
+      "on_leave": "On leave",
+      "absent": "Absent",
+      "rest": "Rest day / holiday",
+      "no_schedule": "No schedule"
+    },
+    "col": {
+      "person": "Person",
+      "state": "Now",
+      "shift": "Today’s hours",
+      "first_in": "First in",
+      "last_seen": "Last seen",
+      "note": "Note"
+    },
+    "footnote": "The door feed records the first and the latest punch, not whether a punch was in or out, so anyone who punched today is shown as in. Owners are not tracked."
+  },
+  "roster": {
+    "title": "Roster",
+    "subtitle": "The month per person and day: what happened, and the shifts planned.",
+    "mode_attendance": "Attendance",
+    "mode_shifts": "Shifts",
+    "prev": "Previous month",
+    "next": "Next month",
+    "person": "Person",
+    "empty": "Nobody to show for this Entity.",
+    "pending": "pending",
+    "brush": "Paint:",
+    "day_off": "Day off",
+    "weekly": "Weekly schedule",
+    "off_abbr": "Off",
+    "discard": "Discard",
+    "save": "Save {{n}} change(s)",
+    "saved": "{{n}} day(s) updated",
+    "abbr": {
+      "present": "P",
+      "remote": "R",
+      "late": "L",
+      "half_day": "H",
+      "absent": "A",
+      "on_leave": "V",
+      "holiday": "PH"
+    },
+    "status": {
+      "present": "Present",
+      "remote": "Remote",
+      "late": "Late",
+      "half_day": "Half day",
+      "absent": "Absent",
+      "on_leave": "On leave",
+      "holiday": "Holiday"
+    },
+    "legend_attendance": "P present · L late · H half day · A absent · V leave (faded: pending) · PH public holiday · ? no record on a working day · dot: rest day",
+    "legend_shifts": "Faded: the weekly schedule · solid: a shift or day off set for that date · moon: ends the next day · dashed: not saved yet. Pick a shift, click or drag over days, then save. Days already over are re-checked against the new shift."
   }
 }

@@ -9,7 +9,7 @@ import {
   BarChart3, ClipboardList, Trophy, Network, UserCog, Settings,
   Sparkles, ChevronDown, X, Package, Shield, Mail, Send,
   CalendarDays, Clock, Banknote, Inbox, HelpCircle, KeyRound, Share2, Globe,
-  Boxes, Layers, Fingerprint, ScanEye, Radar, HandCoins, Timer, Stamp
+  Boxes, Layers, Fingerprint, ScanEye, Radar, HandCoins, Timer, Stamp, Activity, CalendarRange
 } from 'lucide-react';
 import { cn } from '@utils/cn';
 import * as portalApi from '@api/portalApi';
@@ -60,6 +60,8 @@ const buildMenuGroups = (t) => [
         { path: '/leave', icon: CalendarDays, label: t('nav.leave', 'Leave'), roles: HR_ONLY },
         { path: '/attendance', icon: Clock, label: t('nav.attendance', 'Attendance'), roles: HR_ONLY },
         { path: '/attendance/sync', icon: Fingerprint, label: t('nav.attendance_sync'), roles: HR_ONLY },
+        { path: '/attendance/board', icon: Activity, label: t('nav.attendance_board'), roles: HR_ONLY },
+        { path: '/attendance/roster', icon: CalendarRange, label: t('nav.attendance_roster'), roles: HR_ONLY },
         { path: '/attendance/exceptions', icon: ScanEye, label: t('nav.attendance_exceptions'), roles: HR_ONLY },
         { path: '/overtime', icon: Timer, label: t('nav.overtime'), roles: HR_AND_FINANCE },
         { path: '/requests', icon: Inbox, label: t('nav.employee_requests'), roles: HR_AND_FINANCE },

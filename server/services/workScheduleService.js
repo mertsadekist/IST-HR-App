@@ -20,6 +20,7 @@
  *    MySQL's `DAYOFWEEK() - 1`, so the number means the same thing on both sides.
  */
 import pool from '../config/db.js';
+import { withShiftOverride } from './shiftService.js';
 
 /**
  * Weekday for a 'YYYY-MM-DD' string, 0 = Sunday.
@@ -276,11 +277,37 @@ export async function resolveScheduleId(employeeId, dateStr, db = pool) {
  */
 export async function resolveEffectiveSchedule(employeeId, dateStr, db = pool) {
   const resolved = await resolveScheduleId(employeeId, dateStr, db);
-  if (!resolved) return null;
-  const schedule = await getScheduleWithDays(resolved.schedule_id, db);
-  if (!schedule) return null;
-  const dayRule = resolveDayRule(schedule, dateStr);
-  return { schedule, dayRule, source: resolved.source, snapshot: scheduleSnapshot(schedule, dayRule) };
+  const base = resolved ? await getScheduleWithDays(resolved.schedule_id, db) : null;
+  // A shift or day off set for this date wins over the weekly schedule.
+  const [[override]] = await db.query(
+    'SELECT schedule_id, is_off FROM shift_assignments WHERE employee_id = ? AND work_date = ?', [employeeId, dateStr])
+    .catch(() => [[null]]);
+  let picked = base ? { schedule: base, source: resolved.source } : null;
+  if (override) {
+    const byId = new Map();
+    if (override.schedule_id) {
+      const s = await getScheduleWithDays(override.schedule_id, db);
+      if (s) byId.set(s.id, s);
+    }
+    picked = withShiftOverride(picked, override, byId, dateStr);
+  }
+  if (!picked) return null;
+  const dayRule = resolveDayRule(picked.schedule, dateStr);
+  return { schedule: picked.schedule, dayRule, source: picked.source, snapshot: scheduleSnapshot(picked.schedule, dayRule) };
+}
+
+/** Date overrides for some employees: Map `${employeeId}|${date}` → { schedule_id, is_off }. */
+export async function loadShiftOverrides(employeeIds, db = pool, { from = null, to = null } = {}) {
+  const out = new Map();
+  if (!employeeIds.length) return out;
+  let sql = `SELECT employee_id, DATE_FORMAT(work_date, '%Y-%m-%d') AS d, schedule_id, is_off
+               FROM shift_assignments WHERE employee_id IN (?)`;
+  const params = [employeeIds];
+  if (from) { sql += ' AND work_date >= ?'; params.push(from); }
+  if (to) { sql += ' AND work_date <= ?'; params.push(to); }
+  const [rows] = await db.query(sql, params).catch(() => [[]]);
+  for (const r of rows) out.set(`${r.employee_id}|${r.d}`, { schedule_id: r.schedule_id, is_off: !!r.is_off });
+  return out;
 }
 
 /**
