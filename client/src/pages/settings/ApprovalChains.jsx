@@ -8,7 +8,7 @@ import Button from '@components/ui/Button';
 import * as approvalsApi from '@api/approvalsApi';
 import { stepLabel } from '@utils/approvals';
 
-const PROCESSES = ['leave', 'overtime', 'expense', 'advance'];
+const PROCESSES = ['leave', 'overtime', 'expense', 'advance', 'requisition'];
 const blankStep = { type: 'direct_manager' };
 
 /**

@@ -14,6 +14,18 @@ All notable changes to the IST HR System. Dates are ISO (YYYY‑MM‑DD). The ap
 - Google Drive attendance sync, its CSV parser, `GOOGLE_DRIVE_SA_*` / `ATTENDANCE_DRIVE_FOLDER_ID` variables and the `google-auth-library` dependency. Existing `Drive Sync` attendance rows and the `attendance_sync_*` ledger tables are kept as history.
 
 ### Added
+- **Appraisals and hiring requests** (`services/reviewService.js`, `routes/reviews.js`, `routes/requisitions.js`):
+  - **Appraisal cycles** (HR → *Appraisals*, `/reviews`). HR creates a cycle (period, self and manager due dates) and launches it. Launching creates a review for every current employee of the company, with their direct manager recorded, and notifies them. HR follows progress by stage, opens any review, can send it back a step, finalizes it and closes the cycle.
+  - **The review.** Goals (optionally weighted to 100) with 1–5 scores, an overall rating and comments per side.
+    - The employee does a self review from *My Reviews* (`/portal/reviews`).
+    - The direct manager scores the goals, rates the person and recommends: increase, promotion, bonus, training or improvement plan.
+    - HR sets the final rating and recommendation.
+    - Someone with no manager who signs in goes straight from self review to HR. The employee sees the manager's and HR's parts only once the review is complete.
+  - **Salary reviews** show each person's last completed appraisal rating beside their name.
+  - **Hiring requests** (Recruitment → *Hiring requests*, `/requisitions`). A manager (from *My Team*) or HR asks for a role: head count, new or replacement, salary range, start date and why it is needed.
+    - The request goes through the *Hiring requests* approval chain where one is set up, and appears in approvers' *My Approvals*.
+    - HR's approval creates a **Draft vacancy** from it for recruitment to publish. HR's approval waits for the chain, with the same admin override; a rejection anywhere declines the request.
+  - Schema at boot through `ensureSchema`: `review_cycles`, `reviews`, `review_goals`, `job_requisitions`.
 - **Live board, roster and shifts by date** (`services/shiftService.js`, `routes/attendanceBoard.js`):
   - **Shifts by date.** A shift (another schedule's hours) or a day off can be set for one person on one date, overriding their weekly schedule for that day only (`shift_assignments`). The attendance evaluator, the door sync, overtime detection and working-day leave counting all use it, because the override is resolved where the schedule is.
   - **Roster** (Attendance → *Roster*, `/attendance/roster`). The month per person and day.

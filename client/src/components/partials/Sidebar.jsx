@@ -9,7 +9,7 @@ import {
   BarChart3, ClipboardList, Trophy, Network, UserCog, Settings,
   Sparkles, ChevronDown, X, Package, Shield, Mail, Send,
   CalendarDays, Clock, Banknote, Inbox, HelpCircle, KeyRound, Share2, Globe,
-  Boxes, Layers, Fingerprint, ScanEye, Radar, HandCoins, Timer, Stamp, Activity, CalendarRange
+  Boxes, Layers, Fingerprint, ScanEye, Radar, HandCoins, Timer, Stamp, Activity, CalendarRange, ClipboardCheck
 } from 'lucide-react';
 import { cn } from '@utils/cn';
 import * as portalApi from '@api/portalApi';
@@ -41,6 +41,7 @@ const buildMenuGroups = (t) => [
         { path: '/ats', icon: Kanban, label: t('nav.pipeline') },
         { path: '/candidates', icon: Users, label: t('nav.candidates') },
         { path: '/vacancies', icon: FileText, label: t('nav.vacancies') },
+        { path: '/requisitions', icon: ClipboardList, label: t('nav.requisitions') },
         { path: '/applicants', icon: Inbox, label: t('nav.applicants', 'Applicants') },
         { path: '/cv-scorer', icon: Target, label: t('nav.cv_scorer', 'CV Scorer') },
       ],
@@ -69,6 +70,7 @@ const buildMenuGroups = (t) => [
         { path: '/payroll-items', icon: HandCoins, label: t('nav.payroll_items'), roles: HR_AND_FINANCE },
         { path: '/salary-reviews', icon: TrendingUp, label: t('nav.salary_reviews', 'Salary Reviews'), roles: HR_ONLY },
         { path: '/performance', icon: TrendingUp, label: t('nav.performance', 'Performance'), roles: HR_ONLY },
+        { path: '/reviews', icon: ClipboardCheck, label: t('nav.reviews'), roles: HR_ONLY },
         { path: '/offboarding', icon: DoorOpen, label: t('nav.offboarding'), roles: HR_ONLY },
       ],
     },
@@ -129,6 +131,7 @@ const buildMenuGroups = (t) => [
         { path: '/portal/salary', icon: Banknote, label: t('nav.my_salary') },
         { path: '/portal/leave', icon: CalendarDays, label: t('nav.my_leave') },
         { path: '/portal/requests', icon: Inbox, label: t('nav.my_requests') },
+        { path: '/portal/reviews', icon: ClipboardCheck, label: t('nav.my_reviews') },
         // Only for people who manage someone (see hasTeam in Sidebar).
         { path: '/portal/team', icon: Users, label: t('nav.my_team'), requiresTeam: true },
         // For anyone who is an approver: a manager, or named in a chain step.

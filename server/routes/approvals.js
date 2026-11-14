@@ -67,6 +67,15 @@ router.get('/mine', async (req, res) => {
     const ids = (p) => pending.filter((r) => r.process === p).map((r) => r.entity_id);
     const leaveIds = ids('leave'), otIds = ids('overtime');
     const reqIds = [...ids('expense'), ...ids('advance')];
+    const jrIds = ids('requisition');
+    const jrs = new Map();
+    if (jrIds.length) {
+      const [rows] = await pool.query(
+        `SELECT jr.id, jr.title, jr.head_count, jr.reason, jr.budget_min, jr.budget_max, jr.justification,
+                DATE_FORMAT(jr.target_start, '%Y-%m-%d') AS target_start, d.name AS department_name
+           FROM job_requisitions jr LEFT JOIN departments d ON d.id = jr.department_id WHERE jr.id IN (?)`, [jrIds]);
+      for (const r of rows) jrs.set(r.id, r);
+    }
     const leave = new Map(), ot = new Map(), reqs = new Map();
     if (reqIds.length) {
       const [rows] = await pool.query('SELECT id, type, title, amount, details, created_at FROM employee_requests WHERE id IN (?)', [reqIds]);
@@ -104,11 +113,12 @@ router.get('/mine', async (req, res) => {
       ...(await approvalSummaries(pool, 'expense', ids('expense'))).entries(),
       ...(await approvalSummaries(pool, 'advance', ids('advance'))).entries(),
     ]);
+    const jrChains = await approvalSummaries(pool, 'requisition', jrIds);
     res.json(pending.map((r) => ({
       id: r.id, process: r.process, entity_id: r.entity_id, created_at: r.created_at,
       employee: names.get(r.employee_id) || null,
-      details: (r.process === 'leave' ? leave : r.process === 'overtime' ? ot : reqs).get(r.entity_id) || null,
-      chain: (r.process === 'leave' ? chains : r.process === 'overtime' ? otChains : reqChains).get(r.entity_id) || null,
+      details: (r.process === 'leave' ? leave : r.process === 'overtime' ? ot : r.process === 'requisition' ? jrs : reqs).get(r.entity_id) || null,
+      chain: (r.process === 'leave' ? chains : r.process === 'overtime' ? otChains : r.process === 'requisition' ? jrChains : reqChains).get(r.entity_id) || null,
     })).filter((x) => x.details));
   } catch (err) { console.error('GET /approvals/mine error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
@@ -143,11 +153,16 @@ router.post('/:id/act', async (req, res) => {
           `UPDATE employee_requests SET status = 'Rejected', decision_note = ?, decided_by = ?, decided_at = NOW()
             WHERE id = ? AND status IN ('Pending', 'In Progress')`, [note.slice(0, 500), req.user.id, ar.entity_id]);
         await notify(pool, { userId: empUser, companyId: ar.company_id, type: 'request', title: 'Request declined', body: note, link: '/portal/requests' });
+      } else if (ar.process === 'requisition') {
+        await pool.query(
+          `UPDATE job_requisitions SET status = 'Rejected', decision_note = ?, decided_by = ?, decided_at = NOW()
+            WHERE id = ? AND status = 'Pending'`, [note.slice(0, 500), req.user.id, ar.entity_id]);
+        await notify(pool, { userId: ar.created_by, companyId: ar.company_id, type: 'requisition', title: 'Hiring request declined', body: note, link: '/portal/team' });
       }
     } else if (result.status === 'Approved') {
       // The chain is done; the final decision is HR's, as before.
-      const link = { leave: '/leave', overtime: '/overtime' }[ar.process] || '/requests';
-      const what = { leave: 'Leave request', overtime: 'Overtime', expense: 'Expense', advance: 'Salary advance' }[ar.process];
+      const link = { leave: '/leave', overtime: '/overtime', requisition: '/requisitions' }[ar.process] || '/requests';
+      const what = { leave: 'Leave request', overtime: 'Overtime', expense: 'Expense', advance: 'Salary advance', requisition: 'Hiring request' }[ar.process];
       const hrRoles = ['expense', 'advance'].includes(ar.process) ? ['admin', 'hr_manager', 'accountant'] : ['admin', 'hr_manager'];
       await notifyRole(pool, ar.company_id, hrRoles, {
         type: link === '/requests' ? 'request' : ar.process, title: `${what} ready for HR approval`, body: `Approved through the chain by ${req.user.name || 'the approver'}`, link,

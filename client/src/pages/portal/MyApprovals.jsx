@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
-import { Stamp, Loader2, Check, X, CalendarDays, Timer, Receipt, HandCoins } from 'lucide-react';
+import { Stamp, Loader2, Check, X, CalendarDays, Timer, Receipt, HandCoins, ClipboardList } from 'lucide-react';
 import Card from '@components/ui/Card';
 import Button from '@components/ui/Button';
 import EmptyState from '@components/ui/EmptyState';
@@ -10,7 +10,7 @@ import ApprovalProgress from '@components/approvals/ApprovalProgress';
 import LeaveContext from '@components/leave/LeaveContext';
 import * as approvalsApi from '@api/approvalsApi';
 
-const ICONS = { leave: CalendarDays, overtime: Timer, expense: Receipt, advance: HandCoins };
+const ICONS = { leave: CalendarDays, overtime: Timer, expense: Receipt, advance: HandCoins, requisition: ClipboardList };
 const money = (n) => Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const hm = (m) => `${Math.floor((m || 0) / 60)}:${String((m || 0) % 60).padStart(2, '0')}`;
 
@@ -68,6 +68,11 @@ export default function MyApprovals() {
                     {it.process === 'leave' ? (
                       <p className="text-sm text-surface-700">
                         {d.leave_type}: {d.start_date}{d.end_date !== d.start_date ? ` → ${d.end_date}` : ''} · {t('approvals.days', { count: Number(d.days) })}
+                      </p>
+                    ) : it.process === 'requisition' ? (
+                      <p className="text-sm text-surface-700">
+                        {t('approvals.requisition_line', { title: d.title, n: d.head_count })}
+                        <span className="block text-xs text-surface-500 mt-0.5">{d.justification}</span>
                       </p>
                     ) : it.process === 'expense' ? (
                       <p className="text-sm text-surface-700">

@@ -98,7 +98,11 @@ router.get('/:id', requireModule(MODULES.PAYROLL), async (req, res) => {
     if (!review) return res.status(404).json({ error: 'Salary review not found' });
 
     const [items] = await pool.query(`
-      SELECT sri.*, e.first_name, e.last_name, e.email, jt.title AS job_title_name
+      SELECT sri.*, e.first_name, e.last_name, e.email, jt.title AS job_title_name,
+             (SELECT r.final_rating FROM reviews r WHERE r.employee_id = sri.employee_id AND r.status = 'Completed'
+               ORDER BY r.finalized_at DESC LIMIT 1) AS appraisal_rating,
+             (SELECT r.final_recommendation FROM reviews r WHERE r.employee_id = sri.employee_id AND r.status = 'Completed'
+               ORDER BY r.finalized_at DESC LIMIT 1) AS appraisal_recommendation
       FROM salary_review_items sri
       JOIN employees e ON sri.employee_id = e.id
       LEFT JOIN job_titles jt ON sri.job_title_id = jt.id

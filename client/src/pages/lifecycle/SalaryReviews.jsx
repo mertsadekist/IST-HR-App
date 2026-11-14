@@ -254,6 +254,9 @@ export default function SalaryReviews() {
                       <div className="min-w-[140px]">
                         <p className="font-medium text-surface-800 text-sm">{item.first_name} {item.last_name}</p>
                         <p className="text-[11px] text-surface-400">{item.job_title_name || '—'}</p>
+                        {item.appraisal_rating != null && (
+                          <p className="text-[11px] text-brand-700">{t('salary_reviews.appraisal', { n: item.appraisal_rating })}</p>
+                        )}
                       </div>
                       <div className="text-xs text-surface-500">
                         {t('salary_reviews.current')}: {item.current_basic_salary ?? '—'} / {item.current_full_salary ?? '—'}

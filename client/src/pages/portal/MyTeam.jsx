@@ -7,6 +7,7 @@ import EmptyState from '@components/ui/EmptyState';
 import PortalShell from './PortalShell';
 import * as portalApi from '@api/portalApi';
 import TeamCalendar from '@components/leave/TeamCalendar';
+import MyRequisitions from '@components/requisitions/MyRequisitions';
 
 const todayVariant = { present: 'success', late: 'warning', absent: 'danger', leave: 'info', none: 'inactive' };
 
@@ -97,6 +98,8 @@ export default function MyTeam() {
           ))}
         </div>
       )}
+      {/* Hiring requests this manager raised, and the button to raise one. */}
+      {team.length > 0 && <MyRequisitions t={t} people={team.map((m) => ({ id: m.id, name: m.name }))} />}
       {/* Who is off when, this month and the next ones. */}
       <TeamCalendar t={t} />
       <p className="text-[11px] text-surface-400">{t('team.privacy_note')}</p>
