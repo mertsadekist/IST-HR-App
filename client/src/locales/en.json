@@ -62,7 +62,10 @@
     "employee_requests": "Employee Requests",
     "my_requests": "My Requests",
     "attendance_board": "Live board",
-    "attendance_roster": "Roster"
+    "attendance_roster": "Roster",
+    "requisitions": "Hiring requests",
+    "reviews": "Appraisals",
+    "my_reviews": "My Reviews"
   },
   "topbar": {
     "search_placeholder": "Search across HR system...",
@@ -1818,7 +1821,8 @@
     "doc_mohre_proof": "MOHRE Proof",
     "doc_wps_proof": "WPS Proof",
     "doc_other": "Other",
-    "upload": "Upload"
+    "upload": "Upload",
+    "appraisal": "Last appraisal: {{n}} / 5"
   },
   "quick_offer": {
     "title": "Quick Offer",
@@ -3353,7 +3357,9 @@
     "process_expense": "Expenses",
     "process_advance": "Salary advances",
     "expense_line": "{{amount}} · {{category}} on {{date}}",
-    "advance_line": "Advance of {{amount}}, repaid over {{months}} month(s) at {{instalment}}"
+    "advance_line": "Advance of {{amount}}, repaid over {{months}} month(s) at {{instalment}}",
+    "process_requisition": "Hiring requests",
+    "requisition_line": "Hire: {{title}} × {{n}}"
   },
   "requests": {
     "my_title": "My Requests",
@@ -3667,5 +3673,145 @@
     },
     "legend_attendance": "P present · L late · H half day · A absent · V leave (faded: pending) · PH public holiday · ? no record on a working day · dot: rest day",
     "legend_shifts": "Faded: the weekly schedule · solid: a shift or day off set for that date · moon: ends the next day · dashed: not saved yet. Pick a shift, click or drag over days, then save. Days already over are re-checked against the new shift."
+  },
+  "reviews": {
+    "title": "Appraisals",
+    "subtitle": "Review cycles: self review, the manager’s review, then HR’s final rating.",
+    "new_cycle": "New cycle",
+    "no_cycles": "No review cycles yet.",
+    "cycle_status": {
+      "draft": "Draft",
+      "open": "Open",
+      "closed": "Closed"
+    },
+    "period": "{{from}} → {{to}}",
+    "progress": "Self {{self}} · Manager {{manager}} · HR {{hr}} · Done {{done}} of {{total}}",
+    "launch": "Launch",
+    "launched": "Cycle launched; employees notified",
+    "close": "Close",
+    "closed": "Cycle closed",
+    "cycle_deleted": "Cycle deleted",
+    "not_launched": "Not launched yet: launching creates a review for every current employee.",
+    "col": {
+      "employee": "Employee",
+      "manager": "Manager",
+      "stage": "Stage",
+      "self": "Self",
+      "manager_rating": "Manager",
+      "final": "Final"
+    },
+    "recommendation": "Recommendation",
+    "recommendation_ph": "Recommendation…",
+    "rec": {
+      "none": "None",
+      "increase": "Salary increase",
+      "promotion": "Promotion",
+      "bonus": "Bonus",
+      "training": "Training",
+      "improvement_plan": "Improvement plan"
+    },
+    "status": {
+      "self_review": "Self review",
+      "manager_review": "Manager review",
+      "hr_review": "HR review",
+      "completed": "Completed"
+    },
+    "f": {
+      "name": "Name",
+      "name_ph": "e.g. 2026 annual review",
+      "period_start": "Period from",
+      "period_end": "Period to",
+      "self_due": "Self review due",
+      "manager_due": "Manager review due"
+    },
+    "new_cycle_hint": "Saved as a draft. Launching it creates a review for every current employee of the company and notifies them.",
+    "cycle_created": "Cycle created",
+    "review": "Review",
+    "manager": "Manager: {{name}}",
+    "your_turn_self": "Your self review",
+    "your_turn_manager": "Your review as manager",
+    "your_turn_hr": "Final rating",
+    "goals": "Goals",
+    "add_goal": "Add goal",
+    "no_goals_self": "Add the goals you worked on this period; weights, if you use them, add up to 100.",
+    "no_goals": "No goals.",
+    "goal_title": "Goal",
+    "weight": "Weight %",
+    "self_score": "Self",
+    "manager_score": "Manager",
+    "goal_comment": "What you achieved (optional)",
+    "weighted_self": "Weighted self score {{n}}",
+    "weighted_manager": "Weighted manager score {{n}}",
+    "self_part": "Self assessment",
+    "self_comments_ph": "Your achievements, challenges and what you want to develop",
+    "manager_part": "Manager’s assessment",
+    "manager_comments_ph": "Strengths, areas to improve, and your view of the period",
+    "final_part": "Final rating",
+    "hr_comments_ph": "HR note (shown to the employee)",
+    "back_to_employee": "Return to employee",
+    "back_to_manager": "Return to manager",
+    "save_draft": "Save draft",
+    "finalize": "Finalize",
+    "submit": "Submit",
+    "saved": "Saved",
+    "submitted": "Submitted",
+    "returned": "Returned",
+    "my_title": "My Reviews",
+    "my_subtitle": "Your appraisals, and your team’s when you manage people",
+    "waiting_for_you": "Waiting for you",
+    "my_reviews": "My appraisals",
+    "none_mine": "No appraisals yet",
+    "none_mine_desc": "You will be notified when a review cycle opens.",
+    "team_reviews": "My team’s reviews",
+    "due": "Due {{date}}",
+    "final_line": "Final rating {{n}} / 5"
+  },
+  "requisitions": {
+    "title": "Hiring requests",
+    "subtitle": "Requests from managers and HR. Approving one creates a draft vacancy.",
+    "new": "Request a hire",
+    "sent": "Request sent to HR",
+    "sent_chain": "Request sent for approval",
+    "send": "Send request",
+    "f": {
+      "title": "Role",
+      "head_count": "How many",
+      "department": "Department",
+      "job_title": "Job title",
+      "reason": "Reason",
+      "replaces": "Replacing",
+      "budget_min": "Salary from",
+      "budget_max": "Salary to",
+      "target_start": "Start by",
+      "justification": "Why the role is needed"
+    },
+    "reason": {
+      "new": "New position",
+      "replacement": "Replacement"
+    },
+    "form_hint": "It goes through the approval chain if one is set up, then to HR. Approval creates a draft vacancy for recruitment to publish.",
+    "none": "No hiring requests.",
+    "replacing": "replacing {{name}}",
+    "budget": "salary {{min}} – {{max}}",
+    "start_by": "start by {{date}}",
+    "by": "Requested by {{name}} on {{date}}",
+    "status": {
+      "pending": "Pending",
+      "approved": "Approved",
+      "rejected": "Declined",
+      "cancelled": "Withdrawn"
+    },
+    "note": "HR note: {{note}}",
+    "open_vacancy": "Vacancy created ({{status}}) — open Vacancies",
+    "reject_ph": "Reason (needed to decline)",
+    "reject": "Decline",
+    "approve": "Approve",
+    "approved": "Approved; a draft vacancy was created",
+    "rejected": "Declined",
+    "reason_required": "Give a reason to decline",
+    "mine": "My hiring requests",
+    "none_mine": "None yet.",
+    "cancelled": "Withdrawn",
+    "withdraw": "Withdraw"
   }
 }

@@ -64,6 +64,9 @@ const AttendanceSync = lazy(() => import('@pages/lifecycle/AttendanceSync'));
 const AttendanceExceptions = lazy(() => import('@pages/lifecycle/AttendanceExceptions'));
 const AttendanceBoard = lazy(() => import('@pages/lifecycle/AttendanceBoard'));
 const Roster = lazy(() => import('@pages/lifecycle/Roster'));
+const ReviewsPage = lazy(() => import('@pages/lifecycle/Reviews'));
+const MyReviews = lazy(() => import('@pages/portal/MyReviews'));
+const Requisitions = lazy(() => import('@pages/recruitment/Requisitions'));
 const OvertimePage = lazy(() => import('@pages/lifecycle/Overtime'));
 const PayrollRunsPage = lazy(() => import('@pages/lifecycle/PayrollRuns'));
 const PayrollItemsPage = lazy(() => import('@pages/lifecycle/PayrollItems'));
@@ -128,6 +131,7 @@ export default function App() {
                 <Route path="/ats" element={<AtsPipeline />} />
                 <Route path="/candidates" element={<Candidates />} />
                 <Route path="/vacancies" element={<Vacancies />} />
+                <Route path="/requisitions" element={<Requisitions />} />
                 <Route path="/applicants" element={<Applicants />} />
                 <Route path="/cv-scorer" element={<CVScorer />} />
 
@@ -143,6 +147,7 @@ export default function App() {
                 <Route path="/attendance/exceptions" element={<AttendanceExceptions />} />
                 <Route path="/attendance/board" element={<AttendanceBoard />} />
                 <Route path="/attendance/roster" element={<Roster />} />
+                <Route path="/reviews" element={<ReviewsPage />} />
                 <Route path="/overtime" element={<OvertimePage />} />
                 <Route path="/requests" element={<EmployeeRequestsPage />} />
                 <Route path="/payroll-runs" element={<PayrollRunsPage />} />
@@ -164,6 +169,7 @@ export default function App() {
                 <Route path="/portal/team" element={<MyTeam />} />
                 <Route path="/portal/approvals" element={<MyApprovals />} />
                 <Route path="/portal/requests" element={<MyRequests />} />
+                <Route path="/portal/reviews" element={<MyReviews />} />
 
                 {/* Legal */}
                 <Route path="/legal-letters" element={<LegalLetters />} />
