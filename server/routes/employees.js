@@ -758,6 +758,99 @@ router.delete('/:id', authorize('admin'), async (req, res) => {
   } catch (err) { console.error('DELETE /employees/:id error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
+// ==================== Notes (HR-internal) ====================
+// Free-text notes HR keeps on an employee, each saved with who wrote it and
+// when. Internal: the employee role never reaches these routes. Anyone in HR
+// can read and add; only the author can change their own note; deleting is
+// admin-only, like every other delete.
+const NOTE_ROLES = ['admin', 'hr_manager', 'hr_specialist'];
+const NOTE_MAX = 5000;
+const NOTE_COLS = `id, employee_id, body, pinned, created_by, author_name, created_at, updated_at`;
+
+async function getScopedNote(req, employeeId, noteId) {
+  const [[note]] = await pool.query(
+    `SELECT ${NOTE_COLS} FROM employee_notes WHERE id = ? AND employee_id = ?`, [noteId, employeeId]);
+  return note || null;
+}
+
+router.get('/:id/notes', authorize(...NOTE_ROLES), async (req, res) => {
+  try {
+    const emp = await getScopedEmployee(req, parseInt(req.params.id, 10));
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+    const [rows] = await pool.query(
+      `SELECT ${NOTE_COLS} FROM employee_notes WHERE employee_id = ? ORDER BY pinned DESC, created_at DESC, id DESC`, [emp.id]);
+    res.json(rows.map((n) => ({ ...n, pinned: !!n.pinned })));
+  } catch (err) {
+    console.error('GET /employees/:id/notes error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/:id/notes', authorize(...NOTE_ROLES), async (req, res) => {
+  try {
+    const emp = await getScopedEmployee(req, parseInt(req.params.id, 10));
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+    const body = String(req.body?.body || '').trim();
+    if (!body) return res.status(422).json({ error: 'The note is empty' });
+    if (body.length > NOTE_MAX) return res.status(422).json({ error: `A note can be at most ${NOTE_MAX} characters` });
+    // The name comes from the users table, not the token, so it is the
+    // account's current name at the time of writing.
+    const [[u]] = await pool.query('SELECT name, username FROM users WHERE id = ?', [req.user.id]);
+    const author = (u?.name || u?.username || req.user.name || `User #${req.user.id}`).slice(0, 200);
+    const [r] = await pool.query('INSERT INTO employee_notes SET ?', [{
+      company_id: emp.company_id, employee_id: emp.id, body, pinned: !!req.body?.pinned,
+      created_by: req.user.id, author_name: author,
+    }]);
+    await addAudit(pool, req.user, 'Employees', 'Note Added',
+      `Note added to employee #${emp.id} (${emp.first_name} ${emp.last_name})`, emp.company_id);
+    res.status(201).json(await getScopedNote(req, emp.id, r.insertId));
+  } catch (err) {
+    console.error('POST /employees/:id/notes error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Edit the text (author only) or pin/unpin (any HR role — pinning is a shared view).
+router.put('/:id/notes/:noteId', authorize(...NOTE_ROLES), async (req, res) => {
+  try {
+    const emp = await getScopedEmployee(req, parseInt(req.params.id, 10));
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+    const note = await getScopedNote(req, emp.id, parseInt(req.params.noteId, 10));
+    if (!note) return res.status(404).json({ error: 'Note not found' });
+
+    const data = {};
+    if (req.body?.body !== undefined) {
+      if (note.created_by !== req.user.id) return res.status(403).json({ error: 'Only the author can edit this note' });
+      const body = String(req.body.body || '').trim();
+      if (!body) return res.status(422).json({ error: 'The note is empty' });
+      if (body.length > NOTE_MAX) return res.status(422).json({ error: `A note can be at most ${NOTE_MAX} characters` });
+      if (body !== note.body) { data.body = body; data.updated_at = new Date(); }
+    }
+    if (req.body?.pinned !== undefined) data.pinned = !!req.body.pinned;
+    if (Object.keys(data).length) await pool.query('UPDATE employee_notes SET ? WHERE id = ?', [data, note.id]);
+    res.json(await getScopedNote(req, emp.id, note.id));
+  } catch (err) {
+    console.error('PUT /employees/:id/notes/:noteId error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.delete('/:id/notes/:noteId', authorize('admin'), async (req, res) => {
+  try {
+    const emp = await getScopedEmployee(req, parseInt(req.params.id, 10));
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+    const note = await getScopedNote(req, emp.id, parseInt(req.params.noteId, 10));
+    if (!note) return res.status(404).json({ error: 'Note not found' });
+    await pool.query('DELETE FROM employee_notes WHERE id = ?', [note.id]);
+    await addAudit(pool, req.user, 'Employees', 'Note Deleted',
+      `Note #${note.id} by ${note.author_name} deleted from employee #${emp.id}`, emp.company_id);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('DELETE /employees/:id/notes/:noteId error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // GET /api/employees/:id/documents — Retrieve all documents for an employee
 router.get('/:id/documents', async (req, res) => {
   try {

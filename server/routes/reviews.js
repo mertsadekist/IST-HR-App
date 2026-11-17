@@ -134,6 +134,25 @@ router.get('/cycles/:id/reviews', authorize(...HR), async (req, res) => {
 });
 
 // ─── Reviews ─────────────────────────────────────────────────────────────────
+// GET /api/reviews/employee/:employeeId — every appraisal of one employee, for
+// the Performance tab of their profile. HR only, held to the caller's company.
+router.get('/employee/:employeeId(\\d+)', authorize(...HR), async (req, res) => {
+  try {
+    const co = companyClause(req, 'r.company_id');
+    const [rows] = await pool.query(
+      `SELECT r.id, r.status, r.self_rating, r.manager_rating, r.final_rating, r.final_recommendation, r.manager_recommendation,
+              rc.name AS cycle_name, rc.status AS cycle_status,
+              DATE_FORMAT(rc.period_start, '%Y-%m-%d') AS period_start, DATE_FORMAT(rc.period_end, '%Y-%m-%d') AS period_end,
+              m.first_name AS m_first_name, m.last_name AS m_last_name
+         FROM reviews r JOIN review_cycles rc ON rc.id = r.cycle_id
+         LEFT JOIN employees m ON m.id = r.manager_employee_id
+        WHERE r.employee_id = ?${co.clause}
+        ORDER BY COALESCE(rc.period_end, rc.created_at) DESC, r.id DESC`,
+      [req.params.employeeId, ...co.params]);
+    res.json(rows.map((r) => ({ ...r, manager_name: name(r, 'm_') || null })));
+  } catch (err) { fail(res, 'GET /reviews/employee/:employeeId', err); }
+});
+
 // GET /api/reviews/mine — my own reviews, and those waiting for me as a manager.
 router.get('/mine', async (req, res) => {
   try {

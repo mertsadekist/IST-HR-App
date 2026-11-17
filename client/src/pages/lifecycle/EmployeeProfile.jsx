@@ -7,6 +7,7 @@ import dayjs from 'dayjs';
 import {
   ArrowLeft, Camera, Loader2, Download, Mail, Phone, Building2, CalendarDays, UserRound, Hash,
   LayoutDashboard, IdCard, FileText, Banknote, Clock, CalendarClock, Plane, Wallet, Landmark, Laptop, History, UserX, GraduationCap,
+  StickyNote, Inbox, ClipboardCheck,
 } from 'lucide-react';
 import Card from '@components/ui/Card';
 import Badge from '@components/ui/Badge';
@@ -27,11 +28,18 @@ import EmployeeLeaveTab from './components/profile/EmployeeLeaveTab';
 import EmployeeBankTab from './components/profile/EmployeeBankTab';
 import EmployeeAssetsTab from './components/profile/EmployeeAssetsTab';
 import EmployeeTimelineTab from './components/profile/EmployeeTimelineTab';
+import EmployeeNotesTab from './components/profile/EmployeeNotesTab';
+import EmployeeRequestsTab from './components/profile/EmployeeRequestsTab';
+import EmployeeReviewsTab from './components/profile/EmployeeReviewsTab';
+import IdentityDocuments, { ExpiryAlerts } from './components/profile/IdentityDocuments';
+import DocumentViewer from './components/profile/DocumentViewer';
 import { statusLabel, statusVariant, tenureText } from './components/profile/profileUtils';
 
 const PAYROLL_ROLES = ['admin', 'hr_manager', 'accountant'];   // GET /payroll/payslips/:id
 const ATTENDANCE_ROLES = ['admin', 'hr_manager', 'hr_specialist']; // isHR() on /attendance
-const MANAGE_ROLES = ['admin', 'hr_manager'];                   // documents, schedule, secrets
+const MANAGE_ROLES = ['admin', 'hr_manager'];                   // documents, schedule, secrets, appraisals
+const NOTE_ROLES = ['admin', 'hr_manager', 'hr_specialist'];    // /employees/:id/notes
+const REQUEST_ROLES = ['admin', 'hr_manager', 'accountant'];    // STAFF in routes/requests.js
 
 /**
  * The full employee profile, on its own page so every section has room:
@@ -49,6 +57,8 @@ export default function EmployeeProfile() {
   const canPayroll = PAYROLL_ROLES.includes(role);
   const canAttendance = ATTENDANCE_ROLES.includes(role);
   const canManage = MANAGE_ROLES.includes(role);
+  const canNotes = NOTE_ROLES.includes(role);
+  const canRequests = REQUEST_ROLES.includes(role);
 
   const [employee, setEmployee] = useState(null);
   const [loadState, setLoadState] = useState({ id: null, failed: false });
@@ -58,26 +68,54 @@ export default function EmployeeProfile() {
   const [historyData, setHistoryData] = useState(null);
   const [exporting, setExporting] = useState(false);
   const reportRef = useRef(null);
+  const sectionRef = useRef(null);
+  // The employee's documents, for the identity cards and expiry alerts above
+  // the tabs. Reloaded when the Documents tab uploads or edits one.
+  const [docs, setDocs] = useState({ key: null, list: [] });
+  const [docsVersion, setDocsVersion] = useState(0);
+  const docsKey = `${id}:${docsVersion}`;
+  const docsLoading = docs.key === null || !docs.key.startsWith(`${id}:`);
+  const [viewIndex, setViewIndex] = useState(null);
 
-  const tabs = [
-    { key: 'overview', icon: LayoutDashboard, label: t('empProfile.tab_overview') },
-    { key: 'profile', icon: IdCard, label: t('employees.profile_tab') },
-    { key: 'documents', icon: FileText, label: t('employees.documents_tab') },
-    canPayroll && { key: 'payslips', icon: Banknote, label: t('empProfile.tab_payslips') },
-    canAttendance && { key: 'attendance', icon: Clock, label: t('empProfile.tab_attendance') },
-    { key: 'schedule', icon: CalendarClock, label: t('employees.schedule_tab') },
-    { key: 'leave', icon: Plane, label: t('employees.leave_tab') },
-    { key: 'pay', icon: Wallet, label: t('pay_components.tab') },
-    { key: 'bank', icon: Landmark, label: t('employees.bank_tab') },
-    { key: 'assets', icon: Laptop, label: t('employees.assets_tab') },
-    { key: 'training', icon: GraduationCap, label: t('training.tab') },
-    { key: 'timeline', icon: History, label: t('empProfile.tab_timeline') },
-  ].filter(Boolean);
+  // Grouped so fifteen sections stay easy to scan: a side menu on desktop, a
+  // scrolling row on a phone. Each section only appears for roles the server
+  // lets read it.
+  const groups = [
+    { key: 'general', label: t('empProfile.grp_general'), tabs: [
+      { key: 'overview', icon: LayoutDashboard, label: t('empProfile.tab_overview') },
+      { key: 'profile', icon: IdCard, label: t('employees.profile_tab') },
+      { key: 'documents', icon: FileText, label: t('employees.documents_tab') },
+      canNotes && { key: 'notes', icon: StickyNote, label: t('empProfile.tab_notes') },
+    ] },
+    { key: 'pay', label: t('empProfile.grp_pay'), tabs: [
+      canPayroll && { key: 'payslips', icon: Banknote, label: t('empProfile.tab_payslips') },
+      { key: 'pay', icon: Wallet, label: t('pay_components.tab') },
+      { key: 'bank', icon: Landmark, label: t('employees.bank_tab') },
+    ] },
+    { key: 'time', label: t('empProfile.grp_time'), tabs: [
+      canAttendance && { key: 'attendance', icon: Clock, label: t('empProfile.tab_attendance') },
+      { key: 'schedule', icon: CalendarClock, label: t('employees.schedule_tab') },
+      { key: 'leave', icon: Plane, label: t('employees.leave_tab') },
+    ] },
+    { key: 'work', label: t('empProfile.grp_work'), tabs: [
+      canRequests && { key: 'requests', icon: Inbox, label: t('empProfile.tab_requests') },
+      canManage && { key: 'reviews', icon: ClipboardCheck, label: t('empProfile.tab_reviews') },
+      { key: 'training', icon: GraduationCap, label: t('training.tab') },
+    ] },
+    { key: 'records', label: t('empProfile.grp_records'), tabs: [
+      { key: 'assets', icon: Laptop, label: t('employees.assets_tab') },
+      { key: 'timeline', icon: History, label: t('empProfile.tab_timeline') },
+    ] },
+  ].map((g) => ({ ...g, tabs: g.tabs.filter(Boolean) })).filter((g) => g.tabs.length);
+  const tabs = groups.flatMap((g) => g.tabs);
   const requested = searchParams.get('tab');
   const activeTab = tabs.some((x) => x.key === requested) ? requested : 'overview';
+  const current = tabs.find((x) => x.key === activeTab);
   const openTab = (key) => {
     setSearchParams(key === 'overview' ? {} : { tab: key }, { replace: true });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Bring the section into view only when it has scrolled above the screen.
+    const top = sectionRef.current?.getBoundingClientRect().top;
+    if (top != null && top < 0) sectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   useEffect(() => {
@@ -87,6 +125,15 @@ export default function EmployeeProfile() {
       .catch(() => { if (alive) { setEmployee(null); setLoadState({ id, failed: true }); } });
     return () => { alive = false; };
   }, [id]);
+
+  useEffect(() => {
+    let alive = true;
+    employeesApi.getEmployeeDocuments(id)
+      .then(({ data }) => { if (alive) setDocs({ key: docsKey, list: Array.isArray(data) ? data : [] }); })
+      .catch(() => { if (alive) setDocs({ key: docsKey, list: [] }); });
+    return () => { alive = false; };
+  }, [id, docsKey]);
+  const openDoc = (d) => setViewIndex(docs.list.findIndex((x) => x.id === d.id));
 
   // Photo bytes come from an authenticated endpoint, so they are read as a
   // blob. Tagged with the employee id so another profile's photo never shows.
@@ -177,7 +224,7 @@ export default function EmployeeProfile() {
   let body;
   switch (activeTab) {
     case 'profile': body = <ProfileDetailsTab key={employee.id} employee={employee} onChange={mergeEmployee} t={t} isAdmin={isAdmin} />; break;
-    case 'documents': body = <EmployeeDocumentsTab employee={employee} t={t} canEdit={canManage} />; break;
+    case 'documents': body = <EmployeeDocumentsTab employee={employee} t={t} canEdit={canManage} onChanged={() => setDocsVersion((v) => v + 1)} />; break;
     case 'payslips': body = <EmployeePayslipsTab employee={employee} t={t} />; break;
     case 'attendance': body = <EmployeeAttendanceTab employee={employee} t={t} />; break;
     case 'schedule': body = <EmployeeScheduleTab employee={employee} t={t} canEdit={canManage} />; break;
@@ -187,6 +234,9 @@ export default function EmployeeProfile() {
     case 'assets': body = <EmployeeAssetsTab employee={employee} t={t} canReveal={canManage} />; break;
     case 'training': body = <EmployeeTrainingTab employee={employee} t={t} canEdit={canManage} />; break;
     case 'timeline': body = <EmployeeTimelineTab employee={employee} t={t} />; break;
+    case 'notes': body = <EmployeeNotesTab employee={employee} t={t} />; break;
+    case 'requests': body = <EmployeeRequestsTab employee={employee} t={t} />; break;
+    case 'reviews': body = <EmployeeReviewsTab employee={employee} t={t} />; break;
     default: body = <EmployeeOverviewTab employee={employee} t={t} canPayroll={canPayroll} canAttendance={canAttendance} onOpenTab={openTab} />;
   }
 
@@ -251,26 +301,63 @@ export default function EmployeeProfile() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="sticky top-0 z-20 -mx-1 px-1 py-1 bg-surface-50/90 backdrop-blur">
-        <nav role="tablist" aria-label={t('employees.employee_profile')}
-          className="flex gap-1 overflow-x-auto lg:flex-wrap lg:overflow-visible rounded-xl border border-surface-200 bg-white p-1 shadow-sm [scrollbar-width:thin]">
-          {tabs.map((tab) => {
-            const on = tab.key === activeTab;
-            return (
-              <button key={tab.key} type="button" role="tab" aria-selected={on} onClick={() => openTab(tab.key)}
-                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${on ? 'bg-brand-600 text-white shadow-sm' : 'text-surface-600 hover:bg-surface-100 hover:text-surface-900'}`}>
-                <tab.icon size={15} className={on ? 'text-white' : 'text-surface-400'} />
-                {tab.label}
-              </button>
-            );
-          })}
+      {/* Identity and residency, and every expiry that needs action, always in view */}
+      <ExpiryAlerts docs={docs.list} t={t} onOpen={openDoc} />
+      <IdentityDocuments docs={docs.list} loading={docsLoading} t={t} onOpen={openDoc} onAdd={() => openTab('documents')} />
+
+      {/* Sections: grouped side menu on desktop, a scrolling row on smaller screens */}
+      <div ref={sectionRef} className="scroll-mt-4 lg:grid lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-5 lg:items-start">
+        <nav aria-label={t('employees.employee_profile')}
+          className="sticky top-0 z-20 -mx-1 px-1 py-1 bg-surface-50/90 backdrop-blur lg:top-4 lg:mx-0 lg:p-0 lg:bg-transparent lg:backdrop-blur-none">
+          {/* Phone / tablet */}
+          <div role="tablist" className="lg:hidden flex gap-1 overflow-x-auto rounded-xl border border-surface-200 bg-white p-1 shadow-sm [scrollbar-width:thin]">
+            {tabs.map((tab) => {
+              const on = tab.key === activeTab;
+              return (
+                <button key={tab.key} type="button" role="tab" aria-selected={on} onClick={() => openTab(tab.key)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${on ? 'bg-brand-600 text-white shadow-sm' : 'text-surface-600 hover:bg-surface-100'}`}>
+                  <tab.icon size={15} className={on ? 'text-white' : 'text-surface-400'} />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+          {/* Desktop */}
+          <div role="tablist" aria-orientation="vertical" className="hidden lg:block rounded-2xl border border-surface-200 bg-white p-2 shadow-sm space-y-3">
+            {groups.map((g) => (
+              <div key={g.key}>
+                <p className="px-3 pt-1 pb-1 text-[10px] font-bold uppercase tracking-wider text-surface-400">{g.label}</p>
+                <div className="space-y-0.5">
+                  {g.tabs.map((tab) => {
+                    const on = tab.key === activeTab;
+                    return (
+                      <button key={tab.key} type="button" role="tab" aria-selected={on} onClick={() => openTab(tab.key)}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-start transition-colors ${on ? 'bg-brand-50 text-brand-700 font-semibold ring-1 ring-brand-100' : 'text-surface-600 hover:bg-surface-50 hover:text-surface-900'}`}>
+                        <tab.icon size={16} className={on ? 'text-brand-600' : 'text-surface-400'} />
+                        <span className="truncate">{tab.label}</span>
+                        {on && <span className="ms-auto w-1.5 h-1.5 rounded-full bg-brand-500" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
         </nav>
+
+        <section role="tabpanel" className="min-h-[300px] min-w-0 mt-4 lg:mt-0">
+          {current && (
+            <div className="hidden lg:flex items-center gap-2 mb-4">
+              <current.icon size={18} className="text-brand-600" />
+              <h2 className="text-lg font-bold text-surface-900">{current.label}</h2>
+            </div>
+          )}
+          {body}
+        </section>
       </div>
 
-      <div role="tabpanel" className="min-h-[300px]">
-        {body}
-      </div>
+      <DocumentViewer employeeId={employee.id} docs={docs.list} index={viewIndex}
+        onIndexChange={setViewIndex} onClose={() => setViewIndex(null)} t={t} />
 
       {/* Off-screen printable report — captured by html2canvas on export */}
       <div style={{ position: 'fixed', left: '-9999px', top: 0, width: '800px' }} aria-hidden="true">

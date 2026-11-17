@@ -915,6 +915,24 @@ const TABLE_GUARDS = [
      FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE,
      FOREIGN KEY (leave_type_id) REFERENCES leave_types(id) ON DELETE CASCADE
    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  // HR's internal notes on an employee (never shown to the employee). The
+  // author's name is stored with the note, so it still reads correctly after
+  // that user account is renamed or removed.
+  `CREATE TABLE IF NOT EXISTS employee_notes (
+     id           INT AUTO_INCREMENT PRIMARY KEY,
+     company_id   INT NOT NULL,
+     employee_id  INT NOT NULL,
+     body         TEXT NOT NULL,
+     pinned       BOOLEAN NOT NULL DEFAULT FALSE,
+     created_by   INT NULL,
+     author_name  VARCHAR(200) NOT NULL,
+     created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     updated_at   TIMESTAMP NULL DEFAULT NULL,
+     INDEX idx_emp_notes_employee (employee_id, created_at),
+     INDEX idx_emp_notes_company (company_id),
+     FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE,
+     FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 ];
 
 // Rows the app needs, added once after the columns exist. Each is skipped when
