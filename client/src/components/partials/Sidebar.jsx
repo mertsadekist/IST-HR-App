@@ -9,7 +9,7 @@ import {
   BarChart3, ClipboardList, Trophy, Network, UserCog, Settings,
   Sparkles, ChevronDown, X, Package, Shield, Mail, Send,
   CalendarDays, Clock, Banknote, Inbox, HelpCircle, KeyRound, Share2, Globe,
-  Boxes, Layers, Fingerprint, ScanEye, Radar, HandCoins, Timer, Stamp, Activity, CalendarRange, ClipboardCheck, GraduationCap
+  Boxes, Layers, Fingerprint, ScanEye, Radar, HandCoins, Timer, Stamp, Activity, CalendarRange, ClipboardCheck, GraduationCap, ShieldCheck
 } from 'lucide-react';
 import { cn } from '@utils/cn';
 import * as portalApi from '@api/portalApi';
@@ -98,6 +98,7 @@ const buildMenuGroups = (t) => [
       label: t('nav.compliance'),
       roles: HR_AND_FINANCE,
       items: [
+        { path: '/compliance', icon: ShieldCheck, label: t('nav.compliance_center') },
         { path: '/legal-letters', icon: Scale, label: t('nav.legal_letters') },
         { path: '/company-docs', icon: FileArchive, label: t('nav.company_docs') },
         { path: '/payroll', icon: Calculator, label: t('nav.payroll') },

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
+import AttentionList from '@components/compliance/AttentionList';
 import { Link } from 'react-router-dom';
 import * as dashboardApi from '@api/dashboardApi';
 import * as documentsApi from '@api/documentsApi';
@@ -150,6 +151,9 @@ export default function Dashboard() {
             : t('dashboard.emp_docs_expiring_title', { count: empDocAlert.count })}
           desc={empDocAlert.expired ? t('dashboard.emp_docs_expired_desc') : t('dashboard.emp_docs_expiring_desc')} />
       )}
+
+      {/* Everything overdue or at risk, most urgent first. */}
+      {['admin', 'hr_manager', 'accountant'].includes(user?.role) && <AttentionList t={t} />}
 
       {/* Stat cards */}
       <StaggerContainer className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

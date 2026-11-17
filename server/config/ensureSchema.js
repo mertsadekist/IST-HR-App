@@ -732,6 +732,19 @@ const TABLE_GUARDS = [
      INDEX idx_osl_offboarding (offboarding_id),
      FOREIGN KEY (offboarding_id) REFERENCES offboarding_records(id) ON DELETE CASCADE
    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  // Statutory figures by year (services/complianceService.js): Emiratisation
+  // targets and fines. Seeded below as a starting point; an admin updates them
+  // once checked with MOHRE.
+  `CREATE TABLE IF NOT EXISTS law_values (
+     id         INT AUTO_INCREMENT PRIMARY KEY,
+     \`key\`      VARCHAR(60) NOT NULL,
+     year       SMALLINT NOT NULL,
+     value      DECIMAL(14,2) NOT NULL,
+     note       VARCHAR(300) NULL,
+     updated_by INT NULL,
+     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+     UNIQUE KEY uq_law_key_year (\`key\`, year)
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   // Training (services/trainingService.js). company_id NULL = a group-wide course.
   `CREATE TABLE IF NOT EXISTS training_courses (
      id              INT AUTO_INCREMENT PRIMARY KEY,
@@ -907,6 +920,17 @@ const TABLE_GUARDS = [
 // Rows the app needs, added once after the columns exist. Each is skipped when
 // a group-wide type of that name is already there, so HR's edits are kept.
 const SEED_GUARDS = [
+  // Emiratisation (private companies with 50+ employees): +2 points of the
+  // skilled workforce a year, and the yearly fine per national not hired.
+  // To be verified with MOHRE before relying on them.
+  `INSERT IGNORE INTO law_values (\`key\`, year, value, note) VALUES
+     ('emiratisation_min_headcount', 2022, 50, 'Seeded — verify with MOHRE'),
+     ('emiratisation_target_percent', 2024, 6, 'Seeded — verify with MOHRE'),
+     ('emiratisation_target_percent', 2025, 8, 'Seeded — verify with MOHRE'),
+     ('emiratisation_target_percent', 2026, 10, 'Seeded — verify with MOHRE'),
+     ('emiratisation_fine_per_year', 2024, 84000, 'Seeded — verify with MOHRE'),
+     ('emiratisation_fine_per_year', 2025, 96000, 'Seeded — verify with MOHRE'),
+     ('emiratisation_fine_per_year', 2026, 108000, 'Seeded — verify with MOHRE')`,
   // Decree-Law 33/2021 art. 32: ten working days a year to sit exams, after two
   // years of service, for a student at an accredited UAE institution.
   `INSERT INTO leave_types (company_id, name, default_days, is_paid, paid_mode, accrual, eligibility_months,
