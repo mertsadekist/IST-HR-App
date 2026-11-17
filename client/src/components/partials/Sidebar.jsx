@@ -9,7 +9,7 @@ import {
   BarChart3, ClipboardList, Trophy, Network, UserCog, Settings,
   Sparkles, ChevronDown, X, Package, Shield, Mail, Send,
   CalendarDays, Clock, Banknote, Inbox, HelpCircle, KeyRound, Share2, Globe,
-  Boxes, Layers, Fingerprint, ScanEye, Radar, HandCoins, Timer, Stamp, Activity, CalendarRange, ClipboardCheck
+  Boxes, Layers, Fingerprint, ScanEye, Radar, HandCoins, Timer, Stamp, Activity, CalendarRange, ClipboardCheck, GraduationCap
 } from 'lucide-react';
 import { cn } from '@utils/cn';
 import * as portalApi from '@api/portalApi';
@@ -71,6 +71,7 @@ const buildMenuGroups = (t) => [
         { path: '/salary-reviews', icon: TrendingUp, label: t('nav.salary_reviews', 'Salary Reviews'), roles: HR_ONLY },
         { path: '/performance', icon: TrendingUp, label: t('nav.performance', 'Performance'), roles: HR_ONLY },
         { path: '/reviews', icon: ClipboardCheck, label: t('nav.reviews'), roles: HR_ONLY },
+        { path: '/training', icon: GraduationCap, label: t('nav.training'), roles: HR_ONLY },
         { path: '/offboarding', icon: DoorOpen, label: t('nav.offboarding'), roles: HR_ONLY },
       ],
     },

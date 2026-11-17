@@ -14,6 +14,14 @@ All notable changes to the IST HR System. Dates are ISO (YYYY‑MM‑DD). The ap
 - Google Drive attendance sync, its CSV parser, `GOOGLE_DRIVE_SA_*` / `ATTENDANCE_DRIVE_FOLDER_ID` variables and the `google-auth-library` dependency. Existing `Drive Sync` attendance rows and the `attendance_sync_*` ledger tables are kept as history.
 
 ### Added
+- **Training, certificates, skills and onboarding reminders** (`services/trainingService.js`, `routes/training.js`, `services/onboardingReminders.js`):
+  - **Course catalogue** (HR → *Training*, `/training`, *Courses* tab). Each course has a name, a provider, an optional validity in months, and can be mandatory. Courses an admin creates apply to every company; an HR manager's apply to the selected company. A course people have completed is retired, not deleted.
+  - **Training records** on each employee's profile (new *Training & skills* tab). HR records the course, completion date, an optional result and the certificate file (PDF or image, kept on the uploads volume). The expiry defaults to the completion date plus the course's validity.
+  - **Certificate expiry.** HR is notified 90, 60, 30, 14, 7 and 1 day(s) before the latest certificate of a person and course expires, and when it has expired, on the same cadence as passports and visas.
+  - **Compliance** tab: certificates expired or expiring within 60 days, and who lacks a valid certificate for a mandatory course (never completed, or only expired).
+  - **Skills.** HR can record each person's skills from the existing skills catalogue, at a level of 1 to 5.
+  - **Onboarding reminders.** Every day at 08:00, onboarding visa and document steps past their due date and not done are chased. The responsible person gets one reminder a day; steps with nobody responsible are summed up for HR, one message per company.
+  - Schema at boot through `ensureSchema`: `training_courses`, `employee_trainings`, `employee_skills`; `onboarding_visa_steps.overdue_notified_on`.
 - **Appraisals and hiring requests** (`services/reviewService.js`, `routes/reviews.js`, `routes/requisitions.js`):
   - **Appraisal cycles** (HR → *Appraisals*, `/reviews`). HR creates a cycle (period, self and manager due dates) and launches it. Launching creates a review for every current employee of the company, with their direct manager recorded, and notifies them. HR follows progress by stage, opens any review, can send it back a step, finalizes it and closes the cycle.
   - **The review.** Goals (optionally weighted to 100) with 1–5 scores, an overall rating and comments per side.
