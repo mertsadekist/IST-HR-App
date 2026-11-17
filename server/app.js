@@ -98,6 +98,11 @@ app.use(helmet({
       // only be minted by same-origin script, so allowing it here does not
       // widen the origin set the page may load images from.
       'img-src': ["'self'", 'data:', 'blob:'],
+      // The employee document viewer shows PDFs in an <iframe> from a blob: URL,
+      // for the same reason (the download needs the Bearer token). Without this
+      // frame-src falls back to default-src 'self' and the browser blocks the
+      // frame. Same-origin blobs only, as above; no external origin is framed.
+      'frame-src': ["'self'", 'blob:'],
     },
   },
 }));
