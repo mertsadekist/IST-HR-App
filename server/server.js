@@ -12,6 +12,8 @@ import { sendSyncReport } from './services/attendanceSyncReport.js';
 import { hikConfig, configProblems as hikConfigProblems } from './services/hikConfig.js';
 import { closeHikPool } from './services/hikClient.js';
 import { scheduleDailyAt } from './services/dailySchedule.js';
+import { checkTrainingExpiry } from './routes/training.js';
+import { runOnboardingReminders } from './services/onboardingReminders.js';
 
 const PORT = process.env.PORT || 3001;
 
@@ -71,6 +73,13 @@ async function runDocumentExpiryCheck() {
   } catch (err) {
     console.error('Employee document expiry check failed:', err.message);
   }
+  // Training certificates (first aid, safety…): same thresholds.
+  try {
+    const sent = await checkTrainingExpiry(pool);
+    if (sent) console.log(`🎓 Training certificate check: ${sent} alert(s) sent`);
+  } catch (err) {
+    console.error('Training certificate check failed:', err.message);
+  }
 }
 
 // Attendance from Hik Central, two cadences (see services/hikSyncService.js):
@@ -122,6 +131,15 @@ app.listen(PORT, async () => {
 
   await runDocumentExpiryCheck();
   setInterval(runDocumentExpiryCheck, 6 * 60 * 60 * 1000); // every 6 hours
+
+  // Overdue onboarding visa/document steps: one reminder a day to whoever is responsible.
+  scheduleDailyAt({
+    hour: 8, minute: 0, name: 'Onboarding reminders',
+    onTick: async () => {
+      const n = await runOnboardingReminders(pool);
+      if (n) console.log(`📌 Onboarding reminders: ${n} overdue step(s) chased`);
+    },
+  });
 
   const hik = hikConfig();
   const hikProblems = hikConfigProblems(hik);

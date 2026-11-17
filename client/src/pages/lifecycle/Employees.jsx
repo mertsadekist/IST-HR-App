@@ -18,6 +18,7 @@ import EmployeeOnboardingWizard from './components/EmployeeOnboardingWizard';
 import EmployeeHistoryReport from './components/EmployeeHistoryReport';
 import EmployeeDocumentsTab from './components/EmployeeDocumentsTab';
 import EmployeePayComponentsTab from './components/EmployeePayComponentsTab';
+import EmployeeTrainingTab from './components/EmployeeTrainingTab';
 import { printElementWithLetterhead, waitForPaint } from '@utils/printDoc';
 import Modal from '@components/ui/Modal';
 import { toast } from 'react-toastify';
@@ -589,6 +590,16 @@ export default function Employees() {
               >
                 {t('employees.schedule_tab')}
               </button>
+              <button
+                onClick={() => setActiveTab('training')}
+                className={`px-4 py-2 text-sm font-semibold border-b-2 transition-all ${
+                  activeTab === 'training'
+                    ? 'border-brand-600 text-brand-600'
+                    : 'border-transparent text-surface-500 hover:text-surface-700'
+                }`}
+              >
+                {t('training.tab')}
+              </button>
             </div>
 
             {/* Tab Content */}
@@ -782,6 +793,8 @@ export default function Employees() {
               <EmployeePayComponentsTab employee={selectedEmp} t={t} canEdit={canEditDocs} />
             ) : activeTab === 'schedule' ? (
               <EmployeeScheduleTab employee={selectedEmp} t={t} canEdit={canAssignSchedule} />
+            ) : activeTab === 'training' ? (
+              <EmployeeTrainingTab employee={selectedEmp} t={t} canEdit={canEditDocs} />
             ) : (
               <EmployeeDocumentsTab employee={selectedEmp} t={t} canEdit={canEditDocs} />
             )}

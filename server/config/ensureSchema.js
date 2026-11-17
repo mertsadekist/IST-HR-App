@@ -129,6 +129,8 @@ const COLUMN_GUARDS = [
   // 0 = none) and after how many months of that year they lapse (NULL = never).
   { table: 'leave_types', column: 'day_basis', ddl: "ALTER TABLE leave_types ADD COLUMN day_basis ENUM('calendar','working') NOT NULL DEFAULT 'calendar'" },
   { table: 'leave_types', column: 'carry_forward_max', ddl: 'ALTER TABLE leave_types ADD COLUMN carry_forward_max DECIMAL(6,2) NULL DEFAULT 0' },
+  // The day an overdue onboarding visa step was last chased (services/onboardingReminders.js).
+  { table: 'onboarding_visa_steps', column: 'overdue_notified_on', ddl: 'ALTER TABLE onboarding_visa_steps ADD COLUMN overdue_notified_on DATE NULL' },
   { table: 'leave_types', column: 'carry_forward_expiry_months', ddl: 'ALTER TABLE leave_types ADD COLUMN carry_forward_expiry_months TINYINT NULL' },
 ];
 
@@ -729,6 +731,51 @@ const TABLE_GUARDS = [
      sort_order     SMALLINT NOT NULL DEFAULT 0,
      INDEX idx_osl_offboarding (offboarding_id),
      FOREIGN KEY (offboarding_id) REFERENCES offboarding_records(id) ON DELETE CASCADE
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  // Training (services/trainingService.js). company_id NULL = a group-wide course.
+  `CREATE TABLE IF NOT EXISTS training_courses (
+     id              INT AUTO_INCREMENT PRIMARY KEY,
+     company_id      INT NULL,
+     name            VARCHAR(200) NOT NULL,
+     provider        VARCHAR(200) NULL,
+     validity_months TINYINT NULL,
+     mandatory       BOOLEAN NOT NULL DEFAULT FALSE,
+     active          BOOLEAN NOT NULL DEFAULT TRUE,
+     created_by      INT NULL,
+     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     INDEX idx_tc_company (company_id)
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  `CREATE TABLE IF NOT EXISTS employee_trainings (
+     id                INT AUTO_INCREMENT PRIMARY KEY,
+     company_id        INT NOT NULL,
+     employee_id       INT NOT NULL,
+     course_id         INT NOT NULL,
+     completed_on      DATE NOT NULL,
+     expires_on        DATE NULL,
+     result            VARCHAR(100) NULL,
+     notes             VARCHAR(500) NULL,
+     file_name         VARCHAR(255) NULL,
+     file_type         VARCHAR(120) NULL,
+     file_size         INT NULL,
+     storage_key       VARCHAR(255) NULL,
+     expiry_alert_sent VARCHAR(20) NULL,
+     created_by        INT NULL,
+     created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     INDEX idx_et_employee (employee_id),
+     INDEX idx_et_expiry (expires_on),
+     FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE,
+     FOREIGN KEY (course_id) REFERENCES training_courses(id) ON DELETE CASCADE
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  // Skills a person holds, from the skills catalogue, at a level 1-5.
+  `CREATE TABLE IF NOT EXISTS employee_skills (
+     employee_id INT NOT NULL,
+     skill_id    INT NOT NULL,
+     level       TINYINT NOT NULL DEFAULT 3,
+     updated_by  INT NULL,
+     updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+     PRIMARY KEY (employee_id, skill_id),
+     FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE,
+     FOREIGN KEY (skill_id) REFERENCES skills(id) ON DELETE CASCADE
    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   // Appraisals (services/reviewService.js): a cycle, one review per employee,
   // goals inside it. The manager is snapshotted when the cycle opens.
