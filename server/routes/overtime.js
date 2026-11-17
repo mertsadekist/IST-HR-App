@@ -64,6 +64,8 @@ router.get('/', authorize('admin', 'hr_manager', 'accountant'), async (req, res)
     let where = 'WHERE 1=1' + co.clause;
     if (req.query.period && PERIOD_RE.test(req.query.period)) { where += " AND DATE_FORMAT(o.work_date, '%Y-%m') = ?"; params.push(req.query.period); }
     if (req.query.status) { where += ' AND o.status = ?'; params.push(req.query.status); }
+    // One employee's overtime, for their profile.
+    if (req.query.employee_id) { where += ' AND o.employee_id = ?'; params.push(Number(req.query.employee_id) || 0); }
     const [rows] = await pool.query(
       `SELECT o.*, DATE_FORMAT(o.work_date, '%Y-%m-%d') AS work_date, e.basic_salary, pr.status AS run_status,
               TRIM(CONCAT(COALESCE(e.first_name, ''), ' ', COALESCE(e.last_name, ''))) AS employee_name,

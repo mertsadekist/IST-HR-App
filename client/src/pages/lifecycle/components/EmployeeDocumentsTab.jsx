@@ -1,11 +1,13 @@
 import { Fragment, useEffect, useState } from 'react';
-import { Upload, Download, Loader2, Pencil, Check, X } from 'lucide-react';
+import { Upload, Download, Loader2, Pencil, Check, X, Eye, FileText, FileImage, File as FileIcon } from 'lucide-react';
 import { toast } from 'react-toastify';
 import dayjs from 'dayjs';
 import Badge from '@components/ui/Badge';
 import * as employeesApi from '@api/employeesApi';
 import { EMPLOYEE_DOC_TYPES, docTypeLabel, expiryBadge } from '@utils/employeeDocs';
 import { sendWithWarnings } from '@utils/softWarnings';
+import DocumentViewer from './profile/DocumentViewer';
+import { previewKind } from './profile/profileUtils';
 
 const CATEGORIES = ['General', 'ID/Passport', 'Certificate', 'Handover Sheet', 'Other'];
 const EMPTY_META = { doc_type: '', doc_number: '', issue_date: '', expiry_date: '' };
@@ -36,8 +38,9 @@ function categoryLabel(t, c) {
  * "issue" date. The edit form is now its own labelled panel under the row.
  *
  * `canEdit` mirrors authorize('admin','hr_manager') on upload and update.
+ * `onChanged` lets the page refresh its identity cards after an upload or edit.
  */
-export default function EmployeeDocumentsTab({ employee, t, canEdit }) {
+export default function EmployeeDocumentsTab({ employee, t, canEdit, onChanged }) {
   const [docs, setDocs] = useState([]);
   // Which employee the list belongs to; loading is derived from it, so opening
   // another profile shows the spinner instead of the previous person's files.
@@ -49,6 +52,7 @@ export default function EmployeeDocumentsTab({ employee, t, canEdit }) {
   const [editingId, setEditingId] = useState(null);
   const [editMeta, setEditMeta] = useState(EMPTY_META);
   const [saving, setSaving] = useState(false);
+  const [viewIndex, setViewIndex] = useState(null);
 
   const load = async () => {
     const id = employee.id;
@@ -101,6 +105,7 @@ export default function EmployeeDocumentsTab({ employee, t, canEdit }) {
       toast.update(toastId, { render: t('empDocs.uploaded'), type: 'success', isLoading: false, autoClose: 3000 });
       setMeta(EMPTY_META);
       await load();
+      onChanged?.();
     } catch (err) {
       if (err.cancelled) { toast.dismiss(toastId); return; } // the person chose to go back and fix it
       toast.update(toastId, { render: err.response?.data?.error || t('empDocs.upload_failed'), type: 'error', isLoading: false, autoClose: 4000 });
@@ -143,6 +148,7 @@ export default function EmployeeDocumentsTab({ employee, t, canEdit }) {
       toast.success(t('empDocs.saved'));
       setEditingId(null);
       await load();
+      onChanged?.();
     } catch (err) {
       if (err.cancelled) return; // stay in edit mode so the dates can be corrected
       toast.error(err.response?.data?.error || t('empDocs.save_failed'));
@@ -229,12 +235,20 @@ export default function EmployeeDocumentsTab({ employee, t, canEdit }) {
               {docs.map((doc) => {
                 const badge = expiryBadge(t, doc.days_left);
                 const editing = editingId === doc.id;
+                const kind = previewKind(doc.file_name);
+                const KindIcon = kind === 'image' ? FileImage : kind ? FileText : FileIcon;
+                const open = () => setViewIndex(docs.indexOf(doc));
                 return (
                   <Fragment key={doc.id}>
                     <tr className={editing ? 'bg-brand-50/40' : 'hover:bg-surface-50/50'}>
-                      <td className="p-3 text-surface-950 font-medium truncate max-w-[260px]">
-                        {doc.file_name}
-                        <div className="text-[10px] text-surface-400 font-normal">{categoryLabel(t, doc.category)}</div>
+                      <td className="p-3 max-w-[280px]">
+                        <button type="button" onClick={open} className="flex items-start gap-2 text-start group min-w-0 w-full" title={t('empProfile.preview')}>
+                          <KindIcon size={16} className={`shrink-0 mt-0.5 ${kind === 'image' ? 'text-emerald-500' : kind === 'pdf' ? 'text-red-500' : 'text-surface-400'}`} />
+                          <span className="min-w-0">
+                            <span className="block font-medium text-surface-950 truncate group-hover:text-brand-700 group-hover:underline">{doc.file_name}</span>
+                            <span className="block text-[10px] text-surface-400 font-normal">{categoryLabel(t, doc.category)}</span>
+                          </span>
+                        </button>
                       </td>
                       <td className="p-3">{doc.doc_type ? <Badge variant="info" className="text-[10px]">{docTypeLabel(t, doc.doc_type)}</Badge> : <span className="text-surface-300">—</span>}</td>
                       <td className="p-3 font-mono text-surface-700">{doc.doc_number || <span className="text-surface-300">—</span>}</td>
@@ -249,6 +263,9 @@ export default function EmployeeDocumentsTab({ employee, t, canEdit }) {
                       </td>
                       <td className="p-3 text-surface-500 whitespace-nowrap">{dayjs(doc.created_at).format('YYYY-MM-DD')}</td>
                       <td className="p-3 text-center whitespace-nowrap">
+                        <button type="button" onClick={open} className="p-1 text-brand-600 hover:text-brand-700" aria-label={t('empProfile.preview')} title={t('empProfile.preview')}>
+                          <Eye size={14} />
+                        </button>
                         <button type="button" onClick={() => download(doc)} className="p-1 text-brand-600 hover:text-brand-700" aria-label={t('empDocs.download')} title={t('empDocs.download')}>
                           <Download size={14} />
                         </button>
@@ -286,6 +303,9 @@ export default function EmployeeDocumentsTab({ employee, t, canEdit }) {
           </table>
         </div>
       )}
+
+      <DocumentViewer employeeId={employee.id} docs={docs} index={viewIndex}
+        onIndexChange={setViewIndex} onClose={() => setViewIndex(null)} t={t} />
     </div>
   );
 }

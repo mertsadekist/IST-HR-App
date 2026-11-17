@@ -13,3 +13,6 @@ export const getReview = (id) => api.get(`/reviews/${id}`);
 export const saveReview = (id, data) => api.put(`/reviews/${id}`, data);
 export const submitReview = (id) => api.post(`/reviews/${id}/submit`);
 export const returnReview = (id, to, note) => api.post(`/reviews/${id}/return`, { to, note });
+
+// One employee's appraisals, for the Performance tab of their profile (HR only).
+export const getEmployeeReviews = (employeeId) => api.get(`/reviews/employee/${employeeId}`);

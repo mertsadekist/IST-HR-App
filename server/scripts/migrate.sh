@@ -56,4 +56,5 @@ node apply_assessment_confirm.mjs
 node apply_fix_offer_stage_drift.mjs
 node apply_employee_owner.mjs
 node apply_employee_document_expiry.mjs
+node apply_employee_notes.mjs
 echo "✅ All migrations applied."

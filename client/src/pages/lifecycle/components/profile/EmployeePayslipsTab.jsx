@@ -13,6 +13,7 @@ import { printElementWithLetterhead, waitForPaint } from '@utils/printDoc';
 import * as payrollApi from '@api/payrollApi';
 import { money, runStatusLabel } from './profileUtils';
 import { StatCard } from './StatCard';
+import EmployeePayExtras from './EmployeePayExtras';
 
 const FINAL = ['Approved', 'Paid'];
 
@@ -67,7 +68,12 @@ export default function EmployeePayslipsTab({ employee, t }) {
   if (loading) return <Card className="!p-6 animate-pulse"><div className="h-4 bg-surface-100 rounded w-1/3" /></Card>;
 
   if (!payslips.length) {
-    return <Card><EmptyState icon={<Banknote className="w-6 h-6 text-surface-400" />} title={t('empProfile.ps_none')} description={t('empProfile.ps_none_desc')} /></Card>;
+    return (
+      <div className="space-y-4">
+        <Card><EmptyState icon={<Banknote className="w-6 h-6 text-surface-400" />} title={t('empProfile.ps_none')} description={t('empProfile.ps_none_desc')} /></Card>
+        <EmployeePayExtras employee={employee} t={t} />
+      </div>
+    );
   }
 
   return (
@@ -153,6 +159,8 @@ export default function EmployeePayslipsTab({ employee, t }) {
           </table>
         </div>
       </Card>
+
+      <EmployeePayExtras employee={employee} t={t} />
 
       <div style={{ position: 'fixed', left: '-9999px', top: 0, width: '800px' }} aria-hidden="true">
         <SalaryReport ref={reportRef} employeeName={`${employee.first_name} ${employee.last_name}`} company={company}

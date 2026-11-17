@@ -43,3 +43,9 @@ export const getDocumentRadar = (params) => api.get('/employees/documents/radar'
 
 // Current staff with their direct manager: the people org chart and the manager picker.
 export const getOrgPeople = (params) => api.get('/employees/org/people', { params });
+
+// HR's internal notes on an employee, each saved with its author.
+export const getEmployeeNotes = (id) => api.get(`/employees/${id}/notes`);
+export const addEmployeeNote = (id, data) => api.post(`/employees/${id}/notes`, data);
+export const updateEmployeeNote = (id, noteId, data) => api.put(`/employees/${id}/notes/${noteId}`, data);
+export const deleteEmployeeNote = (id, noteId) => api.delete(`/employees/${id}/notes/${noteId}`);

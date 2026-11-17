@@ -79,6 +79,8 @@ router.get('/', async (req, res) => {
     if (isStaff(req)) {
       const co = companyClause(req, 'r.company_id');
       where += co.clause; params.push(...co.params);
+      // One employee's requests, for the Requests tab of their profile.
+      if (req.query.employee_id) { where += ' AND r.employee_id = ?'; params.push(Number(req.query.employee_id) || 0); }
     } else {
       const me = await myEmployeeId(req.user.id);
       if (!me) return res.json([]);
