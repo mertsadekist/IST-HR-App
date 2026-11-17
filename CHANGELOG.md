@@ -14,6 +14,32 @@ All notable changes to the IST HR System. Dates are ISO (YYYY‑MM‑DD). The ap
 - Google Drive attendance sync, its CSV parser, `GOOGLE_DRIVE_SA_*` / `ATTENDANCE_DRIVE_FOLDER_ID` variables and the `google-auth-library` dependency. Existing `Drive Sync` attendance rows and the `attendance_sync_*` ledger tables are kept as history.
 
 ### Added
+- **Compliance centre: needs attention, deadlines and Emiratisation** (`services/complianceService.js`, `routes/compliance.js`):
+  - **Needs your attention** (on the dashboard for admin, HR manager and accountant, and in Compliance → *Compliance centre*). One list of everything overdue or at risk, most urgent first, each with a count, a few names and a link to where it is fixed:
+    - expired and soon-expiring employee documents;
+    - final settlements past their 14-day due date;
+    - last month's payroll not approved (critical once WPS counts it late);
+    - active employees without a valid UAE IBAN;
+    - overdue onboarding steps and expired training certificates;
+    - leave, overtime, employee requests and approval chains waiting too long;
+    - payroll runs, appraisals and hiring requests waiting;
+    - companies below the Emiratisation target.
+  - **Deadlines.** A month's dated deadlines in one list:
+    - WPS (salaries late 15 days after the month, assuming they fall due at month end) and month-end salary dates;
+    - employee and company document expiries, and training certificate expiries;
+    - settlement due dates and last working days;
+    - public holidays and the half-year and year-end Emiratisation checkpoints.
+  - **Emiratisation.** Per company: active employees, nationals (from the nationality field), the number required by the year's target, the shortfall and the yearly fine. The rule counts skilled workers; with no skill level on file every active employee is counted, so the figures are an upper bound to confirm with MOHRE.
+  - **Statutory figures** (`law_values`): the target percentage, the fine per missing national and the headcount it applies from, by year. They are seeded for 2024–2026 marked "verify with MOHRE", and an admin edits them in place, with a note on the source.
+  - Schema at boot through `ensureSchema`: `law_values`, with the seeded rows.
+- **Training, certificates, skills and onboarding reminders** (`services/trainingService.js`, `routes/training.js`, `services/onboardingReminders.js`):
+  - **Course catalogue** (HR → *Training*, `/training`, *Courses* tab). Each course has a name, a provider, an optional validity in months, and can be mandatory. Courses an admin creates apply to every company; an HR manager's apply to the selected company. A course people have completed is retired, not deleted.
+  - **Training records** on each employee's profile (new *Training & skills* tab). HR records the course, completion date, an optional result and the certificate file (PDF or image, kept on the uploads volume). The expiry defaults to the completion date plus the course's validity.
+  - **Certificate expiry.** HR is notified 90, 60, 30, 14, 7 and 1 day(s) before the latest certificate of a person and course expires, and when it has expired, on the same cadence as passports and visas.
+  - **Compliance** tab: certificates expired or expiring within 60 days, and who lacks a valid certificate for a mandatory course (never completed, or only expired).
+  - **Skills.** HR can record each person's skills from the existing skills catalogue, at a level of 1 to 5.
+  - **Onboarding reminders.** Every day at 08:00, onboarding visa and document steps past their due date and not done are chased. The responsible person gets one reminder a day; steps with nobody responsible are summed up for HR, one message per company.
+  - Schema at boot through `ensureSchema`: `training_courses`, `employee_trainings`, `employee_skills`; `onboarding_visa_steps.overdue_notified_on`.
 - **Appraisals and hiring requests** (`services/reviewService.js`, `routes/reviews.js`, `routes/requisitions.js`):
   - **Appraisal cycles** (HR → *Appraisals*, `/reviews`). HR creates a cycle (period, self and manager due dates) and launches it. Launching creates a review for every current employee of the company, with their direct manager recorded, and notifies them. HR follows progress by stage, opens any review, can send it back a step, finalizes it and closes the cycle.
   - **The review.** Goals (optionally weighted to 100) with 1–5 scores, an overall rating and comments per side.

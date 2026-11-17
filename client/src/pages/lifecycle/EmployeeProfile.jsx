@@ -6,7 +6,7 @@ import { toast } from 'react-toastify';
 import dayjs from 'dayjs';
 import {
   ArrowLeft, Camera, Loader2, Download, Mail, Phone, Building2, CalendarDays, UserRound, Hash,
-  LayoutDashboard, IdCard, FileText, Banknote, Clock, CalendarClock, Plane, Wallet, Landmark, Laptop, History, UserX,
+  LayoutDashboard, IdCard, FileText, Banknote, Clock, CalendarClock, Plane, Wallet, Landmark, Laptop, History, UserX, GraduationCap,
 } from 'lucide-react';
 import Card from '@components/ui/Card';
 import Badge from '@components/ui/Badge';
@@ -17,6 +17,7 @@ import { printElementWithLetterhead, waitForPaint } from '@utils/printDoc';
 import EmployeeHistoryReport from './components/EmployeeHistoryReport';
 import EmployeeDocumentsTab from './components/EmployeeDocumentsTab';
 import EmployeePayComponentsTab from './components/EmployeePayComponentsTab';
+import EmployeeTrainingTab from './components/EmployeeTrainingTab';
 import ProfileDetailsTab from './components/profile/ProfileDetailsTab';
 import EmployeeOverviewTab from './components/profile/EmployeeOverviewTab';
 import EmployeePayslipsTab from './components/profile/EmployeePayslipsTab';
@@ -69,6 +70,7 @@ export default function EmployeeProfile() {
     { key: 'pay', icon: Wallet, label: t('pay_components.tab') },
     { key: 'bank', icon: Landmark, label: t('employees.bank_tab') },
     { key: 'assets', icon: Laptop, label: t('employees.assets_tab') },
+    { key: 'training', icon: GraduationCap, label: t('training.tab') },
     { key: 'timeline', icon: History, label: t('empProfile.tab_timeline') },
   ].filter(Boolean);
   const requested = searchParams.get('tab');
@@ -183,6 +185,7 @@ export default function EmployeeProfile() {
     case 'pay': body = <EmployeePayComponentsTab employee={employee} t={t} canEdit={canManage} />; break;
     case 'bank': body = <EmployeeBankTab employee={employee} t={t} isAdmin={isAdmin} />; break;
     case 'assets': body = <EmployeeAssetsTab employee={employee} t={t} canReveal={canManage} />; break;
+    case 'training': body = <EmployeeTrainingTab employee={employee} t={t} canEdit={canManage} />; break;
     case 'timeline': body = <EmployeeTimelineTab employee={employee} t={t} />; break;
     default: body = <EmployeeOverviewTab employee={employee} t={t} canPayroll={canPayroll} canAttendance={canAttendance} onOpenTab={openTab} />;
   }
