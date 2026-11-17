@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
+import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import * as srApi from '@api/salaryReviewApi';
 import Card from '@components/ui/Card';
@@ -61,6 +62,17 @@ export default function SalaryReviews() {
     try { const { data } = await srApi.getReview(r.id); setDetail(data); }
     catch { toast.error(t('salary_reviews.load_failed')); }
   };
+  // Opened from an employee profile: /salary-reviews?open=<review id>&item=<item id>
+  // shows that cycle with the employee's line expanded.
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const open = Number(searchParams.get('open'));
+    if (!open) return;
+    const item = Number(searchParams.get('item'));
+    setSearchParams({}, { replace: true });
+    openDetail({ id: open }).then(() => { if (item) setExpanded({ [item]: true }); });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const reloadDetail = async () => { if (openId) { const { data } = await srApi.getReview(openId); setDetail(data); } load(); };
 
   const createReview = async () => {
