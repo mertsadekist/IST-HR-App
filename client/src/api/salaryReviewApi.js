@@ -19,3 +19,6 @@ export const uploadDocument = (itemId, formData) => api.post(`/salary-reviews/it
 export const downloadDocument = (itemId, docId) => api.get(`/salary-reviews/items/${itemId}/documents/${docId}/download`, {
   responseType: 'blob',
 });
+
+// One employee's line in every salary review cycle, for their profile.
+export const getEmployeeSalaryReviews = (employeeId) => api.get(`/salary-reviews/employee/${employeeId}`);

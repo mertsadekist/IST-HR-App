@@ -7,7 +7,7 @@ import dayjs from 'dayjs';
 import {
   ArrowLeft, Camera, Loader2, Download, Mail, Phone, Building2, CalendarDays, UserRound, Hash,
   LayoutDashboard, IdCard, FileText, Banknote, Clock, CalendarClock, Plane, Wallet, Landmark, Laptop, History, UserX, GraduationCap,
-  StickyNote, Inbox, ClipboardCheck,
+  StickyNote, Inbox, ClipboardCheck, Scale,
 } from 'lucide-react';
 import Card from '@components/ui/Card';
 import Badge from '@components/ui/Badge';
@@ -31,6 +31,7 @@ import EmployeeTimelineTab from './components/profile/EmployeeTimelineTab';
 import EmployeeNotesTab from './components/profile/EmployeeNotesTab';
 import EmployeeRequestsTab from './components/profile/EmployeeRequestsTab';
 import EmployeeReviewsTab from './components/profile/EmployeeReviewsTab';
+import EmployeeSalaryReviewsTab from './components/profile/EmployeeSalaryReviewsTab';
 import IdentityDocuments, { ExpiryAlerts } from './components/profile/IdentityDocuments';
 import DocumentViewer from './components/profile/DocumentViewer';
 import { statusLabel, statusVariant, tenureText } from './components/profile/profileUtils';
@@ -90,6 +91,7 @@ export default function EmployeeProfile() {
     { key: 'pay', label: t('empProfile.grp_pay'), tabs: [
       canPayroll && { key: 'payslips', icon: Banknote, label: t('empProfile.tab_payslips') },
       { key: 'pay', icon: Wallet, label: t('pay_components.tab') },
+      canPayroll && { key: 'salary_reviews', icon: Scale, label: t('empProfile.tab_salary_reviews') },
       { key: 'bank', icon: Landmark, label: t('employees.bank_tab') },
     ] },
     { key: 'time', label: t('empProfile.grp_time'), tabs: [
@@ -237,6 +239,7 @@ export default function EmployeeProfile() {
     case 'notes': body = <EmployeeNotesTab employee={employee} t={t} />; break;
     case 'requests': body = <EmployeeRequestsTab employee={employee} t={t} />; break;
     case 'reviews': body = <EmployeeReviewsTab employee={employee} t={t} />; break;
+    case 'salary_reviews': body = <EmployeeSalaryReviewsTab employee={employee} t={t} />; break;
     default: body = <EmployeeOverviewTab employee={employee} t={t} canPayroll={canPayroll} canAttendance={canAttendance} onOpenTab={openTab} />;
   }
 

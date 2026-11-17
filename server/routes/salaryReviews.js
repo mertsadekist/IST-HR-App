@@ -82,6 +82,41 @@ router.post('/', authorize('admin', 'hr_manager'), validate({
   } finally { conn.release(); }
 });
 
+// GET /api/salary-reviews/employee/:employeeId — one employee's line in every
+// salary review cycle (current → proposed salary, decision, applied), for the
+// salary reviews section of their profile. Same module gate and company scope
+// as the cycle list.
+router.get('/employee/:employeeId(\\d+)', requireModule(MODULES.PAYROLL), async (req, res) => {
+  try {
+    const co = companyClause(req, 'sri.company_id');
+    const [rows] = await pool.query(`
+      SELECT sri.id AS item_id, sri.salary_review_id, sri.status AS item_status,
+             sri.current_basic_salary, sri.current_full_salary, sri.new_basic_salary, sri.new_full_salary,
+             DATE_FORMAT(sri.effective_date, '%Y-%m-%d') AS effective_date, sri.band_min, sri.band_max,
+             sri.notes, sri.applied_at,
+             sr.review_year, sr.status AS review_status, sr.decided_at, sr.decision_note,
+             du.name AS decided_by_name, pu.name AS prepared_by_name, jt.title AS job_title_name,
+             (SELECT COUNT(*) FROM salary_review_actions a WHERE a.salary_review_item_id = sri.id AND a.is_required = 1) AS actions_required,
+             (SELECT COUNT(*) FROM salary_review_actions a WHERE a.salary_review_item_id = sri.id AND a.is_required = 1 AND a.status <> 'Pending') AS actions_done,
+             (SELECT COUNT(*) FROM salary_review_documents d WHERE d.salary_review_item_id = sri.id) AS document_count
+        FROM salary_review_items sri
+        JOIN salary_reviews sr ON sr.id = sri.salary_review_id
+        LEFT JOIN users du ON du.id = sr.decided_by
+        LEFT JOIN users pu ON pu.id = sr.prepared_by
+        LEFT JOIN job_titles jt ON jt.id = sri.job_title_id
+       WHERE sri.employee_id = ?` + co.clause + `
+       ORDER BY sr.review_year DESC, sri.id DESC`, [req.params.employeeId, ...co.params]);
+    const n = (v) => (v == null ? null : Number(v));
+    res.json(rows.map((r) => ({
+      ...r,
+      current_basic_salary: n(r.current_basic_salary), current_full_salary: n(r.current_full_salary),
+      new_basic_salary: n(r.new_basic_salary), new_full_salary: n(r.new_full_salary),
+      band_min: n(r.band_min), band_max: n(r.band_max),
+      actions_required: Number(r.actions_required), actions_done: Number(r.actions_done), document_count: Number(r.document_count),
+    })));
+  } catch (err) { console.error('GET /salary-reviews/employee/:employeeId error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
 // GET /api/salary-reviews/:id — full detail: cycle + items + each item's actions + documents
 router.get('/:id', requireModule(MODULES.PAYROLL), async (req, res) => {
   try {
