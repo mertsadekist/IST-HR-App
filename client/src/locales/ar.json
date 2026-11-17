@@ -66,7 +66,8 @@
     "requisitions": "طلبات التوظيف",
     "reviews": "تقييمات الأداء",
     "my_reviews": "تقييماتي",
-    "training": "التدريب"
+    "training": "التدريب",
+    "compliance_center": "مركز الامتثال"
   },
   "topbar": {
     "search_placeholder": "ابحث في نظام الموارد البشرية...",
@@ -3865,5 +3866,79 @@
     "no_skills": "لا توجد مهارات مسجلة.",
     "add_skill": "إضافة مهارة…",
     "skills_saved": "تم حفظ المهارات"
+  },
+  "attention": {
+    "title": "يحتاج انتباهك",
+    "subtitle": "الأكثر إلحاحاً أولاً",
+    "clear": "لا يوجد ما هو متأخر أو معرّض للخطر.",
+    "severity": {
+      "critical": "حرج",
+      "high": "مرتفع",
+      "medium": "متوسط",
+      "low": "منخفض"
+    },
+    "item": {
+      "docs_expired": "{{count}} موظف لديه جواز أو تأشيرة أو هوية أو بطاقة عمل منتهية",
+      "docs_expiring": "{{count}} موظف لديه مستند ينتهي خلال 30 يوماً",
+      "settlements_overdue": "{{count}} تسوية نهائية تجاوزت موعد الـ 14 يوماً ولم تُدفع",
+      "payroll_previous": "{{count}} شركة لم تُعتمد رواتب الشهر الماضي لديها",
+      "iban_missing": "{{count}} موظف فعّال بلا IBAN إماراتي صالح",
+      "onboarding_overdue": "{{count}} خطوة Onboarding تجاوزت موعدها",
+      "training_expired": "{{count}} موظف لديه شهادة تدريب منتهية",
+      "leave_waiting": "{{count}} طلب إجازة ينتظر أكثر من 3 أيام",
+      "overtime_waiting": "{{count}} يوم عمل إضافي ينتظر أكثر من 7 أيام",
+      "requests_waiting": "{{count}} طلب موظف مفتوح أكثر من 5 أيام",
+      "approvals_stuck": "{{count}} سلسلة موافقات تنتظر أكثر من 3 أيام",
+      "payroll_pending_approval": "{{count}} مسير رواتب بانتظار الاعتماد",
+      "reviews_for_hr": "{{count}} تقييم أداء بانتظار التقييم النهائي",
+      "requisitions_waiting": "{{count}} طلب توظيف بالانتظار",
+      "emiratisation_gap": "{{count}} شركة دون نسبة التوطين المستهدفة لهذا العام"
+    }
+  },
+  "compliance": {
+    "title": "مركز الامتثال",
+    "subtitle": "ما يحتاج انتباهك، ومواعيد هذا الشهر، والتوطين.",
+    "tab_attention": "يحتاج انتباهك",
+    "tab_calendar": "المواعيد",
+    "tab_emiratisation": "التوطين",
+    "prev": "الشهر السابق",
+    "next": "الشهر التالي",
+    "calendar_empty": "لا توجد مواعيد هذا الشهر.",
+    "calendar_hint": "نظام حماية الأجور: تُعدّ الرواتب متأخرة إن لم تُدفع خلال 15 يوماً بعد نهاية الشهر المستحقة عنه (بافتراض استحقاقها نهاية الشهر). التسويات مستحقة بعد 14 يوماً من آخر يوم عمل.",
+    "kind": {
+      "wps_late": "حماية الأجور: رواتب {{period}} متأخرة اعتباراً من اليوم",
+      "salary_month_end": "نهاية الشهر: استحقاق رواتب {{period}}",
+      "emiratisation_midyear": "نقطة التوطين نصف السنوية",
+      "emiratisation_yearend": "هدف التوطين لنهاية العام",
+      "document_expiry": "انتهاء مستند موظف",
+      "company_document_expiry": "انتهاء مستند الشركة",
+      "training_expiry": "انتهاء شهادة",
+      "settlement_due": "استحقاق التسوية النهائية",
+      "last_working_day": "آخر يوم عمل",
+      "holiday": "عطلة رسمية"
+    },
+    "emi_rule": "الهدف {{pct}}٪ من القوى العاملة · الغرامة {{fine}} سنوياً لكل مواطن غير معيّن · يسري من {{min}} موظفاً",
+    "emi_hint": "تحتسب القاعدة العمالة الماهرة؛ ولعدم توفر مستوى المهارة يُحتسب كل موظف فعّال، لذا اعتبر الأرقام حداً أعلى وتحقق منها مع وزارة الموارد البشرية والتوطين. يُعرف المواطنون من حقل الجنسية.",
+    "not_applicable": "دون الحد",
+    "col": {
+      "company": "الشركة",
+      "headcount": "الموظفون",
+      "nationals": "المواطنون",
+      "required": "المطلوب",
+      "gap": "النقص",
+      "fine": "الغرامة / سنة"
+    },
+    "law_title": "الأرقام النظامية",
+    "law_key": "البند",
+    "law_year": "من سنة",
+    "law_value": "القيمة",
+    "law_note": "ملاحظة",
+    "law_note_ph": "المصدر، مثل تعميم الوزارة",
+    "law_saved": "تم الحفظ",
+    "law": {
+      "emiratisation_target_percent": "نسبة التوطين المستهدفة (٪)",
+      "emiratisation_fine_per_year": "الغرامة عن كل مواطن ناقص (سنوياً)",
+      "emiratisation_min_headcount": "يسري من (عدد الموظفين)"
+    }
   }
 }

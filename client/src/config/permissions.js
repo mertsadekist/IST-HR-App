@@ -81,6 +81,7 @@ const ROUTE_MODULES = [
   ['/digital-access', MODULES.ASSETS],
   ['/social-governance', MODULES.ASSETS],
   ['/domains', MODULES.ASSETS],
+  ['/compliance', MODULES.COMPLIANCE],
   ['/legal-letters', MODULES.COMPLIANCE],
   ['/company-docs', MODULES.COMPLIANCE],
   ['/users', MODULES.OPERATIONS],
