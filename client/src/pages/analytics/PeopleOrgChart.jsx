@@ -60,7 +60,7 @@ export default function PeopleOrgChart({ t }) {
             </button>
           ) : <span className="w-[14px]" />}
           <UserCircle2 size={18} className={n.reports.length ? 'text-brand-600' : 'text-surface-300'} />
-          <Link to={`/employees?open=${n.id}`} className="text-sm font-medium text-surface-900 hover:text-brand-700 truncate">{n.name}</Link>
+          <Link to={`/employees/${n.id}`} className="text-sm font-medium text-surface-900 hover:text-brand-700 truncate">{n.name}</Link>
           <span className="text-xs text-surface-500 truncate">{[n.job_title, n.department_name].filter(Boolean).join(' · ')}</span>
           {n.short_code && <Badge variant="inactive" className="text-[9px]">{n.short_code}</Badge>}
           {n.status !== 'Active' && <Badge variant="warning" className="text-[9px]">{n.status}</Badge>}

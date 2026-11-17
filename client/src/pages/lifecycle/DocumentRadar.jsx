@@ -73,7 +73,7 @@ export default function DocumentRadar() {
     30: t('docRadar.win_30'), 90: t('docRadar.win_90'), all: t('docRadar.win_all'),
   })[w];
   const showCompany = !currentCompanyId;
-  const profileLink = (id) => `/employees?open=${id}&tab=documents`;
+  const profileLink = (id) => `/employees/${id}?tab=documents`;
 
   return (
     <div className="space-y-6 animate-fade-in">
