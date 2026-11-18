@@ -14,6 +14,38 @@ All notable changes to the IST HR System. Dates are ISO (YYYY‑MM‑DD). The ap
 - Google Drive attendance sync, its CSV parser, `GOOGLE_DRIVE_SA_*` / `ATTENDANCE_DRIVE_FOLDER_ID` variables and the `google-auth-library` dependency. Existing `Drive Sync` attendance rows and the `attendance_sync_*` ledger tables are kept as history.
 
 ### Added
+- **Clock in from the portal, off by default** (Settings → *Portal clock-in*; `services/clockInService.js`, `routes/clockIn.js`):
+  - **Who and where.** An admin switches it on and chooses:
+    - all employees, or only listed people (field staff, remote days);
+    - whether the browser's location is required, and how precise it must be;
+    - optional sites (name, coordinates, radius): when set, a punch must be made inside one. *Use my current location* fills a site in.
+  - **The employee's side.** *My Attendance* shows a *Clock in / Clock out* card when the feature is on for them. The location is taken at the moment of the punch, and a refusal says why (location off, not precise enough, how far from which site).
+  - **Every punch is stored** with its time, coordinates, accuracy, site and distance, IP and browser.
+    - It fills the day's attendance (lateness against the person's schedule and grace).
+    - The office door stays the authority: a day the door has already recorded is not overwritten.
+  - **HR** sees a day's portal punches on the same settings page, each with a map link. HR managers can view the settings; only an admin changes them.
+  - Schema at boot through `ensureSchema`: `portal_punches`; settings in `app_settings` (`portal_clock_in`).
+- **Benefits (medical insurance, air ticket) and the employee change log** (`services/benefitsService.js`, `routes/benefits.js`, `services/historyService.js`):
+  - **Group insurance policies** (HR → *Benefits*): insurer, policy number, plan and period, per company. The page also lists cover ending and air tickets falling due within 60 days.
+  - **Enrolment** (employee profile → *Benefits*): the policy, category, card number, cover dates, the yearly premium, and the dependents covered (name, relation, date of birth).
+  - **Air ticket.** Each person can have an entitlement: every 12 or 24 months, class, destination, an amount cap and the dependents included.
+    - HR records each use: a booked ticket, or cash in lieu paid as a one-time allowance in a Draft payroll month.
+    - The next ticket falls due N months after the last use, or after the entitlement starts.
+  - **My Benefits** (portal): the employee's insurance (without the premium) and when their next ticket is due.
+  - **Change log** (employee profile → *Change log*, HR only). Audit rows now carry the record they are about and, for edits, each changed field before → after; IBANs and account numbers are masked to their last 4 digits. Recorded so far:
+    - edits to the employee record and bank details;
+    - salary components, documents, notes, the photo and the login;
+    - benefits.
+    - Earlier audit entries have no record attached, so the log starts from this release.
+  - Schema at boot through `ensureSchema`: `insurance_policies`, `employee_insurance`, `ticket_entitlements`, `ticket_usages`; `audit_logs.entity_type`, `entity_id`, `changes`.
+
+### Fixed
+- **Emiratisation fines were one year behind.** Checked against MoHRE statements:
+  - AED 96,000 per Emirati not hired for 2024 targets (WAM);
+  - AED 108,000 for 2025 targets (Gulf News);
+  - AED 10,000 a month (120,000 a year) from 1 July 2026 (Emirates 24|7).
+  - The targets (+2 points a year to 10% by end-2026, Cabinet Resolution 18/2022) were already right; 2023 figures are added.
+  - Seeded rows nobody has edited are corrected at startup with their source in the note; values an admin has set are left alone.
 - **Announcements, policies with acknowledgement, and the disciplinary file** (`services/hrServicesService.js`, `routes/hrServices.js`):
   - **Announcements** (HR → *Announcements & policies*; portal → *Announcements*). A title and message, normal or important, shown until an optional date.
     - An admin's announcements go to every company; an HR manager's go to the selected company.

@@ -13,6 +13,7 @@ import { printElementWithLetterhead, waitForPaint } from '@utils/printDoc';
 import { toast } from 'react-toastify';
 import { Clock, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import dayjs from 'dayjs';
+import ClockInCard from '@components/attendance/ClockInCard';
 
 // The statuses worth a colour of their own. Anything the enum grows later falls
 // through to neutral rather than breaking the row.
@@ -40,6 +41,8 @@ export default function MyAttendance() {
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const reportRef = useRef(null);
+  // Bumped after a portal clock-in so today's row shows at once.
+  const [bump, setBump] = useState(0);
 
   // State is set only once the data lands: `loading` covers the first paint and
   // a month change swaps the table when the new month arrives, which keeps the
@@ -58,7 +61,7 @@ export default function MyAttendance() {
       setLoading(false);
     });
     return () => { alive = false; };
-  }, [month]);
+  }, [month, bump]);
 
   const download = async () => {
     setExporting(true);
@@ -85,6 +88,8 @@ export default function MyAttendance() {
         { value: summary?.total_hours ?? 0, label: t('portal.total_hours') },
       ]}
     >
+      {/* Shown only when an admin has switched portal clock-in on for this person. */}
+      <ClockInCard t={t} onPunched={() => setBump((n) => n + 1)} />
       <div className="flex items-center gap-2 flex-wrap justify-end">
         <Button size="sm" variant="secondary" onClick={download} loading={exporting} disabled={loading || rows.length === 0}>
           <Download size={14} /> {t('portal.download_pdf')}

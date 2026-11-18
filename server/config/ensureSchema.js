@@ -130,6 +130,9 @@ const COLUMN_GUARDS = [
   { table: 'leave_types', column: 'day_basis', ddl: "ALTER TABLE leave_types ADD COLUMN day_basis ENUM('calendar','working') NOT NULL DEFAULT 'calendar'" },
   { table: 'leave_types', column: 'carry_forward_max', ddl: 'ALTER TABLE leave_types ADD COLUMN carry_forward_max DECIMAL(6,2) NULL DEFAULT 0' },
   // The day an overdue onboarding visa step was last chased (services/onboardingReminders.js).
+  // Record history (services/historyService.js): which record an audit row is
+  // about, and the fields that changed (bank numbers masked).
+  { table: 'audit_logs', column: 'entity_type', ddl: 'ALTER TABLE audit_logs ADD COLUMN entity_type VARCHAR(40) NULL, ADD COLUMN entity_id INT NULL, ADD COLUMN changes JSON NULL, ADD INDEX idx_audit_entity (entity_type, entity_id)' },
   { table: 'onboarding_visa_steps', column: 'overdue_notified_on', ddl: 'ALTER TABLE onboarding_visa_steps ADD COLUMN overdue_notified_on DATE NULL' },
   { table: 'leave_types', column: 'carry_forward_expiry_months', ddl: 'ALTER TABLE leave_types ADD COLUMN carry_forward_expiry_months TINYINT NULL' },
 ];
@@ -732,6 +735,84 @@ const TABLE_GUARDS = [
      INDEX idx_osl_offboarding (offboarding_id),
      FOREIGN KEY (offboarding_id) REFERENCES offboarding_records(id) ON DELETE CASCADE
    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  // Portal clock-in (services/clockInService.js): every punch with where it was made.
+  `CREATE TABLE IF NOT EXISTS portal_punches (
+     id          INT AUTO_INCREMENT PRIMARY KEY,
+     company_id  INT NOT NULL,
+     employee_id INT NOT NULL,
+     kind        ENUM('in','out') NOT NULL,
+     punched_at  DATETIME NOT NULL,
+     lat         DECIMAL(9,6) NULL,
+     lng         DECIMAL(9,6) NULL,
+     accuracy_m  INT NULL,
+     site_name   VARCHAR(80) NULL,
+     within_site BOOLEAN NULL,
+     distance_m  INT NULL,
+     ip          VARCHAR(64) NULL,
+     user_agent  VARCHAR(255) NULL,
+     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     INDEX idx_pp_employee (employee_id, punched_at),
+     INDEX idx_pp_company (company_id, punched_at),
+     FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  // Benefits (services/benefitsService.js): group insurance policies, each
+  // employee's enrolment, and the air ticket entitlement with its uses.
+  `CREATE TABLE IF NOT EXISTS insurance_policies (
+     id            INT AUTO_INCREMENT PRIMARY KEY,
+     company_id    INT NOT NULL,
+     provider      VARCHAR(150) NOT NULL,
+     policy_number VARCHAR(80) NULL,
+     plan_name     VARCHAR(120) NULL,
+     start_date    DATE NOT NULL,
+     end_date      DATE NOT NULL,
+     notes         VARCHAR(500) NULL,
+     created_by    INT NULL,
+     created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     INDEX idx_ip_company (company_id),
+     FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  `CREATE TABLE IF NOT EXISTS employee_insurance (
+     id           INT AUTO_INCREMENT PRIMARY KEY,
+     employee_id  INT NOT NULL UNIQUE,
+     policy_id    INT NOT NULL,
+     category     VARCHAR(60) NULL,
+     card_number  VARCHAR(60) NULL,
+     start_date   DATE NULL,
+     end_date     DATE NULL,
+     premium      DECIMAL(12,2) NULL,
+     dependents   JSON NULL,
+     updated_by   INT NULL,
+     updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+     FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE,
+     FOREIGN KEY (policy_id) REFERENCES insurance_policies(id) ON DELETE CASCADE
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  `CREATE TABLE IF NOT EXISTS ticket_entitlements (
+     employee_id      INT NOT NULL PRIMARY KEY,
+     frequency_months TINYINT NOT NULL DEFAULT 12,
+     ticket_class     VARCHAR(30) NOT NULL DEFAULT 'Economy',
+     destination      VARCHAR(120) NULL,
+     max_amount       DECIMAL(12,2) NULL,
+     dependents_count TINYINT NOT NULL DEFAULT 0,
+     start_from       DATE NOT NULL,
+     notes            VARCHAR(500) NULL,
+     updated_by       INT NULL,
+     updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+     FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  `CREATE TABLE IF NOT EXISTS ticket_usages (
+     id                    INT AUTO_INCREMENT PRIMARY KEY,
+     company_id            INT NOT NULL,
+     employee_id           INT NOT NULL,
+     used_on               DATE NOT NULL,
+     mode                  ENUM('Ticket','Cash') NOT NULL,
+     amount                DECIMAL(12,2) NOT NULL,
+     payroll_adjustment_id INT NULL,
+     notes                 VARCHAR(300) NULL,
+     created_by            INT NULL,
+     created_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     INDEX idx_tu_employee (employee_id, used_on),
+     FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   // HR services (services/hrServicesService.js). company_id NULL = every company.
   `CREATE TABLE IF NOT EXISTS announcements (
      id           INT AUTO_INCREMENT PRIMARY KEY,
@@ -1012,13 +1093,29 @@ const SEED_GUARDS = [
   // skilled workforce a year, and the yearly fine per national not hired.
   // To be verified with MOHRE before relying on them.
   `INSERT IGNORE INTO law_values (\`key\`, year, value, note) VALUES
-     ('emiratisation_min_headcount', 2022, 50, 'Seeded — verify with MOHRE'),
-     ('emiratisation_target_percent', 2024, 6, 'Seeded — verify with MOHRE'),
-     ('emiratisation_target_percent', 2025, 8, 'Seeded — verify with MOHRE'),
-     ('emiratisation_target_percent', 2026, 10, 'Seeded — verify with MOHRE'),
-     ('emiratisation_fine_per_year', 2024, 84000, 'Seeded — verify with MOHRE'),
-     ('emiratisation_fine_per_year', 2025, 96000, 'Seeded — verify with MOHRE'),
-     ('emiratisation_fine_per_year', 2026, 108000, 'Seeded — verify with MOHRE')`,
+     ('emiratisation_min_headcount', 2022, 50, 'Cabinet Resolution 18/2022: companies with 50+ skilled employees'),
+     ('emiratisation_target_percent', 2023, 4, 'Cabinet Resolution 18/2022: +2 points a year (1 per half-year)'),
+     ('emiratisation_target_percent', 2024, 6, 'Cabinet Resolution 18/2022: +2 points a year (1 per half-year)'),
+     ('emiratisation_target_percent', 2025, 8, 'Cabinet Resolution 18/2022: +2 points a year (1 per half-year)'),
+     ('emiratisation_target_percent', 2026, 10, 'Cabinet Resolution 18/2022: +2 points a year (1 per half-year)'),
+     ('emiratisation_fine_per_year', 2023, 84000, 'MoHRE: AED 7,000 a month for 2023 targets'),
+     ('emiratisation_fine_per_year', 2024, 96000, 'MoHRE (WAM, Sep 2024): AED 96,000 for 2024 targets, collected Jan 2025'),
+     ('emiratisation_fine_per_year', 2025, 108000, 'MoHRE (Gulf News): AED 108,000 for 2025 targets, collected Jan 2026'),
+     ('emiratisation_fine_per_year', 2026, 120000, 'MoHRE (Emirates 24|7, Jun 2026): AED 10,000 a month from 1 Jul 2026')`,
+  // The first seed of these figures had the fines one year behind. Correct the
+  // rows an admin has not touched (still carrying the placeholder note).
+  `UPDATE law_values SET
+       value = CASE year WHEN 2024 THEN 96000 WHEN 2025 THEN 108000 WHEN 2026 THEN 120000 ELSE value END,
+       note = CASE year
+         WHEN 2024 THEN 'MoHRE (WAM, Sep 2024): AED 96,000 for 2024 targets, collected Jan 2025'
+         WHEN 2025 THEN 'MoHRE (Gulf News): AED 108,000 for 2025 targets, collected Jan 2026'
+         WHEN 2026 THEN 'MoHRE (Emirates 24|7, Jun 2026): AED 10,000 a month from 1 Jul 2026'
+         ELSE note END
+     WHERE \`key\` = 'emiratisation_fine_per_year' AND note = 'Seeded — verify with MOHRE'`,
+  `UPDATE law_values SET note = CASE \`key\`
+         WHEN 'emiratisation_min_headcount' THEN 'Cabinet Resolution 18/2022: companies with 50+ skilled employees'
+         ELSE 'Cabinet Resolution 18/2022: +2 points a year (1 per half-year)' END
+     WHERE \`key\` IN ('emiratisation_target_percent', 'emiratisation_min_headcount') AND note = 'Seeded — verify with MOHRE'`,
   // Decree-Law 33/2021 art. 32: ten working days a year to sit exams, after two
   // years of service, for a student at an accredited UAE institution.
   `INSERT INTO leave_types (company_id, name, default_days, is_paid, paid_mode, accrual, eligibility_months,

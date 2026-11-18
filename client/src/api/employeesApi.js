@@ -49,3 +49,4 @@ export const getEmployeeNotes = (id) => api.get(`/employees/${id}/notes`);
 export const addEmployeeNote = (id, data) => api.post(`/employees/${id}/notes`, data);
 export const updateEmployeeNote = (id, noteId, data) => api.put(`/employees/${id}/notes/${noteId}`, data);
 export const deleteEmployeeNote = (id, noteId) => api.delete(`/employees/${id}/notes/${noteId}`);
+export const getHistory = (id) => api.get(`/employees/${id}/history`);

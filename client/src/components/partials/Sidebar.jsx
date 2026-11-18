@@ -9,7 +9,7 @@ import {
   BarChart3, ClipboardList, Trophy, Network, UserCog, Settings,
   Sparkles, ChevronDown, X, Package, Shield, Mail, Send,
   CalendarDays, Clock, Banknote, Inbox, HelpCircle, KeyRound, Share2, Globe,
-  Boxes, Layers, Fingerprint, ScanEye, Radar, HandCoins, Timer, Stamp, Activity, CalendarRange, ClipboardCheck, GraduationCap, ShieldCheck, Megaphone, BookOpenCheck, Gavel
+  Boxes, Layers, Fingerprint, ScanEye, Radar, HandCoins, Timer, Stamp, Activity, CalendarRange, ClipboardCheck, GraduationCap, ShieldCheck, Megaphone, BookOpenCheck, Gavel, HeartHandshake
 } from 'lucide-react';
 import { cn } from '@utils/cn';
 import * as portalApi from '@api/portalApi';
@@ -74,6 +74,7 @@ const buildMenuGroups = (t) => [
         { path: '/training', icon: GraduationCap, label: t('nav.training'), roles: HR_ONLY },
         { path: '/communications', icon: Megaphone, label: t('nav.communications'), roles: HR_ONLY },
         { path: '/disciplinary', icon: Gavel, label: t('nav.disciplinary'), roles: HR_ONLY },
+        { path: '/benefits', icon: HeartHandshake, label: t('nav.benefits'), roles: HR_ONLY },
         { path: '/offboarding', icon: DoorOpen, label: t('nav.offboarding'), roles: HR_ONLY },
       ],
     },
@@ -138,6 +139,7 @@ const buildMenuGroups = (t) => [
         { path: '/portal/reviews', icon: ClipboardCheck, label: t('nav.my_reviews') },
         { path: '/portal/announcements', icon: Megaphone, label: t('nav.announcements') },
         { path: '/portal/policies', icon: BookOpenCheck, label: t('nav.policies') },
+        { path: '/portal/benefits', icon: HeartHandshake, label: t('nav.my_benefits') },
         // Only for people who manage someone (see hasTeam in Sidebar).
         { path: '/portal/team', icon: Users, label: t('nav.my_team'), requiresTeam: true },
         // For anyone who is an approver: a manager, or named in a chain step.

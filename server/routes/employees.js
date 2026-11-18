@@ -4,6 +4,7 @@ import { auth } from '../middleware/auth.js';
 import { requireModule, MODULES } from '../config/permissions.js';
 import { authorize } from '../middleware/rbac.js';
 import { addAudit } from '../services/auditService.js';
+import { diffFields } from '../services/historyService.js';
 import { tenantScope, companyClause, resolveWriteCompanyId } from '../middleware/tenant.js';
 import { validate } from '../middleware/validate.js';
 import bcrypt from 'bcryptjs';
@@ -286,7 +287,7 @@ router.post('/:id/create-login', authorize('admin', 'hr_manager'), async (req, r
     }
     if (!userId) return res.status(500).json({ error: 'Could not generate a unique username, try again' });
 
-    await addAudit(pool, req.user, 'Employees', 'Login Created', `Login account created for employee ${emp.first_name} ${emp.last_name}`);
+    await addAudit(pool, req.user, 'Employees', 'Login Created', `Login account created for employee ${emp.first_name} ${emp.last_name}`, null, { type: 'employee', id: emp.id });
     res.status(201).json({ user_id: userId, username, password: tempPassword });
   } catch (err) { console.error('POST /employees/:id/create-login error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
@@ -470,6 +471,7 @@ router.put('/:id/bank', authorize('admin', 'hr_manager'), async (req, res) => {
     if (!IBAN_RE.test(iban)) return res.status(422).json({ error: 'Invalid IBAN format' });
     const METHODS = ['Bank Transfer', 'WPS', 'Cheque', 'Cash'];
     const method = METHODS.includes(transfer_method) ? transfer_method : 'Bank Transfer';
+    const [[bankBefore]] = await pool.query('SELECT * FROM employee_bank_details WHERE employee_id = ?', [emp.id]);
 
     await pool.query(
       `INSERT INTO employee_bank_details
@@ -482,7 +484,8 @@ router.put('/:id/bank', authorize('admin', 'hr_manager'), async (req, res) => {
          verified=0, verified_by=NULL, verified_at=NULL`,
       [emp.id, emp.company_id, bank_name, account_holder_name, account_number, iban,
         swift_code || null, branch_name || null, method, salary_currency || null, notes || null]);
-    await addAudit(pool, req.user, 'Employees', 'Bank Details Updated', `Bank account saved for ${emp.first_name} ${emp.last_name} (pending verification)`);
+    await addAudit(pool, req.user, 'Employees', 'Bank Details Updated', `Bank account saved for ${emp.first_name} ${emp.last_name} (pending verification)`,
+      null, { type: 'employee', id: emp.id, changes: diffFields(bankBefore || null, { bank_name, account_holder_name, account_number, iban, swift_code: swift_code || null, branch_name: branch_name || null, transfer_method: method, salary_currency: salary_currency || null }) });
     res.json({ success: true });
   } catch (err) { console.error('PUT /employees/:id/bank error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
@@ -499,7 +502,7 @@ router.post('/:id/bank/verify', authorize('admin', 'hr_manager'), async (req, re
     if (!letter) return res.status(422).json({ error: 'Attach the bank-stamped IBAN letter before verifying the account' });
 
     await pool.query('UPDATE employee_bank_details SET verified = 1, verified_by = ?, verified_at = NOW() WHERE employee_id = ?', [req.user.id, emp.id]);
-    await addAudit(pool, req.user, 'Employees', 'Bank Details Verified', `Bank account verified for ${emp.first_name} ${emp.last_name}`);
+    await addAudit(pool, req.user, 'Employees', 'Bank Details Verified', `Bank account verified for ${emp.first_name} ${emp.last_name}`, null, { type: 'employee', id: emp.id });
     res.json({ success: true });
   } catch (err) { console.error('POST /employees/:id/bank/verify error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
@@ -516,7 +519,7 @@ router.post('/:id/bank/files', authorize('admin', 'hr_manager'), acceptBankFile,
       file_name: req.file.originalname, file_type: req.file.mimetype, file_size: req.file.size,
       storage_key: req.file.filename, uploaded_by: req.user.id,
     });
-    await addAudit(pool, req.user, 'Employees', 'IBAN Letter Attached', `${kind} attached for ${emp.first_name} ${emp.last_name}`);
+    await addAudit(pool, req.user, 'Employees', 'IBAN Letter Attached', `${kind} attached for ${emp.first_name} ${emp.last_name}`, null, { type: 'employee', id: emp.id });
     res.status(201).json({ id: r.insertId, kind });
   } catch (err) { console.error('POST /employees/:id/bank/files error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
@@ -549,7 +552,7 @@ router.delete('/:id/bank/files/:fileId', authorize('admin'), async (req, res) =>
       const [[left]] = await pool.query("SELECT id FROM employee_bank_files WHERE employee_id = ? AND kind = 'iban_letter' LIMIT 1", [emp.id]);
       if (!left) await pool.query('UPDATE employee_bank_details SET verified = 0, verified_by = NULL, verified_at = NULL WHERE employee_id = ?', [emp.id]);
     }
-    await addAudit(pool, req.user, 'Employees', 'Bank File Removed', `${f.kind} removed for ${emp.first_name} ${emp.last_name}`);
+    await addAudit(pool, req.user, 'Employees', 'Bank File Removed', `${f.kind} removed for ${emp.first_name} ${emp.last_name}`, null, { type: 'employee', id: emp.id });
     res.json({ success: true });
   } catch (err) { console.error('DELETE bank file error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
@@ -577,7 +580,7 @@ router.post('/:id/photo', authorize('admin', 'hr_manager'), acceptPhoto, async (
     if (emp.photo_path) fs.unlink(uploadPath('employee_photos', emp.photo_path), () => {});
     const type = PHOTO_EXT[req.file.mimetype];
     await pool.query('UPDATE employees SET photo_path = ?, photo_type = ? WHERE id = ?', [req.file.filename, type, emp.id]);
-    await addAudit(pool, req.user, 'Employees', 'Photo Updated', `Profile photo set for ${emp.first_name} ${emp.last_name}`);
+    await addAudit(pool, req.user, 'Employees', 'Photo Updated', `Profile photo set for ${emp.first_name} ${emp.last_name}`, null, { type: 'employee', id: emp.id });
     res.json({ success: true, type });
   } catch (err) { console.error('POST /employees/:id/photo error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
@@ -602,7 +605,7 @@ router.delete('/:id/photo', authorize('admin'), async (req, res) => {
     if (!emp) return res.status(404).json({ error: 'Employee not found' });
     if (emp.photo_path) fs.unlink(uploadPath('employee_photos', emp.photo_path), () => {});
     await pool.query('UPDATE employees SET photo_path = NULL, photo_type = NULL WHERE id = ?', [emp.id]);
-    await addAudit(pool, req.user, 'Employees', 'Photo Removed', `Profile photo removed for ${emp.first_name} ${emp.last_name}`);
+    await addAudit(pool, req.user, 'Employees', 'Photo Removed', `Profile photo removed for ${emp.first_name} ${emp.last_name}`, null, { type: 'employee', id: emp.id });
     res.json({ success: true });
   } catch (err) { console.error('DELETE /employees/:id/photo error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
@@ -730,6 +733,7 @@ router.put('/:id', authorize('admin', 'hr_manager'), async (req, res) => {
     if (!Object.keys(data).length) return res.status(400).json({ error: 'Nothing to update' });
 
     const co = companyClause(req, 'company_id');
+    const [[before]] = await pool.query('SELECT * FROM employees WHERE id = ?' + co.clause, [req.params.id, ...co.params]);
     const [result] = await pool.query('UPDATE employees SET ? WHERE id = ?' + co.clause, [data, req.params.id, ...co.params]);
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Employee not found' });
     let waived = 0;
@@ -738,7 +742,8 @@ router.put('/:id', authorize('admin', 'hr_manager'), async (req, res) => {
       data.is_owner === undefined
         ? `Employee #${req.params.id} updated`
         : `Employee #${req.params.id} ${data.is_owner ? 'marked as company owner (exempt from attendance)' : 'no longer marked as company owner'}`
-          + (waived ? `; ${waived} open attendance case(s) waived` : ''));
+          + (waived ? `; ${waived} open attendance case(s) waived` : ''),
+      null, { type: 'employee', id: Number(req.params.id), changes: diffFields(before, data, Object.keys(data)) });
     res.json({ success: true });
   } catch (err) {
     if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'An employee with this email already exists in this company' });
@@ -802,7 +807,7 @@ router.post('/:id/notes', authorize(...NOTE_ROLES), async (req, res) => {
       created_by: req.user.id, author_name: author,
     }]);
     await addAudit(pool, req.user, 'Employees', 'Note Added',
-      `Note added to employee #${emp.id} (${emp.first_name} ${emp.last_name})`, emp.company_id);
+      `Note added to employee #${emp.id} (${emp.first_name} ${emp.last_name})`, emp.company_id, { type: 'employee', id: emp.id });
     res.status(201).json(await getScopedNote(req, emp.id, r.insertId));
   } catch (err) {
     console.error('POST /employees/:id/notes error:', err);
@@ -843,7 +848,7 @@ router.delete('/:id/notes/:noteId', authorize('admin'), async (req, res) => {
     if (!note) return res.status(404).json({ error: 'Note not found' });
     await pool.query('DELETE FROM employee_notes WHERE id = ?', [note.id]);
     await addAudit(pool, req.user, 'Employees', 'Note Deleted',
-      `Note #${note.id} by ${note.author_name} deleted from employee #${emp.id}`, emp.company_id);
+      `Note #${note.id} by ${note.author_name} deleted from employee #${emp.id}`, emp.company_id, { type: 'employee', id: emp.id });
     res.json({ success: true });
   } catch (err) {
     console.error('DELETE /employees/:id/notes/:noteId error:', err);
@@ -918,7 +923,7 @@ router.post('/:id/documents', authorize('admin', 'hr_manager', 'hr_specialist'),
 
     await addAudit(pool, req.user, 'Employees', 'Document Uploaded', `Uploaded document "${req.file.originalname}" for employee #${employeeId}`
       + (fields.data.doc_type ? ` (${fields.data.doc_type}${fields.data.expiry_date ? `, expires ${fields.data.expiry_date}` : ''})` : '')
-      + overrideNote(req, fields.warnings));
+      + overrideNote(req, fields.warnings), null, { type: 'employee', id: Number(employeeId) });
     res.status(201).json({ id: result.insertId, file_name: req.file.originalname, file_url: req.file.filename, success: true });
   } catch (err) {
     console.error('POST /employees/:id/documents error:', err);
@@ -962,7 +967,7 @@ router.put('/:id/documents/:docId', authorize('admin', 'hr_manager'), async (req
     await addAudit(pool, req.user, 'Employees', 'Document Updated',
       `Document "${doc.file_name}" of employee #${employeeId} updated`
       + (expiryChanged ? ` — expiry ${doc.expiry_date || 'unset'} → ${data.expiry_date || 'unset'}` : '')
-      + overrideNote(req, fields.warnings));
+      + overrideNote(req, fields.warnings), null, { type: 'employee', id: Number(employeeId) });
     res.json({ success: true });
   } catch (err) {
     console.error('PUT /employees/:id/documents/:docId error:', err);
@@ -1005,7 +1010,7 @@ router.delete('/:id/documents/:docId', authorize('admin', 'hr_manager'), async (
     }
 
     await addAudit(pool, req.user, 'Employees', 'Document Deleted',
-      `Deleted ${doc.category || 'General'} document "${doc.file_name}" from employee #${employeeId}`);
+      `Deleted ${doc.category || 'General'} document "${doc.file_name}" from employee #${employeeId}`, null, { type: 'employee', id: Number(employeeId) });
     res.json({ success: true });
   } catch (err) {
     console.error('DELETE /employees/:id/documents/:docId error:', err);
@@ -1045,6 +1050,20 @@ router.get('/:id/documents/:docId/download', async (req, res) => {
     console.error('GET /employees/:id/documents/:docId/download error:', err);
     res.status(500).json({ error: 'Failed to download document' });
   }
+});
+
+// GET /api/employees/:id/history — everything recorded about this person, newest
+// first, with the fields that changed (bank numbers masked). HR only.
+router.get('/:id/history', authorize('admin', 'hr_manager'), async (req, res) => {
+  try {
+    const co = companyClause(req, 'company_id');
+    const [[emp]] = await pool.query('SELECT id FROM employees WHERE id = ?' + co.clause, [req.params.id, ...co.params]);
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+    const [rows] = await pool.query(
+      `SELECT id, user_name, module, action, detail, changes, created_at FROM audit_logs
+        WHERE entity_type = 'employee' AND entity_id = ? ORDER BY created_at DESC, id DESC LIMIT 300`, [emp.id]);
+    res.json(rows.map((r) => ({ ...r, changes: typeof r.changes === 'string' ? JSON.parse(r.changes) : (r.changes || []) })));
+  } catch (err) { console.error('GET /employees/:id/history error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
 export default router;

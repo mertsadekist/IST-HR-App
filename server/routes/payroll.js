@@ -3,6 +3,7 @@ import pool from '../config/db.js';
 import { auth } from '../middleware/auth.js';
 import { authorize } from '../middleware/rbac.js';
 import { addAudit } from '../services/auditService.js';
+import { diffFields } from '../services/historyService.js';
 import { tenantScope, companyClause, ownRecordsClause } from '../middleware/tenant.js';
 import { validate } from '../middleware/validate.js';
 import { computePayrollItem } from '../services/payrollService.js';
@@ -668,6 +669,7 @@ router.put('/employees/:employeeId/components', authorize('admin', 'hr_manager')
         c.effective_from || null, c.effective_to || null, req.user.id]);
     }
 
+    const [prevComponents] = await pool.query('SELECT component_code, amount FROM employee_pay_components WHERE employee_id = ?', [emp.id]);
     conn = await pool.getConnection();
     await conn.beginTransaction();
     await conn.query('DELETE FROM employee_pay_components WHERE employee_id = ?', [emp.id]);
@@ -679,7 +681,11 @@ router.put('/employees/:employeeId/components', authorize('admin', 'hr_manager')
     await conn.commit();
     await addAudit(pool, req.user, 'Payroll', 'Components Updated',
       `Salary breakdown of ${emp.first_name} ${emp.last_name} set: `
-      + (clean.map((c) => `${c[2]} ${c[3].toFixed(2)}`).join(', ') || 'none'));
+      + (clean.map((c) => `${c[2]} ${c[3].toFixed(2)}`).join(', ') || 'none'),
+      null, { type: 'employee', id: emp.id, changes: diffFields(
+        Object.fromEntries(prevComponents.map((p) => [p.component_code, Number(p.amount)])),
+        Object.fromEntries([...new Set([...prevComponents.map((p) => p.component_code), ...clean.map((c) => c[2])])]
+          .map((code) => [code, clean.find((c) => c[2] === code)?.[3] ?? null]))) });
     res.json({ success: true });
   } catch (err) {
     if (conn) { try { await conn.rollback(); } catch { /* not in a transaction */ } }
