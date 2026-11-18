@@ -7,7 +7,7 @@ import dayjs from 'dayjs';
 import {
   ArrowLeft, Camera, Loader2, Download, Mail, Phone, Building2, CalendarDays, UserRound, Hash,
   LayoutDashboard, IdCard, FileText, Banknote, Clock, CalendarClock, Plane, Wallet, Landmark, Laptop, History, UserX, GraduationCap,
-  StickyNote, Inbox, ClipboardCheck, Scale,
+  StickyNote, Inbox, ClipboardCheck, Scale, HeartHandshake, ScrollText,
 } from 'lucide-react';
 import Card from '@components/ui/Card';
 import Badge from '@components/ui/Badge';
@@ -19,6 +19,8 @@ import EmployeeHistoryReport from './components/EmployeeHistoryReport';
 import EmployeeDocumentsTab from './components/EmployeeDocumentsTab';
 import EmployeePayComponentsTab from './components/EmployeePayComponentsTab';
 import EmployeeTrainingTab from './components/EmployeeTrainingTab';
+import EmployeeBenefitsTab from './components/EmployeeBenefitsTab';
+import EmployeeHistoryTab from './components/EmployeeHistoryTab';
 import ProfileDetailsTab from './components/profile/ProfileDetailsTab';
 import EmployeeOverviewTab from './components/profile/EmployeeOverviewTab';
 import EmployeePayslipsTab from './components/profile/EmployeePayslipsTab';
@@ -93,6 +95,7 @@ export default function EmployeeProfile() {
       { key: 'pay', icon: Wallet, label: t('pay_components.tab') },
       canPayroll && { key: 'salary_reviews', icon: Scale, label: t('empProfile.tab_salary_reviews') },
       { key: 'bank', icon: Landmark, label: t('employees.bank_tab') },
+      { key: 'benefits', icon: HeartHandshake, label: t('benefits.tab') },
     ] },
     { key: 'time', label: t('empProfile.grp_time'), tabs: [
       canAttendance && { key: 'attendance', icon: Clock, label: t('empProfile.tab_attendance') },
@@ -107,6 +110,7 @@ export default function EmployeeProfile() {
     { key: 'records', label: t('empProfile.grp_records'), tabs: [
       { key: 'assets', icon: Laptop, label: t('employees.assets_tab') },
       { key: 'timeline', icon: History, label: t('empProfile.tab_timeline') },
+      canManage && { key: 'changes', icon: ScrollText, label: t('history.tab') },
     ] },
   ].map((g) => ({ ...g, tabs: g.tabs.filter(Boolean) })).filter((g) => g.tabs.length);
   const tabs = groups.flatMap((g) => g.tabs);
@@ -235,6 +239,8 @@ export default function EmployeeProfile() {
     case 'bank': body = <EmployeeBankTab employee={employee} t={t} isAdmin={isAdmin} />; break;
     case 'assets': body = <EmployeeAssetsTab employee={employee} t={t} canReveal={canManage} />; break;
     case 'training': body = <EmployeeTrainingTab employee={employee} t={t} canEdit={canManage} />; break;
+    case 'benefits': body = <EmployeeBenefitsTab employee={employee} t={t} canEdit={canManage} />; break;
+    case 'changes': body = <EmployeeHistoryTab employee={employee} t={t} />; break;
     case 'timeline': body = <EmployeeTimelineTab employee={employee} t={t} />; break;
     case 'notes': body = <EmployeeNotesTab employee={employee} t={t} />; break;
     case 'requests': body = <EmployeeRequestsTab employee={employee} t={t} />; break;
