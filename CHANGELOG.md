@@ -14,6 +14,20 @@ All notable changes to the IST HR System. Dates are ISO (YYYY‑MM‑DD). The ap
 - Google Drive attendance sync, its CSV parser, `GOOGLE_DRIVE_SA_*` / `ATTENDANCE_DRIVE_FOLDER_ID` variables and the `google-auth-library` dependency. Existing `Drive Sync` attendance rows and the `attendance_sync_*` ledger tables are kept as history.
 
 ### Added
+- **Announcements, policies with acknowledgement, and the disciplinary file** (`services/hrServicesService.js`, `routes/hrServices.js`):
+  - **Announcements** (HR → *Announcements & policies*; portal → *Announcements*). A title and message, normal or important, shown until an optional date.
+    - An admin's announcements go to every company; an HR manager's go to the selected company.
+    - Publishing notifies everyone it is for. Employees see unread ones marked, and opening one marks it read. HR sees how many have read each.
+  - **Policies** (same HR page; portal → *Policies*). Policy text and/or a PDF (uploads volume, up to 20 MB), a category, and whether employees must acknowledge it, optionally by a date.
+    - The first publication is version 1; *Publish new version* after an edit asks everyone to acknowledge again.
+    - Employees read the policy and press *Acknowledge*; it is recorded per person and version.
+    - HR sees how many of the current employees have acknowledged, the list of who has and who has not, and can send a reminder to those who have not. Retired policies drop out of the portal.
+  - **Disciplinary file** (HR → *Disciplinary*). One record per incident:
+    - the employee, category, date and what happened;
+    - the action taken (counselling, verbal, written or final warning, suspension, termination) and the employee's response;
+    - the warning letter issued from *Legal letters*, linked to the case.
+    - Cases are opened and closed by HR; only an admin deletes. It is not shown in the portal.
+  - Schema at boot through `ensureSchema`: `announcements`, `announcement_reads`, `policies`, `policy_acknowledgements`, `disciplinary_cases`.
 - **Compliance centre: needs attention, deadlines and Emiratisation** (`services/complianceService.js`, `routes/compliance.js`):
   - **Needs your attention** (on the dashboard for admin, HR manager and accountant, and in Compliance → *Compliance centre*). One list of everything overdue or at risk, most urgent first, each with a count, a few names and a link to where it is fixed:
     - expired and soon-expiring employee documents;
