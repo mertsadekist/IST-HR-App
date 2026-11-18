@@ -2485,11 +2485,19 @@
     "related": "ذات صلة",
     "group_start": "البدء",
     "group_recruitment": "التوظيف",
-    "group_lifecycle": "دورة حياة الموظف",
+    "group_lifecycle": "الموظفون",
     "group_compliance": "الامتثال",
     "group_analytics": "التحليلات",
     "group_operations": "العمليات والإعدادات",
-    "group_portal": "بوابة الموظف"
+    "group_portal": "بوابة الموظف",
+    "group_time": "الحضور والإجازات",
+    "group_payroll": "الرواتب",
+    "group_talent": "المواهب",
+    "group_services": "الخدمات والموافقات",
+    "group_assets": "الأصول والصلاحيات",
+    "guide_title": "جديد الإصدار 2.5: دليل التحديثات المصوّر",
+    "guide_text": "كل ميزة جديدة مع صورة الشاشة وخطوات استخدامها، بالعربية والإنجليزية.",
+    "guide_open": "افتح الدليل"
   },
   "digital_access": {
     "access_level": "مستوى الصلاحية",

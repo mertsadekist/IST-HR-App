@@ -14,6 +14,10 @@ All notable changes to the IST HR System. Dates are ISO (YYYY‑MM‑DD). The ap
 - Google Drive attendance sync, its CSV parser, `GOOGLE_DRIVE_SA_*` / `ATTENDANCE_DRIVE_FOLDER_ID` variables and the `google-auth-library` dependency. Existing `Drive Sync` attendance rows and the `attendance_sync_*` ledger tables are kept as history.
 
 ### Added
+- **Help centre rebuilt for v2.5** (`client/src/data/kb`, `client/public/kb`):
+  - 78 articles in Arabic and English (up from 39), one for every page, grouped into 12 areas: getting started, recruitment, people, attendance and leave, payroll, talent, services and approvals, assets and access, compliance, analytics, settings, and the employee portal.
+  - Fresh screenshots of every page, with names, salaries, emails, phone numbers and credentials blurred. Old screenshots of the same pages were replaced.
+  - A banner at the top of the help centre and a What’s new article open the illustrated updates guide (`/kb/guide/index.html`, Arabic and English).
 - **WPS bank file (SIF) for Wio and a Zoho Books payroll journal** (`services/payrollExportService.js`, Settings → *Bank file and accounting*):
   - **SIF.** An approved run downloads as the Central Bank's Salary Information File: one EDR line per employee (14-digit personal number, the employee bank's 9-digit routing code, IBAN, period, days, fixed and variable pay, days on leave) and an SCR line with the 13-digit employer ID, the paying bank's routing code and the total. Fixed + variable is the net transferred.
   - **What it needs** is set once: each company's employer ID (defaults to the MOL ID, zero-padded) and paying-bank routing code, and a routing code per employee bank (keyed by the 3-digit bank code inside the IBAN). A missing piece is reported by name instead of producing a file the bank would reject.

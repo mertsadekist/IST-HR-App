@@ -2485,11 +2485,19 @@
     "related": "Related",
     "group_start": "Getting started",
     "group_recruitment": "Recruitment",
-    "group_lifecycle": "Employee lifecycle",
+    "group_lifecycle": "People",
     "group_compliance": "Compliance",
     "group_analytics": "Analytics",
     "group_operations": "Operations & Settings",
-    "group_portal": "Employee portal"
+    "group_portal": "Employee portal",
+    "group_time": "Attendance & leave",
+    "group_payroll": "Payroll",
+    "group_talent": "Talent",
+    "group_services": "Services & approvals",
+    "group_assets": "Assets & access",
+    "guide_title": "New in v2.5: the illustrated updates guide",
+    "guide_text": "Every new feature with a screenshot and the steps to use it, in Arabic and English.",
+    "guide_open": "Open the guide"
   },
   "digital_access": {
     "access_level": "Access level",

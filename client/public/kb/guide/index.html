@@ -1,0 +1,685 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>IST HR Updates Guide</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: a sticky bar (language + audience filter), a short opener with the setup checklist,
+   then one band per area; each feature pairs its instructions with the real screen. */
+:root {
+  --bg: #f6f5fa; --surface: #ffffff; --ink: #1c1830; --muted: #5d5872; --line: #e5e1ef;
+  --accent: #6b2fd6; --accent-ink: #ffffff; --accent-soft: #efe8fd; --note-bg: #fff7e6; --note-ink: #7a4a00;
+  --t-hr: #efe8fd; --t-hr-ink: #5b23c2; --t-pay: #e3f5ef; --t-pay-ink: #0f6b4f; --t-mgr: #fdf0dc; --t-mgr-ink: #8a5300;
+  --t-emp: #e5f0fc; --t-emp-ink: #1f5fa8; --t-adm: #fbe8ee; --t-adm-ink: #a2244c;
+  --shadow: 0 1px 2px rgba(28,24,48,.06), 0 8px 24px rgba(28,24,48,.06);
+  --f-ar: "IBM Plex Sans Arabic", "IBM Plex Sans", "Segoe UI", Tahoma, sans-serif;
+  --f-en: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #13111b; --surface: #1c1928; --ink: #ece9f6; --muted: #a8a2bd; --line: #2d2940;
+  --accent: #a98bff; --accent-ink: #16122a; --accent-soft: #2a2244; --note-bg: #2e2412; --note-ink: #f3c87a;
+  --t-hr: #2a2244; --t-hr-ink: #c5b2ff; --t-pay: #143229; --t-pay-ink: #7fdcb8; --t-mgr: #33270f; --t-mgr-ink: #f1c27a;
+  --t-emp: #152a42; --t-emp-ink: #93c2f5; --t-adm: #3a1825; --t-adm-ink: #f3a1bb;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25); color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #13111b; --surface: #1c1928; --ink: #ece9f6; --muted: #a8a2bd; --line: #2d2940;
+  --accent: #a98bff; --accent-ink: #16122a; --accent-soft: #2a2244; --note-bg: #2e2412; --note-ink: #f3c87a;
+  --t-hr: #2a2244; --t-hr-ink: #c5b2ff; --t-pay: #143229; --t-pay-ink: #7fdcb8; --t-mgr: #33270f; --t-mgr-ink: #f1c27a;
+  --t-emp: #152a42; --t-emp-ink: #93c2f5; --t-adm: #3a1825; --t-adm-ink: #f3a1bb;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25); color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-ar); font-size: 15px; line-height: 1.7 }
+#app[data-lang="en"] { font-family: var(--f-en) }
+#app[data-lang="ar"] .en, #app[data-lang="en"] .ar { display: none !important }
+.wrap { max-width: 1180px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)) }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface) }
+.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line) }
+.bar .wrap { display: flex; align-items: center; gap: 12px; padding-block: 10px; flex-wrap: wrap }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; min-width: 0 }
+.mark { width: 32px; height: 32px; border-radius: 9px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font-size: 13px; font-family: var(--f-en); letter-spacing: .02em; flex: none }
+.brand small { display: block; font-weight: 500; color: var(--muted); font-size: 12px; line-height: 1.2 }
+.filters { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; flex: 1; min-width: 0; padding-block: 2px }
+.filters::-webkit-scrollbar { display: none }
+.chip { border: 1px solid var(--line); background: var(--surface); color: var(--muted); border-radius: 999px; padding: 5px 12px; font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap }
+.chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent) }
+.chip:focus-visible, .lang:focus-visible, .shot:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+.lang { border: 1px solid var(--accent); color: var(--accent); background: transparent; border-radius: 9px; padding: 6px 12px; font: inherit; font-weight: 600; font-size: 13px; cursor: pointer; flex: none }
+.lang .ar { font-family: var(--f-en) } .lang .en { font-family: var(--f-ar) }
+header.top { padding-block: 40px 24px }
+.eyebrow { color: var(--accent); font-weight: 600; font-size: 13px; letter-spacing: .04em }
+h1 { font-size: clamp(28px, 4vw, 40px); line-height: 1.25; margin: 6px 0 10px; text-wrap: balance }
+.lede { color: var(--muted); max-width: 68ch; margin: 0 }
+.meta { display: flex; gap: 10px 20px; flex-wrap: wrap; margin-top: 18px; color: var(--muted); font-size: 13px }
+.meta b { color: var(--ink); font-variant-numeric: tabular-nums }
+.opener { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 20px; margin-bottom: 28px }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px }
+.panel h2 { font-size: 17px; margin: 0 0 10px }
+.toc { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px }
+.toc a { display: flex; justify-content: space-between; gap: 8px; text-decoration: none; color: var(--ink); padding: 9px 12px; border-radius: 10px; background: var(--bg); font-weight: 500 }
+.toc a:hover { background: var(--accent-soft) }
+.toc .n { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 13px }
+.checklist { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px }
+.checklist li { display: flex; gap: 10px; align-items: flex-start; font-size: 14px }
+.checklist li::before { content: ""; flex: none; width: 16px; height: 16px; border: 1.5px solid var(--accent); border-radius: 4px; margin-top: 4px }
+.privacy { font-size: 13px; color: var(--muted); margin: 12px 0 0 }
+section.group { padding-block: 26px }
+.group-head { display: flex; gap: 14px; align-items: baseline; border-bottom: 2px solid var(--ink); padding-bottom: 10px; margin-bottom: 18px }
+.group-head .ico { font-size: 20px; color: var(--accent); font-family: var(--f-en) }
+.group-head h2 { margin: 0; font-size: 24px; text-wrap: balance }
+.group-head p { margin: 0; color: var(--muted); font-size: 14px }
+.group-head > div { min-width: 0 }
+.feature { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 22px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 22px; margin-bottom: 16px; box-shadow: var(--shadow) }
+.feature.no-shot { grid-template-columns: minmax(0, 1fr) }
+.feature[hidden] { display: none }
+.copy { min-width: 0 }
+.who { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px }
+.tag { font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px }
+.t-hr { background: var(--t-hr); color: var(--t-hr-ink) } .t-pay { background: var(--t-pay); color: var(--t-pay-ink) }
+.t-mgr { background: var(--t-mgr); color: var(--t-mgr-ink) } .t-emp { background: var(--t-emp); color: var(--t-emp-ink) }
+.t-adm { background: var(--t-adm); color: var(--t-adm-ink) }
+.feature h3 { font-size: 20px; margin: 0 0 8px; line-height: 1.35; text-wrap: balance }
+.where { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; margin: 0 0 10px; font-size: 13px }
+.where-label { color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; font-size: 11px }
+.path { background: var(--accent-soft); color: var(--ink); padding: 2px 9px; border-radius: 6px; font-weight: 500 }
+.what { margin: 0 0 12px; max-width: 65ch }
+.feature h4 { font-size: 13px; color: var(--muted); margin: 14px 0 6px; font-weight: 600; letter-spacing: .03em }
+.steps { margin: 0; padding: 0; list-style: none; counter-reset: s; display: grid; gap: 8px }
+.steps li { counter-increment: s; display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 10px; font-size: 14.5px }
+.steps li::before { content: counter(s); width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font-size: 12px; font-weight: 700; font-family: var(--f-en); margin-top: 2px }
+.note { background: var(--note-bg); color: var(--note-ink); border-radius: 10px; padding: 10px 12px; font-size: 13.5px; margin: 14px 0 0 }
+.legend { font-family: var(--f-mono); font-size: 12.5px; color: var(--muted); margin: 12px 0 0; direction: ltr; text-align: start }
+.tbl { overflow-x: auto; margin: 4px 0 8px; border: 1px solid var(--line); border-radius: 10px }
+.tbl table { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums }
+.tbl th, .tbl td { padding: 8px 10px; text-align: start; border-bottom: 1px solid var(--line); vertical-align: top }
+.tbl th { background: var(--bg); font-weight: 600; font-size: 12.5px; color: var(--muted) }
+.tbl tr:last-child td { border-bottom: 0 }
+.figs { display: grid; gap: 12px; align-content: start; min-width: 0 }
+.shot { position: relative; display: block; padding: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--bg); cursor: zoom-in; width: 100% }
+.shot img { display: block; width: 100%; height: auto; aspect-ratio: 1366 / 820 }
+.shot .zoom { position: absolute; inset-inline-end: 8px; bottom: 8px; background: rgba(20,16,36,.78); color: #fff; font-size: 12px; padding: 3px 9px; border-radius: 6px; opacity: 0; transition: opacity .15s }
+.shot:hover .zoom, .shot:focus-visible .zoom { opacity: 1 }
+footer { padding-block: 30px 50px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); margin-top: 20px }
+.empty { display: none; text-align: center; color: var(--muted); padding: 40px 0 }
+.lightbox { position: fixed; inset: 0; z-index: 20; background: rgba(10,8,20,.86); display: grid; place-items: center; padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); cursor: zoom-out }
+.lightbox img { max-width: 100%; max-height: 100%; border-radius: 10px; box-shadow: 0 20px 60px rgba(0,0,0,.5) }
+.lightbox button { position: absolute; top: max(14px, env(safe-area-inset-top, 0px)); inset-inline-end: max(14px, env(safe-area-inset-right, 0px)); background: #fff; color: #1c1830; border: 0; border-radius: 8px; padding: 6px 12px; font: inherit; font-weight: 600; cursor: pointer }
+@media (max-width: 900px) {
+  .opener, .feature { grid-template-columns: minmax(0, 1fr) }
+  .figs { order: -1 }
+}
+@media (max-width: 520px) { .toc { grid-template-columns: minmax(0, 1fr) } .bar .brand small { display: none } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important } }
+html { scroll-behavior: smooth; scroll-padding-top: 70px }
+</style>
+
+</head>
+<body>
+<div id="app" data-lang="ar" lang="ar" dir="rtl">
+  <div class="bar"><div class="wrap">
+    <div class="brand"><span class="mark">IST</span><span><span class="ar ">دليل التحديثات</span><span class="en ">Updates guide</span><small><span class="ar ">نظام IST للموارد البشرية</span><span class="en ">IST HR System</span></small></span></div>
+    <div class="filters" role="group" aria-label="Audience">
+      <button type="button" class="chip" data-who="all" aria-pressed="true"><span class="ar ">الكل</span><span class="en ">All</span></button>
+      <button type="button" class="chip" data-who="hr" aria-pressed="false"><span class="ar ">الموارد البشرية</span><span class="en ">HR</span></button>
+      <button type="button" class="chip" data-who="pay" aria-pressed="false"><span class="ar ">الرواتب والمحاسبة</span><span class="en ">Payroll &amp; finance</span></button>
+      <button type="button" class="chip" data-who="mgr" aria-pressed="false"><span class="ar ">المدراء</span><span class="en ">Managers</span></button>
+      <button type="button" class="chip" data-who="emp" aria-pressed="false"><span class="ar ">الموظفون</span><span class="en ">Employees</span></button>
+      <button type="button" class="chip" data-who="adm" aria-pressed="false"><span class="ar ">المسؤول</span><span class="en ">Admins</span></button>
+    </div>
+    <button type="button" class="lang" id="lang"><span class="ar">English</span><span class="en">العربية</span></button>
+  </div></div>
+
+  <header class="top wrap">
+    <div class="eyebrow"><span class="ar ">الإصدار 2.5 · نوفمبر 2026</span><span class="en ">Version 2.5 · November 2026</span></div>
+    <h1><span class="ar ">ما الجديد في نظام الموارد البشرية وكيف تستخدمه</span><span class="en ">What’s new in the HR system, and how to use it</span></h1>
+    <p class="lede"><span class="ar ">كل ما أُضيف وتغيّر في الفترة الأخيرة، مع صورة من الشاشة الحقيقية وخطوات الاستخدام. اختر فئتك من الشريط أعلاه لترى ما يخصك فقط، واضغط أي صورة لتكبيرها.</span><span class="en ">Everything added and changed recently, each with a picture of the real screen and the steps to use it. Pick your group in the bar above to see only what concerns you, and click any picture to enlarge it.</span></p>
+    <div class="meta"><span><b>7</b> <span class="ar ">أقسام</span><span class="en ">areas</span></span><span><b>27</b> <span class="ar ">ميزة</span><span class="en ">features</span></span><span><b>34</b> <span class="ar ">صورة شاشة</span><span class="en ">screenshots</span></span><span>hrapp.istrealestate.ae</span></div>
+  </header>
+
+  <div class="wrap opener">
+    <nav class="panel" aria-label="Contents">
+      <h2><span class="ar ">المحتويات</span><span class="en ">Contents</span></h2>
+      <div class="toc">
+        <a href="#overview"><span><span class="ar ">المتابعة والامتثال</span><span class="en ">Oversight and compliance</span></span><span class="n">3</span></a>
+        <a href="#payroll"><span><span class="ar ">الرواتب</span><span class="en ">Payroll</span></span><span class="n">7</span></a>
+        <a href="#time"><span><span class="ar ">الحضور والإجازات</span><span class="en ">Attendance and leave</span></span><span class="n">4</span></a>
+        <a href="#people"><span><span class="ar ">الفرق والموافقات والطلبات</span><span class="en ">Teams, approvals and requests</span></span><span class="n">3</span></a>
+        <a href="#talent"><span><span class="ar ">المواهب</span><span class="en ">Talent</span></span><span class="n">3</span></a>
+        <a href="#services"><span><span class="ar ">خدمات الموظفين</span><span class="en ">Employee services</span></span><span class="n">4</span></a>
+        <a href="#admin"><span><span class="ar ">إدارة النظام</span><span class="en ">System administration</span></span><span class="n">3</span></a>
+      </div>
+    </nav>
+    <div class="panel">
+      <h2><span class="ar ">قبل البدء: ما يحتاج إعداداً مرة واحدة</span><span class="en ">Before you start: one-time setup</span></h2>
+      <ul class="checklist ar"><li>رموز التوجيه للبنوك ورقم صاحب العمل لكل شركة (الإعدادات ← ملف البنك والمحاسبة).</li><li>أسماء حسابات Zoho Books كما هي في دليل الحسابات (نفس الصفحة).</li><li>المدير المباشر لكل موظف (ملف الموظف ← بيانات الملف).</li><li>سلاسل الموافقات لكل نوع طلب (الإعدادات ← سلاسل الموافقات).</li><li>إعداد معاش GPSSA لكل موظف مواطن (ملف الموظف ← بيانات الملف).</li><li>وثائق التأمين الجماعي ثم تسجيل الموظفين (الموارد البشرية ← المزايا).</li></ul>
+      <ul class="checklist en"><li>Bank routing codes and each company’s employer ID (Settings → Bank file and accounting).</li><li>Zoho Books account names as in your chart of accounts (same page).</li><li>A direct manager for every employee (Employee profile → Profile details).</li><li>Approval chains for each request type (Settings → Approval chains).</li><li>The GPSSA pension setting for each UAE national (Employee profile → Profile details).</li><li>Group insurance policies, then enrol employees (HR → Benefits).</li></ul>
+      <p class="privacy"><span class="ar ">الأسماء والرواتب والبيانات الشخصية في الصور مموّهة عمداً.</span><span class="en ">Names, salaries and personal details in the pictures are blurred on purpose.</span></p>
+    </div>
+  </div>
+
+  <main class="wrap">
+    
+    <section class="group" id="overview">
+      <div class="group-head"><span class="ico" aria-hidden="true">◎</span><div><h2><span class="ar ">المتابعة والامتثال</span><span class="en ">Oversight and compliance</span></h2><p><span class="ar ">أين ترى ما يحتاج تدخلاً اليوم، وما يقترب موعده، وموقف الشركة من القانون.</span><span class="en ">Where you see what needs action today, what is coming due, and where the company stands with the law.</span></p></div></div>
+      
+  <article class="feature" id="attention" data-who="hr pay adm">
+    <div class="copy">
+      <div class="who"><span class="tag t-hr"><span class="ar ">الموارد البشرية</span><span class="en ">HR</span></span><span class="tag t-pay"><span class="ar ">الرواتب والمحاسبة</span><span class="en ">Payroll &amp; finance</span></span><span class="tag t-adm"><span class="ar ">المسؤول</span><span class="en ">Admins</span></span></div>
+      <h3><span class="ar ">قائمة «يحتاج انتباهك»</span><span class="en ">Needs your attention</span></h3>
+      <p class="where"><span class="where-label"><span class="ar ">المكان</span><span class="en ">Where</span></span><span class="path"><span class="ar ">لوحة التحكم (أعلى الصفحة)</span><span class="en ">Dashboard (top of the page)</span></span></p>
+      <p class="what"><span class="ar ">تجمع كل ما هو متأخر أو معرّض للخطر في مكان واحد: تسويات متأخرة، شركات بلا مسير معتمد، إجازات تنتظر أكثر من 3 أيام، مستندات منتهية، وفجوة التوطين. مرتبة من الأخطر إلى الأقل.</span><span class="en ">Everything that is late or at risk in one place: overdue settlements, companies without an approved payroll, leave waiting over 3 days, expired documents, and the Emiratisation gap. Most urgent first.</span></p>
+      
+      <h4><span class="ar ">طريقة الاستخدام</span><span class="en ">How to use it</span></h4>
+      <ol class="steps ar"><li>افتح لوحة التحكم وابدأ يومك من هذه القائمة.</li><li>الرقم على اليسار هو عدد الحالات، والوسم على اليمين درجة الخطورة.</li><li>اضغط السهم في أي سطر لتنتقل مباشرة إلى الصفحة التي تعالجه فيها.</li></ol><ol class="steps en"><li>Open the dashboard and start the day from this list.</li><li>The number on the left is how many cases; the tag on the right is how serious.</li><li>Click the arrow on a line to go straight to the page where you fix it.</li></ol>
+      
+      
+    </div>
+    <div class="figs"><button type="button" class="shot" data-src="../dashboard.jpg" aria-label="Screenshot: Needs your attention">
+      <img src="../dashboard.jpg" alt="Screenshot: Needs your attention" width="1366" height="820" loading="eager" decoding="async">
+      <span class="zoom"><span class="ar ">تكبير</span><span class="en ">Enlarge</span></span>
+    </button></div>
+  </article>
+  <article class="feature" id="compliance" data-who="hr adm">
+    <div class="copy">
+      <div class="who"><span class="tag t-hr"><span class="ar ">الموارد البشرية</span><span class="en ">HR</span></span><span class="tag t-adm"><span class="ar ">المسؤول</span><span class="en ">Admins</span></span></div>
+      <h3><span class="ar ">مركز الامتثال</span><span class="en ">Compliance centre</span></h3>
+      <p class="where"><span class="where-label"><span class="ar ">المكان</span><span class="en ">Where</span></span><span class="path"><span class="ar ">الامتثال ← مركز الامتثال</span><span class="en ">Compliance → Compliance centre</span></span></p>
+      <p class="what"><span class="ar ">ثلاث تبويبات: «يحتاج انتباهك»، و«المواعيد» (حماية الأجور، الانتهاءات، التسويات، العطل، نقاط التوطين لكل شهر)، و«التوطين» لكل شركة مع النسبة المطلوبة والغرامة المتوقعة.</span><span class="en ">Three tabs: Needs attention; Deadlines (WPS, expiries, settlements, holidays and Emiratisation checkpoints for the month); and Emiratisation per company with the required share and the expected fine.</span></p>
+      
+      <h4><span class="ar ">طريقة الاستخدام</span><span class="en ">How to use it</span></h4>
+      <ol class="steps ar"><li>في «المواعيد» اختر الشهر لترى كل موعد فيه بالتاريخ.</li><li>في «التوطين» اختر السنة: يظهر عدد الموظفين والمواطنين والمطلوب والفجوة والغرامة.</li><li>الأرقام النظامية (نسب التوطين، الغرامات، نسب معاش GPSSA) يعدّلها المسؤول من جدول الأرقام أسفل الصفحة بعد التحقق من الجهة الرسمية.</li></ol><ol class="steps en"><li>In Deadlines, pick the month to see every dated deadline.</li><li>In Emiratisation, pick the year: headcount, nationals, required, gap and fine.</li><li>Statutory figures (Emiratisation targets, fines, GPSSA rates) are edited by an admin in the figures table at the bottom, after checking with the authority.</li></ol>
+      
+      <p class="note"><span class="ar ">الأرقام المحمّلة تحققنا منها من مصادر رسمية: +2 نقطة سنوياً حتى 10٪ نهاية 2026، وغرامة 10,000 درهم شهرياً عن كل مواطن ناقص من يوليو 2026.</span><span class="en ">The loaded figures were checked against official sources: +2 points a year to 10% by end-2026, and AED 10,000 a month per missing national from July 2026.</span></p>
+    </div>
+    <div class="figs two"><button type="button" class="shot" data-src="../compliance.jpg" aria-label="Screenshot: Compliance centre">
+      <img src="../compliance.jpg" alt="Screenshot: Compliance centre" width="1366" height="820" loading="lazy" decoding="async">
+      <span class="zoom"><span class="ar ">تكبير</span><span class="en ">Enlarge</span></span>
+    </button><button type="button" class="shot" data-src="../compliance-emiratisation.jpg" aria-label="Screenshot: Compliance centre (2)">
+      <img src="../compliance-emiratisation.jpg" alt="Screenshot: Compliance centre (2)" width="1366" height="820" loading="lazy" decoding="async">
+      <span class="zoom"><span class="ar ">تكبير</span><span class="en ">Enlarge</span></span>
+    </button></div>
+  </article>
+  <article class="feature" id="radar" data-who="hr">
+    <div class="copy">
+      <div class="who"><span class="tag t-hr"><span class="ar ">الموارد البشرية</span><span class="en ">HR</span></span></div>
+      <h3><span class="ar ">رادار المستندات</span><span class="en ">Document radar</span></h3>
+      <p class="where"><span class="where-label"><span class="ar ">المكان</span><span class="en ">Where</span></span><span class="path"><span class="ar ">الموارد البشرية ← رادار المستندات</span><span class="en ">HR → Document Radar</span></span></p>
+      <p class="what"><span class="ar ">جوازات السفر والإقامات والهويات وبطاقات العمل حسب تاريخ الانتهاء، ومن ليس لديه مستند مطلوب. يصل تنبيه قبل الانتهاء بـ 90 و60 و30 و15 و7 أيام.</span><span class="en ">Passports, residence visas, Emirates IDs and labour cards by expiry date, and who has a required document missing. Alerts go out 90, 60, 30, 15 and 7 days before expiry.</span></p>
+      
+      <h4><span class="ar ">طريقة الاستخدام</span><span class="en ">How to use it</span></h4>
+      <ol class="steps ar"><li>استخدم الأزرار أعلى القائمة: يحتاج انتباه، منتهٍ، خلال 30 يوماً، خلال 90 يوماً.</li><li>قسم «مستندات ناقصة» يعرض لكل موظف ما ينقصه؛ اضغط «إضافة مستندات» لتفتح ملفه.</li><li>أدخل لكل مستند رقمه وتاريخي الإصدار والانتهاء حتى يدخل في الرادار.</li></ol><ol class="steps en"><li>Use the buttons at the top: needs attention, expired, within 30 days, within 90 days.</li><li>Missing documents lists what each person lacks; Add documents opens their file.</li><li>Enter each document’s number, issue and expiry dates so the radar can track it.</li></ol>
+      
+      
+    </div>
+    <div class="figs"><button type="button" class="shot" data-src="../document-radar.jpg" aria-label="Screenshot: Document radar">
+      <img src="../document-radar.jpg" alt="Screenshot: Document radar" width="1366" height="820" loading="lazy" decoding="async">
+      <span class="zoom"><span class="ar ">تكبير</span><span class="en ">Enlarge</span></span>
+    </button></div>
+  </article>
+    </section>
+    <section class="group" id="payroll">
+      <div class="group-head"><span class="ico" aria-hidden="true">◈</span><div><h2><span class="ar ">الرواتب</span><span class="en ">Payroll</span></h2><p><span class="ar ">مسير الرواتب أصبح يمر بمراجعة واعتماد، مع قسيمة مفصلة، ومسيرات إضافية، وملف البنك وقيد المحاسبة.</span><span class="en ">Payroll now goes through review and approval, with itemised payslips, extra runs, the bank file and the accounting journal.</span></p></div></div>
+      
+  <article class="feature" id="runs" data-who="pay hr">
+    <div class="copy">
+      <div class="who"><span class="tag t-pay"><span class="ar ">الرواتب والمحاسبة</span><span class="en ">Payroll &amp; finance</span></span><span class="tag t-hr"><span class="ar ">الموارد البشرية</span><span class="en ">HR</span></span></div>
+      <h3><span class="ar ">مسير الرواتب: من المسودة إلى الدفع</span><span class="en ">Payroll runs: from draft to paid</span></h3>
+      <p class="where"><span class="where-label"><span class="ar ">المكان</span><span class="en ">Where</span></span><span class="path"><span class="ar ">الرواتب ← مسيرات الرواتب</span><span class="en ">Payroll → Payroll Runs</span></span></p>
+      <p class="what"><span class="ar ">المسير يُنشأ مسودة، تُراجع فحوصه (آيبان غير صالح، بيانات WPS ناقصة، فرق كبير عن الشهر السابق)، ثم يُرسل للاعتماد ويعتمده شخص آخر غير من أرسله.</span><span class="en ">A run starts as a draft, its checks are reviewed (invalid IBAN, missing WPS data, a big change from last month), then it is submitted and approved by someone other than the submitter.</span></p>
+      
+      <h4><span class="ar ">طريقة الاستخدام</span><span class="en ">How to use it</span></h4>
+      <ol class="steps ar"><li>اختر الشهر واضغط «توليد المسير». يمكن إعادة التوليد ما دام مسودة.</li><li>افتح المسير: راجع التحذيرات والأخطاء، ونزّل «شرح الراتب» (Excel) لترى سبب كل خصم يوماً بيوم.</li><li>اضغط «إرسال للاعتماد». المعتمِد يراجع ثم يضغط «اعتماد» أو «إرجاع» مع السبب.</li><li>بعد الاعتماد: «إرسال القسائم بالبريد»، و«ملف البنك (SIF)»، و«قيد Zoho»، ثم «تم الدفع».</li></ol><ol class="steps en"><li>Pick the month and click Generate run. You can regenerate while it is a draft.</li><li>Open the run: review warnings and errors, and download the Salary Explanation (Excel) to see why each deduction happened, day by day.</li><li>Click Submit for approval. The approver reviews, then approves or sends it back with a reason.</li><li>Once approved: Email payslips, Bank file (SIF), Zoho journal, then Mark paid.</li></ol>
+      
+      <p class="note"><span class="ar ">أزرار «ملف البنك (SIF)» و«قيد Zoho» تظهر بعد اعتماد المسير فقط، لذلك لا تظهر في صورة المسودة.</span><span class="en ">The Bank file (SIF) and Zoho journal buttons appear only once a run is approved, so they are not in the draft shown here.</span></p>
+    </div>
+    <div class="figs two"><button type="button" class="shot" data-src="../payroll-runs.jpg" aria-label="Screenshot: Payroll runs: from draft to paid">
+      <img src="../payroll-runs.jpg" alt="Screenshot: Payroll runs: from draft to paid" width="1366" height="820" loading="lazy" decoding="async">
+      <span class="zoom"><span class="ar ">تكبير</span><span class="en ">Enlarge</span></span>
+    </button><button type="button" class="shot" data-src="../payroll-run-detail.jpg" aria-label="Screenshot: Payroll runs: from draft to paid (2)">
+      <img src="../payroll-run-detail.jpg" alt="Screenshot: Payroll runs: from draft to paid (2)" width="1366" height="820" loading="lazy" decoding="async">
+      <span class="zoom"><span class="ar ">تكبير</span><span class="en ">Enlarge</span></span>
+    </button></div>
+  </article>
+  <article class="feature" id="offcycle" data-who="pay">
+    <div class="copy">
+      <div class="who"><span class="tag t-pay"><span class="ar ">الرواتب والمحاسبة</span><span class="en ">Payroll &amp; finance</span></span></div>
+      <h3><span class="ar ">مسير إضافي (Off-cycle)</span><span class="en ">Off-cycle run</span></h3>
+      <p class="where"><span class="where-label"><span class="ar ">المكان</span><span class="en ">Where</span></span><span class="path"><span class="ar ">مسيرات الرواتب ← زر «مسير إضافي»</span><span class="en ">Payroll Runs → Off-cycle run</span></span></p>
+      <p class="what"><span class="ar ">مسير ثانٍ في نفس الشهر لمكافأة أو عمولة أو تصحيح، دون انتظار المسير الشهري. تُدفع البنود المدخلة فقط: لا راتب ولا إجازات ولا قروض ولا معاش.</span><span class="en ">A second run in the same month for a bonus, commission or correction, without waiting for the monthly run. Only the lines entered are paid: no salary, leave, loans or pension.</span></p>
+      
+      <h4><span class="ar ">طريقة الاستخدام</span><span class="en ">How to use it</span></h4>
+      <ol class="steps ar"><li>اختر الشركة من «الكيان» أعلى القائمة، ثم اضغط «مسير إضافي».</li><li>حدد الشهر واكتب عنواناً واضحاً (مثل: مكافأة الربع الثالث).</li><li>أضف سطراً لكل موظف: دفعة أو خصم، الفئة، الوصف، المبلغ. يظهر الصافي أسفل النموذج.</li><li>اضغط «إنشاء المسير»؛ يظهر في القائمة بوسم «إضافي» ويمر بنفس الاعتماد وملف البنك.</li></ol><ol class="steps en"><li>Choose the company in Entity at the top of the menu, then click Off-cycle run.</li><li>Set the month and a clear title (for example: Q3 bonus).</li><li>Add a line per person: payment or deduction, category, description, amount. The net shows at the bottom.</li><li>Click Create run; it appears tagged Off-cycle and goes through the same approval and bank file.</li></ol>
+      
+      
+    </div>
+    <div class="figs"><button type="button" class="shot" data-src="../payroll-off-cycle.jpg" aria-label="Screenshot: Off-cycle run">
+      <img src="../payroll-off-cycle.jpg" alt="Screenshot: Off-cycle run" width="1366" height="820" loading="lazy" decoding="async">
+      <span class="zoom"><span class="ar ">تكبير</span><span class="en ">Enlarge</span></span>
+    </button></div>
+  </article>
+  <article class="feature" id="sif" data-who="pay adm">
+    <div class="copy">
+      <div class="who"><span class="tag t-pay"><span class="ar ">الرواتب والمحاسبة</span><span class="en ">Payroll &amp; finance</span></span><span class="tag t-adm"><span class="ar ">المسؤول</span><span class="en ">Admins</span></span></div>
+      <h3><span class="ar ">ملف البنك (SIF) لبنك Wio وقيد Zoho Books</span><span class="en ">Bank file (SIF) for Wio and the Zoho Books journal</span></h3>
+      <p class="where"><span class="where-label"><span class="ar ">المكان</span><span class="en ">Where</span></span><span class="path"><span class="ar ">الإعدادات ← ملف البنك والمحاسبة</span><span class="en ">Settings → Bank file and accounting</span></span></p>
+      <p class="what"><span class="ar ">المسير المعتمد يُنزَّل كملف SIF يقبله البنك لنظام حماية الأجور، وكقيد يومية CSV يُستورد في Zoho Books. أي معلومة ناقصة يذكرها النظام بالاسم بدل أن يُخرج ملفاً يرفضه البنك.</span><span class="en ">An approved run downloads as a SIF the bank accepts for WPS, and as a CSV journal you import into Zoho Books. Anything missing is named, instead of producing a file the bank would reject.</span></p>
+      
+      <h4><span class="ar ">طريقة الاستخدام</span><span class="en ">How to use it</span></h4>
+      <ol class="steps ar"><li>مرة واحدة: أدخل لكل شركة رقم صاحب العمل (13 خانة؛ الافتراضي رقم الوزارة) ورمز توجيه Wio (9 خانات).</li><li>أضف رمز توجيه لكل بنك يستخدمه الموظفون: رمز البنك هو الخانات 5–7 من الآيبان.</li><li>اكتب أسماء الحسابات كما هي في دليل حسابات Zoho، واختر مركز التكلفة (القسم أو بدون).</li><li>من المسير المعتمد: «ملف البنك (SIF)» يُرفع إلى Wio، و«قيد Zoho» يُستورد من المحاسب ← القيود اليدوية ← استيراد.</li></ol><ol class="steps en"><li>Once: enter each company’s employer ID (13 digits; defaults to the MOL ID) and Wio’s routing code (9 digits).</li><li>Add a routing code for each bank your staff use: the bank code is digits 5–7 of the IBAN.</li><li>Type the account names exactly as in your Zoho chart of accounts, and choose the cost centre (department or none).</li><li>From an approved run: upload Bank file (SIF) to Wio; import Zoho journal via Accountant → Manual Journals → Import.</li></ol>
+      
+      <p class="note"><span class="ar ">جرّب أول ملف SIF مع Wio قبل الاعتماد عليه.</span><span class="en ">Test the first SIF with Wio before relying on it.</span></p>
+    </div>
+    <div class="figs"><button type="button" class="shot" data-src="../settings-payroll-exports.jpg" aria-label="Screenshot: Bank file (SIF) for Wio and the Zoho Books journal">
+      <img src="../settings-payroll-exports.jpg" alt="Screenshot: Bank file (SIF) for Wio and the Zoho Books journal" width="1366" height="820" loading="lazy" decoding="async">
+      <span class="zoom"><span class="ar ">تكبير</span><span class="en ">Enlarge</span></span>
+    </button></div>
+  </article>
+  <article class="feature no-shot" id="gpssa" data-who="pay hr">
+    <div class="copy">
+      <div class="who"><span class="tag t-pay"><span class="ar ">الرواتب والمحاسبة</span><span class="en ">Payroll &amp; finance</span></span><span class="tag t-hr"><span class="ar ">الموارد البشرية</span><span class="en ">HR</span></span></div>
+      <h3><span class="ar ">معاش GPSSA للمواطنين</span><span class="en ">GPSSA pension for UAE nationals</span></h3>
+      <p class="where"><span class="where-label"><span class="ar ">المكان</span><span class="en ">Where</span></span><span class="path"><span class="ar ">ملف الموظف ← بيانات الملف ← تعديل ← معاش الهيئة العامة للمعاشات</span><span class="en ">Employee profile → Profile details → Edit → GPSSA pension</span></span></p>
+      <p class="what"><span class="ar ">يُخصم نصيب الموظف تلقائياً في المسير كبند «GPSSA pension» في القسيمة، ويُسجَّل نصيب صاحب العمل ويظهر في قيد Zoho.</span><span class="en ">The employee’s share is deducted automatically as a GPSSA pension line on the payslip; the employer’s share is recorded and posted in the Zoho journal.</span></p>
+      <div class="tbl"><table class="ar"><thead><tr><th>النظام</th><th>الموظف</th><th>صاحب العمل</th><th>راتب الاشتراك</th></tr></thead><tbody><tr><td>القانون الجديد (مؤمَّن من 31 أكتوبر 2023)</td><td>11٪</td><td>15٪ (تدفع الحكومة 2.5 نقطة منها تحت 20,000 درهم)</td><td>3,000 – 70,000 درهم</td></tr><tr><td>القانون القديم (مؤمَّن قبل ذلك)</td><td>5٪</td><td>12.5٪</td><td>1,000 – 50,000 درهم</td></tr></tbody></table><table class="en"><thead><tr><th>Scheme</th><th>Employee</th><th>Employer</th><th>Contribution salary</th></tr></thead><tbody><tr><td>New law (insured from 31 Oct 2023)</td><td>11%</td><td>15% (government pays 2.5 points of it below AED 20,000)</td><td>AED 3,000 – 70,000</td></tr><tr><td>Old law (insured before then)</td><td>5%</td><td>12.5%</td><td>AED 1,000 – 50,000</td></tr></tbody></table></div>
+      <h4><span class="ar ">طريقة الاستخدام</span><span class="en ">How to use it</span></h4>
+      <ol class="steps ar"><li>«تلقائي» يكفي لمعظم المواطنين: يختار النظام القانون حسب تاريخ الالتحاق.</li><li>إن كان تاريخ تسجيله في الهيئة مختلفاً، اختر «القانون الجديد» أو «القديم» يدوياً.</li><li>لمواطني الخليج وصندوق أبوظبي اختر «غير مشمول» وعالجهم يدوياً.</li><li>راجع إعداد كل مواطن قبل أول مسير يخصم المعاش.</li></ol><ol class="steps en"><li>Automatic suits most nationals: the system picks the law from the join date.</li><li>If their GPSSA registration date says otherwise, choose new or old law by hand.</li><li>For GCC nationals and the Abu Dhabi fund choose Not covered and handle them by hand.</li><li>Check each national’s setting before the first run that deducts the pension.</li></ol>
+      
+      
+    </div>
+    
+  </article>
+  <article class="feature" id="items" data-who="pay">
+    <div class="copy">
+      <div class="who"><span class="tag t-pay"><span class="ar ">الرواتب والمحاسبة</span><span class="en ">Payroll &amp; finance</span></span></div>
+      <h3><span class="ar ">القروض والبنود المؤقتة</span><span class="en ">Loans and one-time items</span></h3>
+      <p class="where"><span class="where-label"><span class="ar ">المكان</span><span class="en ">Where</span></span><span class="path"><span class="ar ">الرواتب ← القروض والبنود المؤقتة</span><span class="en ">Payroll → Loans &amp; One-time Items</span></span></p>
+      <p class="what"><span class="ar ">قروض وسلف تُخصم أقساطها تلقائياً كل شهر حتى السداد، وبنود لمرة واحدة (مكافأة، عمولة، بدل، استرداد، خصم) تدخل مسير الشهر وملف WPS.</span><span class="en ">Loans and salary advances whose instalments come off pay each month until repaid, and one-time items (bonus, commission, allowance, reimbursement, deduction) that go into the month’s run and the WPS file.</span></p>
+      
+      <h4><span class="ar ">طريقة الاستخدام</span><span class="en ">How to use it</span></h4>
+      <ol class="steps ar"><li>للقرض: الموظف، المبلغ، القسط الشهري، وشهر البدء.</li><li>للبند المؤقت: الموظف، النوع، المبلغ، والشهر الذي يُصرف فيه.</li><li>عند توليد المسير يظهر كل قسط وبند كسطر مستقل في القسيمة.</li></ol><ol class="steps en"><li>For a loan: employee, amount, monthly instalment and start month.</li><li>For a one-time item: employee, type, amount and the month it is paid in.</li><li>When the run is generated, each instalment and item is its own payslip line.</li></ol>
+      
+      
+    </div>
+    <div class="figs"><button type="button" class="shot" data-src="../payroll-items.jpg" aria-label="Screenshot: Loans and one-time items">
+      <img src="../payroll-items.jpg" alt="Screenshot: Loans and one-time items" width="1366" height="820" loading="lazy" decoding="async">
+      <span class="zoom"><span class="ar ">تكبير</span><span class="en ">Enlarge</span></span>
+    </button></div>
+  </article>
+  <article class="feature" id="overtime" data-who="hr pay">
+    <div class="copy">
+      <div class="who"><span class="tag t-hr"><span class="ar ">الموارد البشرية</span><span class="en ">HR</span></span><span class="tag t-pay"><span class="ar ">الرواتب والمحاسبة</span><span class="en ">Payroll &amp; finance</span></span></div>
+      <h3><span class="ar ">العمل الإضافي</span><span class="en ">Overtime</span></h3>
+      <p class="where"><span class="where-label"><span class="ar ">المكان</span><span class="en ">Where</span></span><span class="path"><span class="ar ">الموارد البشرية ← العمل الإضافي</span><span class="en ">HR → Overtime</span></span></p>
+      <p class="what"><span class="ar ">يُكتشف من بصمات الحضور أو يُدخل يدوياً، يُعتمد، ثم يُدفع مع الرواتب بنسب القانون: 125٪ للعادي و150٪ للّيلي وأيام الراحة.</span><span class="en ">Detected from attendance punches or entered by hand, approved, then paid with salaries at the legal rates: 125% normal, 150% night and rest days.</span></p>
+      
+      <h4><span class="ar ">طريقة الاستخدام</span><span class="en ">How to use it</span></h4>
+      <ol class="steps ar"><li>اختر الشهر واضغط «الاكتشاف من الحضور» لقراءة الساعات الزائدة.</li><li>راجع كل يوم واعتمد الدقائق المستحقة أو ارفضها، أو أضف يوماً يدوياً.</li><li>الساعات المعتمدة تدخل مسير ذلك الشهر تلقائياً.</li></ol><ol class="steps en"><li>Pick the month and click Detect from attendance to read the extra hours.</li><li>Review each day and approve or reject the minutes, or add a day by hand.</li><li>Approved hours go into that month’s run automatically.</li></ol>
+      
+      
+    </div>
+    <div class="figs"><button type="button" class="shot" data-src="../overtime.jpg" aria-label="Screenshot: Overtime">
+      <img src="../overtime.jpg" alt="Screenshot: Overtime" width="1366" height="820" loading="lazy" decoding="async">
+      <span class="zoom"><span class="ar ">تكبير</span><span class="en ">Enlarge</span></span>
+    </button></div>
+  </article>
+  <article class="feature" id="settlement" data-who="hr pay">
+    <div class="copy">
+      <div class="who"><span class="tag t-hr"><span class="ar ">الموارد البشرية</span><span class="en ">HR</span></span><span class="tag t-pay"><span class="ar ">الرواتب والمحاسبة</span><span class="en ">Payroll &amp; finance</span></span></div>
+      <h3><span class="ar ">التسوية النهائية</span><span class="en ">Final settlement</span></h3>
+      <p class="where"><span class="where-label"><span class="ar ">المكان</span><span class="en ">Where</span></span><span class="path"><span class="ar ">الموارد البشرية ← إنهاء الخدمة ← سجل الموظف</span><span class="en ">HR → Offboarding → the employee’s record</span></span></p>
+      <p class="what"><span class="ar ">آخر راتب ورصيد الإجازات ومكافأة نهاية الخدمة والقروض المتبقية في حساب واحد، يُعتمد ويُدفع مرة واحدة. موعد الاستحقاق 14 يوماً بعد آخر يوم عمل، والمتأخر يظهر في «يحتاج انتباهك».</span><span class="en ">Last salary, leave balance, end-of-service gratuity and outstanding loans in one calculation, approved and paid once. It is due 14 days after the last working day; late ones show in Needs your attention.</span></p>
+      
+      <h4><span class="ar ">طريقة الاستخدام</span><span class="en ">How to use it</span></h4>
+      <ol class="steps ar"><li>افتح سجل المغادرة واذهب إلى قسم التسوية، ثم اضغط «احتساب».</li><li>راجع البنود: الراتب الأخير، الإجازات، المكافأة، والقروض والسلف المتبقية. أضف أي خصم يدوي مع السبب.</li><li>اعتمد التسوية ثم سجّلها كمدفوعة.</li></ol><ol class="steps en"><li>Open the offboarding record, go to the settlement and click Calculate.</li><li>Check the lines: final salary, leave, gratuity, and remaining loans and advances. Add any manual deduction with a reason.</li><li>Approve the settlement, then mark it paid.</li></ol>
+      
+      
+    </div>
+    <div class="figs"><button type="button" class="shot" data-src="../offboarding.jpg" aria-label="Screenshot: Final settlement">
+      <img src="../offboarding.jpg" alt="Screenshot: Final settlement" width="1366" height="820" loading="lazy" decoding="async">
+      <span class="zoom"><span class="ar ">تكبير</span><span class="en ">Enlarge</span></span>
+    </button></div>
+  </article>
+    </section>
+    <section class="group" id="time">
+      <div class="group-head"><span class="ico" aria-hidden="true">◷</span><div><h2><span class="ar ">الحضور والإجازات</span><span class="en ">Attendance and leave</span></h2><p><span class="ar ">لوحة حية لليوم، جدول ورديات شهري، إجازات أكثر مرونة، وتسجيل حضور من البوابة عند الحاجة.</span><span class="en ">A live board for today, a monthly shift roster, more flexible leave, and portal clock-in when needed.</span></p></div></div>
+      
+  <article class="feature" id="leave" data-who="hr mgr emp">
+    <div class="copy">
+      <div class="who"><span class="tag t-hr"><span class="ar ">الموارد البشرية</span><span class="en ">HR</span></span><span class="tag t-mgr"><span class="ar ">المدراء</span><span class="en ">Managers</span></span><span class="tag t-emp"><span class="ar ">الموظفون</span><span class="en ">Employees</span></span></div>
+      <h3><span class="ar ">تحسينات الإجازات</span><span class="en ">Leave improvements</span></h3>
+      <p class="where"><span class="where-label"><span class="ar ">المكان</span><span class="en ">Where</span></span><span class="path"><span class="ar ">الموارد البشرية ← الإجازات (وللموظف: إجازاتي)</span><span class="en ">HR → Leave (employees: My Leave)</span></span></p>
+      <p class="what"><span class="ar ">تبويبات للطلبات والتقويم والأرصدة والأنواع والتقرير. أُضيفت إجازة دراسية وإجازة حج، وأنواع تحتسب أيام العمل فقط، وإجازة بالساعات، ومعاينة الأيام قبل الإرسال.</span><span class="en ">Tabs for requests, calendar, balances, types and report. Added study and Hajj leave, types that count working days only, leave by the hour, and a preview of the days before sending.</span></p>
+      
+      <h4><span class="ar ">طريقة الاستخدام</span><span class="en ">How to use it</span></h4>
+      <ol class="steps ar"><li>«الطلبات»: اعتمد أو ارفض. يرى المعتمِد من غائب من الفريق في نفس الأيام وانتهاء التأشيرة.</li><li>«التقويم»: من في إجازة كل يوم من الشهر.</li><li>«الأرصدة»: تسوية الرصيد بسبب إلزامي، واستيراد الأرصدة الافتتاحية من ملف CSV.</li><li>نهاية السنة: ترحيل الأيام أو إلغاؤها حسب نوع الإجازة، وصرف بدل الرصيد مع الراتب.</li></ol><ol class="steps en"><li>Requests: approve or reject. The approver sees who else in the team is off and any visa expiry.</li><li>Calendar: who is on leave each day of the month.</li><li>Balances: adjust a balance with a required reason, and import opening balances from a CSV file.</li><li>Year end: carry forward or lapse days by leave type, and pay out a balance with salary.</li></ol>
+      
+      <p class="note"><span class="ar ">في الصورة أُخفيت الأسماء وأسباب الإجازات لأنها معلومات شخصية.</span><span class="en ">Names and leave reasons are blurred in the picture because they are personal.</span></p>
+    </div>
+    <div class="figs two"><button type="button" class="shot" data-src="../leave.jpg" aria-label="Screenshot: Leave improvements">
+      <img src="../leave.jpg" alt="Screenshot: Leave improvements" width="1366" height="820" loading="lazy" decoding="async">
+      <span class="zoom"><span class="ar ">تكبير</span><span class="en ">Enlarge</span></span>
+    </button><button type="button" class="shot" data-src="../leave-calendar.jpg" aria-label="Screenshot: Leave improvements (2)">
+      <img src="../leave-calendar.jpg" alt="Screenshot: Leave improvements (2)" width="1366" height="820" loading="lazy" decoding="async">
+      <span class="zoom"><span class="ar ">تكبير</span><span class="en ">Enlarge</span></span>
+    </button></div>
+  </article>
+  <article class="feature" id="board" data-who="hr mgr">
+    <div class="copy">
+      <div class="who"><span class="tag t-hr"><span class="ar ">الموارد البشرية</span><span class="en ">HR</span></span><span class="tag t-mgr"><span class="ar ">المدراء</span><span class="en ">Managers</span></span></div>
+      <h3><span class="ar ">اللوحة الحية</span><span class="en ">Live board</span></h3>
+      <p class="where"><span class="where-label"><span class="ar ">المكان</span><span class="en ">Where</span></span><span class="path"><span class="ar ">الموارد البشرية ← الحضور ← اللوحة الحية</span><span class="en ">HR → Attendance → Live board</span></span></p>
+      <p class="what"><span class="ar ">من حضر ومن تأخر ومن لم يصل بعد ومن في إجازة أو راحة اليوم، تتحدث كل دقيقة من بوابة المكتب.</span><span class="en ">Who is in, late, not in yet, on leave or resting today, refreshed every minute from the office door.</span></p>
+      
+      <h4><span class="ar ">طريقة الاستخدام</span><span class="en ">How to use it</span></h4>
+      <ol class="steps ar"><li>البطاقات أعلى الصفحة أعداد؛ اضغط أي بطاقة لتصفية القائمة.</li><li>ابحث باسم الشخص أو القسم.</li><li>العمود «ساعات اليوم» يعرض الوردية المطبقة على الشخص اليوم.</li></ol><ol class="steps en"><li>The tiles at the top are counts; click one to filter the list.</li><li>Search by person or department.</li><li>Today’s hours shows the shift that applies to the person today.</li></ol>
+      
+      
+    </div>
+    <div class="figs"><button type="button" class="shot" data-src="../attendance-board.jpg" aria-label="Screenshot: Live board">
+      <img src="../attendance-board.jpg" alt="Screenshot: Live board" width="1366" height="820" loading="lazy" decoding="async">
+      <span class="zoom"><span class="ar ">تكبير</span><span class="en ">Enlarge</span></span>
+    </button></div>
+  </article>
+  <article class="feature" id="roster" data-who="hr">
+    <div class="copy">
+      <div class="who"><span class="tag t-hr"><span class="ar ">الموارد البشرية</span><span class="en ">HR</span></span></div>
+      <h3><span class="ar ">جدول الورديات (Roster)</span><span class="en ">Roster</span></h3>
+      <p class="where"><span class="where-label"><span class="ar ">المكان</span><span class="en ">Where</span></span><span class="path"><span class="ar ">الموارد البشرية ← الحضور ← جدول الورديات</span><span class="en ">HR → Attendance → Roster</span></span></p>
+      <p class="what"><span class="ar ">الشهر كاملاً لكل شخص ويوم: «الحضور» يعرض ما حدث (حاضر، متأخر، غائب)، و«الورديات» لتخطيط وردية أو يوم راحة بتاريخ محدد يتغلب على الجدول الأسبوعي.</span><span class="en ">The whole month per person and day: Attendance shows what happened (present, late, absent); Shifts lets you plan a shift or rest day for a date, overriding the weekly schedule.</span></p>
+      
+      <h4><span class="ar ">طريقة الاستخدام</span><span class="en ">How to use it</span></h4>
+      <ol class="steps ar"><li>اختر «الورديات» أعلى الصفحة.</li><li>اختر الوردية أو يوم الراحة، ثم انقر خانة يوم أو اسحب على عدة أيام.</li><li>اضغط «حفظ التغييرات»؛ الأيام الماضية يُعاد فحصها على الوردية الجديدة، واللوحة الحية تستخدمها.</li></ol><ol class="steps en"><li>Choose Shifts at the top of the page.</li><li>Pick the shift or day off, then click a day or drag across several.</li><li>Click Save changes; past days are re-checked against the new shift, and the live board uses it.</li></ol>
+      <p class="legend"><span class="ar ">P حاضر · L متأخر · H نصف يوم · A غائب · V إجازة · PH عطلة رسمية · ? لا سجل في يوم عمل</span><span class="en ">P present · L late · H half day · A absent · V leave · PH public holiday · ? no record on a working day</span></p>
+      
+    </div>
+    <div class="figs"><button type="button" class="shot" data-src="../attendance-roster.jpg" aria-label="Screenshot: Roster">
+      <img src="../attendance-roster.jpg" alt="Screenshot: Roster" width="1366" height="820" loading="lazy" decoding="async">
+      <span class="zoom"><span class="ar ">تكبير</span><span class="en ">Enlarge</span></span>
+    </button></div>
+  </article>
+  <article class="feature" id="clockin" data-who="adm emp">
+    <div class="copy">
+      <div class="who"><span class="tag t-adm"><span class="ar ">المسؤول</span><span class="en ">Admins</span></span><span class="tag t-emp"><span class="ar ">الموظفون</span><span class="en ">Employees</span></span></div>
+      <h3><span class="ar ">تسجيل الحضور من البوابة (غير مفعّل افتراضياً)</span><span class="en ">Clock in from the portal (off by default)</span></h3>
+      <p class="where"><span class="where-label"><span class="ar ">المكان</span><span class="en ">Where</span></span><span class="path"><span class="ar ">الإعدادات ← تسجيل الحضور من البوابة</span><span class="en ">Settings → Portal clock-in</span></span></p>
+      <p class="what"><span class="ar ">لمن لا تراه بوابة المكتب (العمل الميداني أو عن بُعد). يُحفظ كل تسجيل مع موقعه ودقته، ولا يُستبدل سجل البوابة أبداً.</span><span class="en ">For people the office door does not see (field work, remote days). Every punch is stored with its location and accuracy, and a door punch is never overwritten.</span></p>
+      
+      <h4><span class="ar ">طريقة الاستخدام</span><span class="en ">How to use it</span></h4>
+      <ol class="steps ar"><li>المسؤول يفعّله ويختار: كل الموظفين أو أشخاص محددين.</li><li>يحدد هل الموقع مطلوب وأقل دقة مقبولة، ويضيف مواقع بنطاق (زر «استخدام موقعي الحالي» يملأ الإحداثيات).</li><li>الموظف يرى بطاقة «تسجيل دخول / خروج» في «حضوري» ويسمح للمتصفح بالموقع.</li><li>الموارد البشرية ترى تسجيلات كل يوم في نفس الصفحة مع رابط الخريطة.</li></ol><ol class="steps en"><li>An admin switches it on and chooses all employees or listed people.</li><li>They set whether location is required and how precise, and add sites with a radius (Use my current location fills the coordinates).</li><li>Employees see a Clock in / out card in My Attendance and allow location in the browser.</li><li>HR sees each day’s punches on the same page with a map link.</li></ol>
+      
+      
+    </div>
+    <div class="figs"><button type="button" class="shot" data-src="../settings-clock-in.jpg" aria-label="Screenshot: Clock in from the portal (off by default)">
+      <img src="../settings-clock-in.jpg" alt="Screenshot: Clock in from the portal (off by default)" width="1366" height="820" loading="lazy" decoding="async">
+      <span class="zoom"><span class="ar ">تكبير</span><span class="en ">Enlarge</span></span>
+    </button></div>
+  </article>
+    </section>
+    <section class="group" id="people">
+      <div class="group-head"><span class="ico" aria-hidden="true">◇</span><div><h2><span class="ar ">الفرق والموافقات والطلبات</span><span class="en ">Teams, approvals and requests</span></h2><p><span class="ar ">لكل موظف مدير مباشر، والطلبات تمر بخطوات موافقة تحددونها، والموظف يقدّم طلباته من البوابة.</span><span class="en ">Each employee has a direct manager, requests go through approval steps you define, and employees raise requests from the portal.</span></p></div></div>
+      
+  <article class="feature" id="org" data-who="hr mgr">
+    <div class="copy">
+      <div class="who"><span class="tag t-hr"><span class="ar ">الموارد البشرية</span><span class="en ">HR</span></span><span class="tag t-mgr"><span class="ar ">المدراء</span><span class="en ">Managers</span></span></div>
+      <h3><span class="ar ">المدير المباشر والهيكل التنظيمي و«فريقي»</span><span class="en ">Direct manager, org chart and My Team</span></h3>
+      <p class="where"><span class="where-label"><span class="ar ">المكان</span><span class="en ">Where</span></span><span class="path"><span class="ar ">العمليات ← الهيكل التنظيمي · البوابة ← فريقي</span><span class="en ">Operations → Org Chart · Portal → My Team</span></span></p>
+      <p class="what"><span class="ar ">الهيكل حسب الأشخاص أو الأقسام. صفحة «فريقي» للمدير تعرض حضور فريقه اليوم وإجازاتهم القادمة، دون الرواتب.</span><span class="en ">The chart by people or department. My Team shows a manager their team’s attendance today and upcoming leave, without salaries.</span></p>
+      
+      <h4><span class="ar ">طريقة الاستخدام</span><span class="en ">How to use it</span></h4>
+      <ol class="steps ar"><li>من ملف الموظف ← بيانات الملف ← تعديل: اختر المدير المباشر.</li><li>يظهر الشخص تحت مديره في الهيكل فوراً.</li><li>المدير يدخل البوابة ← فريقي ليرى فريقه.</li></ol><ol class="steps en"><li>In the employee profile → Profile details → Edit, choose the direct manager.</li><li>The person appears under their manager in the chart straight away.</li><li>The manager opens Portal → My Team to see the team.</li></ol>
+      
+      <p class="note"><span class="ar ">أدخلوا المدير لكل موظف: «فريقي» وخطوة «المدير المباشر» في الموافقات تعتمد عليه.</span><span class="en ">Set a manager for everyone: My Team and the Direct manager approval step depend on it.</span></p>
+    </div>
+    <div class="figs two"><button type="button" class="shot" data-src="../org-chart.jpg" aria-label="Screenshot: Direct manager, org chart and My Team">
+      <img src="../org-chart.jpg" alt="Screenshot: Direct manager, org chart and My Team" width="1366" height="820" loading="lazy" decoding="async">
+      <span class="zoom"><span class="ar ">تكبير</span><span class="en ">Enlarge</span></span>
+    </button><button type="button" class="shot" data-src="../portal-team.jpg" aria-label="Screenshot: Direct manager, org chart and My Team (2)">
+      <img src="../portal-team.jpg" alt="Screenshot: Direct manager, org chart and My Team (2)" width="1366" height="820" loading="lazy" decoding="async">
+      <span class="zoom"><span class="ar ">تكبير</span><span class="en ">Enlarge</span></span>
+    </button></div>
+  </article>
+  <article class="feature" id="chains" data-who="adm mgr">
+    <div class="copy">
+      <div class="who"><span class="tag t-adm"><span class="ar ">المسؤول</span><span class="en ">Admins</span></span><span class="tag t-mgr"><span class="ar ">المدراء</span><span class="en ">Managers</span></span></div>
+      <h3><span class="ar ">سلاسل الموافقات و«موافقاتي»</span><span class="en ">Approval chains and My Approvals</span></h3>
+      <p class="where"><span class="where-label"><span class="ar ">المكان</span><span class="en ">Where</span></span><span class="path"><span class="ar ">الإعدادات ← سلاسل الموافقات · البوابة ← موافقاتي</span><span class="en ">Settings → Approval chains · Portal → My Approvals</span></span></p>
+      <p class="what"><span class="ar ">خطوات موافقة قبل قرار الموارد البشرية لكل نوع طلب: الإجازة، العمل الإضافي، المصروف، السلفة، وطلب التوظيف. كل من ينتظره قرار يجده في «موافقاتي».</span><span class="en ">Approval steps before HR decides, per request type: leave, overtime, expense, advance and hiring request. Anyone with a decision waiting finds it in My Approvals.</span></p>
+      
+      <h4><span class="ar ">طريقة الاستخدام</span><span class="en ">How to use it</span></h4>
+      <ol class="steps ar"><li>اختر نوع الطلب وأضف الخطوات بالترتيب: المدير المباشر، مدير المدير، دور، أو شخص محدد.</li><li>احفظ؛ الطلبات الجديدة تمر بهذه الخطوات قبل الموارد البشرية.</li><li>دون سلسلة، يذهب الطلب مباشرة إلى الموارد البشرية.</li></ol><ol class="steps en"><li>Pick the request type and add steps in order: direct manager, manager’s manager, a role or a named person.</li><li>Save; new requests go through these steps before HR.</li><li>Without a chain, a request goes straight to HR.</li></ol>
+      
+      
+    </div>
+    <div class="figs two"><button type="button" class="shot" data-src="../settings-approvals.jpg" aria-label="Screenshot: Approval chains and My Approvals">
+      <img src="../settings-approvals.jpg" alt="Screenshot: Approval chains and My Approvals" width="1366" height="820" loading="lazy" decoding="async">
+      <span class="zoom"><span class="ar ">تكبير</span><span class="en ">Enlarge</span></span>
+    </button><button type="button" class="shot" data-src="../portal-approvals.jpg" aria-label="Screenshot: Approval chains and My Approvals (2)">
+      <img src="../portal-approvals.jpg" alt="Screenshot: Approval chains and My Approvals (2)" width="1366" height="820" loading="lazy" decoding="async">
+      <span class="zoom"><span class="ar ">تكبير</span><span class="en ">Enlarge</span></span>
+    </button></div>
+  </article>
+  <article class="feature" id="requests" data-who="emp hr">
+    <div class="copy">
+      <div class="who"><span class="tag t-emp"><span class="ar ">الموظفون</span><span class="en ">Employees</span></span><span class="tag t-hr"><span class="ar ">الموارد البشرية</span><span class="en ">HR</span></span></div>
+      <h3><span class="ar ">طلبات البوابة</span><span class="en ">Portal requests</span></h3>
+      <p class="where"><span class="where-label"><span class="ar ">المكان</span><span class="en ">Where</span></span><span class="path"><span class="ar ">البوابة ← طلباتي · الموارد البشرية ← طلبات الموظفين</span><span class="en ">Portal → My Requests · HR → Employee Requests</span></span></p>
+      <p class="what"><span class="ar ">الموظف يطلب خطاباً (شهادة راتب، عدم ممانعة، تأكيد عمل، شهادة خبرة) أو استرداد مصروف أو سلفة، أو يفتح حالة، مع محادثة ومرفقات.</span><span class="en ">Employees ask for a letter (salary certificate, NOC, employment confirmation, experience), claim an expense, ask for an advance or open a case, with a conversation and attachments.</span></p>
+      
+      <h4><span class="ar ">طريقة الاستخدام</span><span class="en ">How to use it</span></h4>
+      <ol class="steps ar"><li>الموظف: طلباتي ← طلب جديد، يختار النوع ويكتب التفاصيل ويرفق ما يلزم.</li><li>الموارد البشرية: تفتح الطلب من «طلبات الموظفين»، ترد، وترفع الخطاب الجاهز.</li><li>المصروف المعتمد يُدفع مع الراتب، والسلفة المعتمدة تُخصم أقساطاً.</li><li>الموظف ينزّل الخطاب من حسابه.</li></ol><ol class="steps en"><li>Employee: My Requests → New request, choose the type, write the details, attach files.</li><li>HR opens it from Employee Requests, replies, and uploads the finished letter.</li><li>An approved expense is paid with salary; an approved advance is deducted in instalments.</li><li>The employee downloads the letter from their account.</li></ol>
+      
+      
+    </div>
+    <div class="figs two"><button type="button" class="shot" data-src="../portal-requests.jpg" aria-label="Screenshot: Portal requests">
+      <img src="../portal-requests.jpg" alt="Screenshot: Portal requests" width="1366" height="820" loading="lazy" decoding="async">
+      <span class="zoom"><span class="ar ">تكبير</span><span class="en ">Enlarge</span></span>
+    </button><button type="button" class="shot" data-src="../employee-requests.jpg" aria-label="Screenshot: Portal requests (2)">
+      <img src="../employee-requests.jpg" alt="Screenshot: Portal requests (2)" width="1366" height="820" loading="lazy" decoding="async">
+      <span class="zoom"><span class="ar ">تكبير</span><span class="en ">Enlarge</span></span>
+    </button></div>
+  </article>
+    </section>
+    <section class="group" id="talent">
+      <div class="group-head"><span class="ico" aria-hidden="true">△</span><div><h2><span class="ar ">المواهب</span><span class="en ">Talent</span></h2><p><span class="ar ">دورات تقييم الأداء، طلبات التوظيف من المدراء، والتدريب والشهادات.</span><span class="en ">Appraisal cycles, hiring requests from managers, and training and certificates.</span></p></div></div>
+      
+  <article class="feature" id="reviews" data-who="hr mgr emp">
+    <div class="copy">
+      <div class="who"><span class="tag t-hr"><span class="ar ">الموارد البشرية</span><span class="en ">HR</span></span><span class="tag t-mgr"><span class="ar ">المدراء</span><span class="en ">Managers</span></span><span class="tag t-emp"><span class="ar ">الموظفون</span><span class="en ">Employees</span></span></div>
+      <h3><span class="ar ">تقييمات الأداء</span><span class="en ">Appraisals</span></h3>
+      <p class="where"><span class="where-label"><span class="ar ">المكان</span><span class="en ">Where</span></span><span class="path"><span class="ar ">الموارد البشرية ← التقييمات · البوابة ← تقييماتي</span><span class="en ">HR → Appraisals · Portal → My Reviews</span></span></p>
+      <p class="what"><span class="ar ">دورة تقييم تطلقها الموارد البشرية: تقييم ذاتي بأهداف وأوزان، ثم تقييم المدير وتوصيته، ثم التقييم النهائي. آخر تقييم يظهر عند مراجعة الراتب.</span><span class="en ">An appraisal cycle HR launches: self review with goals and weights, then the manager’s review and recommendation, then the final rating. The latest rating shows in salary reviews.</span></p>
+      
+      <h4><span class="ar ">طريقة الاستخدام</span><span class="en ">How to use it</span></h4>
+      <ol class="steps ar"><li>الموارد البشرية تنشئ الدورة وتختار الموظفين والفترة.</li><li>الموظف يكمل تقييمه الذاتي من «تقييماتي».</li><li>المدير يقيّم ويوصي، ثم تعتمد الموارد البشرية التقييم النهائي.</li></ol><ol class="steps en"><li>HR creates the cycle and chooses the people and period.</li><li>The employee completes their self review in My Reviews.</li><li>The manager rates and recommends; HR confirms the final rating.</li></ol>
+      
+      
+    </div>
+    <div class="figs"><button type="button" class="shot" data-src="../reviews.jpg" aria-label="Screenshot: Appraisals">
+      <img src="../reviews.jpg" alt="Screenshot: Appraisals" width="1366" height="820" loading="lazy" decoding="async">
+      <span class="zoom"><span class="ar ">تكبير</span><span class="en ">Enlarge</span></span>
+    </button></div>
+  </article>
+  <article class="feature" id="requisitions" data-who="mgr hr">
+    <div class="copy">
+      <div class="who"><span class="tag t-mgr"><span class="ar ">المدراء</span><span class="en ">Managers</span></span><span class="tag t-hr"><span class="ar ">الموارد البشرية</span><span class="en ">HR</span></span></div>
+      <h3><span class="ar ">طلبات التوظيف</span><span class="en ">Hiring requests</span></h3>
+      <p class="where"><span class="where-label"><span class="ar ">المكان</span><span class="en ">Where</span></span><span class="path"><span class="ar ">التوظيف ← طلبات التوظيف</span><span class="en ">Recruitment → Hiring requests</span></span></p>
+      <p class="what"><span class="ar ">المدير يطلب وظيفة جديدة (المسمى، العدد، الراتب المتوقع، السبب). يمر الطلب بسلسلة الموافقات، والموافقة النهائية تنشئ وظيفة شاغرة كمسودة.</span><span class="en ">A manager asks for a new position (title, headcount, expected salary, reason). It goes through the approval chain, and final approval creates a draft vacancy.</span></p>
+      
+      <h4><span class="ar ">طريقة الاستخدام</span><span class="en ">How to use it</span></h4>
+      <ol class="steps ar"><li>اضغط «طلب توظيف» واملأ البيانات.</li><li>تابع حالته: بانتظار، معتمد، مرفوض.</li><li>بعد الاعتماد أكمل الوظيفة الشاغرة من «الوظائف» وانشرها.</li></ol><ol class="steps en"><li>Click Request a hire and fill it in.</li><li>Follow its status: pending, approved, rejected.</li><li>After approval, finish the vacancy in Vacancies and publish it.</li></ol>
+      
+      
+    </div>
+    <div class="figs"><button type="button" class="shot" data-src="../requisitions.jpg" aria-label="Screenshot: Hiring requests">
+      <img src="../requisitions.jpg" alt="Screenshot: Hiring requests" width="1366" height="820" loading="lazy" decoding="async">
+      <span class="zoom"><span class="ar ">تكبير</span><span class="en ">Enlarge</span></span>
+    </button></div>
+  </article>
+  <article class="feature" id="training" data-who="hr">
+    <div class="copy">
+      <div class="who"><span class="tag t-hr"><span class="ar ">الموارد البشرية</span><span class="en ">HR</span></span></div>
+      <h3><span class="ar ">التدريب والشهادات والمهارات</span><span class="en ">Training, certificates and skills</span></h3>
+      <p class="where"><span class="where-label"><span class="ar ">المكان</span><span class="en ">Where</span></span><span class="path"><span class="ar ">الموارد البشرية ← التدريب · ملف الموظف ← التدريب والمهارات</span><span class="en ">HR → Training · Employee profile → Training &amp; skills</span></span></p>
+      <p class="what"><span class="ar ">قائمة دورات بمدة صلاحية ودورات إلزامية، وتسجيل التدريب والشهادة في ملف الموظف مع تنبيه قبل انتهائها، ومهارات بمستوى من 1 إلى 5.</span><span class="en ">A course list with validity and mandatory courses, training and certificates recorded on the profile with an alert before they expire, and skills rated 1 to 5.</span></p>
+      
+      <h4><span class="ar ">طريقة الاستخدام</span><span class="en ">How to use it</span></h4>
+      <ol class="steps ar"><li>أضف الدورات وحدد مدة الصلاحية وهل هي إلزامية.</li><li>من ملف الموظف سجّل التدريب وارفع الشهادة.</li><li>صفحة التدريب تعرض المنتهي والقريب ومن لم يأخذ دورة إلزامية.</li></ol><ol class="steps en"><li>Add courses with their validity and whether they are mandatory.</li><li>On the profile, record the training and upload the certificate.</li><li>The Training page shows expired, expiring, and who lacks a mandatory course.</li></ol>
+      
+      <p class="note"><span class="ar ">كل صباح الساعة 08:00 يصل تذكير بخطوات التعيين (Onboarding) المتأخرة إلى المسؤول عنها.</span><span class="en ">Every morning at 08:00 a reminder goes to whoever owns an overdue onboarding step.</span></p>
+    </div>
+    <div class="figs"><button type="button" class="shot" data-src="../training.jpg" aria-label="Screenshot: Training, certificates and skills">
+      <img src="../training.jpg" alt="Screenshot: Training, certificates and skills" width="1366" height="820" loading="lazy" decoding="async">
+      <span class="zoom"><span class="ar ">تكبير</span><span class="en ">Enlarge</span></span>
+    </button></div>
+  </article>
+    </section>
+    <section class="group" id="services">
+      <div class="group-head"><span class="ico" aria-hidden="true">▢</span><div><h2><span class="ar ">خدمات الموظفين</span><span class="en ">Employee services</span></h2><p><span class="ar ">الإعلانات والسياسات، الملف التأديبي، المزايا، وسجل التغييرات.</span><span class="en ">Announcements and policies, the disciplinary file, benefits, and the change log.</span></p></div></div>
+      
+  <article class="feature" id="comms" data-who="hr emp">
+    <div class="copy">
+      <div class="who"><span class="tag t-hr"><span class="ar ">الموارد البشرية</span><span class="en ">HR</span></span><span class="tag t-emp"><span class="ar ">الموظفون</span><span class="en ">Employees</span></span></div>
+      <h3><span class="ar ">الإعلانات والسياسات</span><span class="en ">Announcements and policies</span></h3>
+      <p class="where"><span class="where-label"><span class="ar ">المكان</span><span class="en ">Where</span></span><span class="path"><span class="ar ">الموارد البشرية ← الإعلانات والسياسات · البوابة ← الإعلانات والسياسات</span><span class="en ">HR → Announcements &amp; policies · Portal → Announcements, Policies</span></span></p>
+      <p class="what"><span class="ar ">إعلانات للموظفين مع متابعة من قرأ، وسياسات بإصدارات يقرّ بها الموظف من البوابة، مع تذكير لمن لم يقر.</span><span class="en ">Announcements with read tracking, and versioned policies employees acknowledge from the portal, with a reminder for those who have not.</span></p>
+      
+      <h4><span class="ar ">طريقة الاستخدام</span><span class="en ">How to use it</span></h4>
+      <ol class="steps ar"><li>اضغط «إعلان جديد» أو «سياسة جديدة» واختر من يراها.</li><li>للسياسة: فعّل «يجب على الموظفين الإقرار بها» وحدد موعداً اختيارياً للإقرار.</li><li>تعديل السياسة المنشورة يغيّرها في مكانها؛ «نشر إصدار جديد» يطلب من الجميع الإقرار من جديد.</li><li>تابع عدد من أقر، واضغط «تذكير من لم يقر».</li><li>الموظف يقرأ ويقر من البوابة.</li></ol><ol class="steps en"><li>Click New announcement or New policy and choose who sees it.</li><li>For a policy: turn on Employees must acknowledge it, with an optional acknowledge-by date.</li><li>Editing a published policy changes it in place; Publish new version asks everyone to acknowledge again.</li><li>Track how many have acknowledged and click Remind those who have not acknowledged.</li><li>Employees read and acknowledge in the portal.</li></ol>
+      
+      
+    </div>
+    <div class="figs two"><button type="button" class="shot" data-src="../communications.jpg" aria-label="Screenshot: Announcements and policies">
+      <img src="../communications.jpg" alt="Screenshot: Announcements and policies" width="1366" height="820" loading="lazy" decoding="async">
+      <span class="zoom"><span class="ar ">تكبير</span><span class="en ">Enlarge</span></span>
+    </button><button type="button" class="shot" data-src="../portal-policies.jpg" aria-label="Screenshot: Announcements and policies (2)">
+      <img src="../portal-policies.jpg" alt="Screenshot: Announcements and policies (2)" width="1366" height="820" loading="lazy" decoding="async">
+      <span class="zoom"><span class="ar ">تكبير</span><span class="en ">Enlarge</span></span>
+    </button></div>
+  </article>
+  <article class="feature" id="discipline" data-who="hr">
+    <div class="copy">
+      <div class="who"><span class="tag t-hr"><span class="ar ">الموارد البشرية</span><span class="en ">HR</span></span></div>
+      <h3><span class="ar ">الملف التأديبي</span><span class="en ">Disciplinary file</span></h3>
+      <p class="where"><span class="where-label"><span class="ar ">المكان</span><span class="en ">Where</span></span><span class="path"><span class="ar ">الموارد البشرية ← التأديب</span><span class="en ">HR → Disciplinary</span></span></p>
+      <p class="what"><span class="ar ">لكل حالة: الواقعة، الإجراء المتخذ (توجيه، إنذار شفهي، إنذار كتابي، إنذار نهائي، إيقاف، فصل)، رد الموظف، وخطاب الإنذار الصادر مربوطاً بها.</span><span class="en ">Each case holds the incident, the action taken (counselling, verbal, written or final warning, suspension, termination), the employee’s response and the warning letter issued.</span></p>
+      
+      <h4><span class="ar ">طريقة الاستخدام</span><span class="en ">How to use it</span></h4>
+      <ol class="steps ar"><li>اضغط «تسجيل حالة» واختر الموظف والتاريخ والوصف.</li><li>اختر الإجراء وأصدر الخطاب من «الخطابات القانونية» واربطه بالحالة.</li><li>أضف رد الموظف عند استلامه.</li></ol><ol class="steps en"><li>Click Record a case and choose the employee, date and description.</li><li>Choose the action, issue the letter from Legal Letters and link it to the case.</li><li>Add the employee’s response when you receive it.</li></ol>
+      
+      
+    </div>
+    <div class="figs"><button type="button" class="shot" data-src="../disciplinary.jpg" aria-label="Screenshot: Disciplinary file">
+      <img src="../disciplinary.jpg" alt="Screenshot: Disciplinary file" width="1366" height="820" loading="lazy" decoding="async">
+      <span class="zoom"><span class="ar ">تكبير</span><span class="en ">Enlarge</span></span>
+    </button></div>
+  </article>
+  <article class="feature" id="benefits" data-who="hr emp">
+    <div class="copy">
+      <div class="who"><span class="tag t-hr"><span class="ar ">الموارد البشرية</span><span class="en ">HR</span></span><span class="tag t-emp"><span class="ar ">الموظفون</span><span class="en ">Employees</span></span></div>
+      <h3><span class="ar ">المزايا: التأمين الطبي وتذاكر الطيران</span><span class="en ">Benefits: medical insurance and air tickets</span></h3>
+      <p class="where"><span class="where-label"><span class="ar ">المكان</span><span class="en ">Where</span></span><span class="path"><span class="ar ">الموارد البشرية ← المزايا · ملف الموظف ← المزايا · البوابة ← مزاياي</span><span class="en ">HR → Benefits · Employee profile → Benefits · Portal → My Benefits</span></span></p>
+      <p class="what"><span class="ar ">وثائق التأمين الجماعي لكل شركة، وتسجيل كل موظف فيها مع المعالين، واستحقاق تذكرة الطيران. الصفحة تعرض التغطيات التي تنتهي والتذاكر المستحقة خلال 60 يوماً.</span><span class="en ">Group insurance policies per company, each employee’s enrolment with dependents, and the air ticket entitlement. The page lists cover ending and tickets due within 60 days.</span></p>
+      
+      <h4><span class="ar ">طريقة الاستخدام</span><span class="en ">How to use it</span></h4>
+      <ol class="steps ar"><li>أضف الوثيقة: شركة التأمين، رقم الوثيقة، الخطة والفترة.</li><li>من ملف الموظف ← المزايا: اختر الوثيقة والفئة ورقم البطاقة والتواريخ والقسط السنوي، وأضف المعالين.</li><li>حدد استحقاق التذكرة (كل 12 أو 24 شهراً، والدرجة)، وسجّل استخدامها.</li><li>التذكرة النقدية تُضاف كبدل إلى مسودة مسير ذلك الشهر تلقائياً.</li></ol><ol class="steps en"><li>Add the policy: insurer, policy number, plan and period.</li><li>In the profile → Benefits: choose the policy, category, card number, dates and yearly premium, and add dependents.</li><li>Set the ticket entitlement (every 12 or 24 months, and the class), and record each use.</li><li>A ticket paid in cash is added as an allowance to that month’s draft run automatically.</li></ol>
+      
+      <p class="note"><span class="ar ">الموظف يرى تغطيته ومعاليه وتذكرته في «مزاياي»، دون قيمة القسط.</span><span class="en ">Employees see their cover, dependents and ticket in My Benefits, without the premium.</span></p>
+    </div>
+    <div class="figs two"><button type="button" class="shot" data-src="../benefits.jpg" aria-label="Screenshot: Benefits: medical insurance and air tickets">
+      <img src="../benefits.jpg" alt="Screenshot: Benefits: medical insurance and air tickets" width="1366" height="820" loading="lazy" decoding="async">
+      <span class="zoom"><span class="ar ">تكبير</span><span class="en ">Enlarge</span></span>
+    </button><button type="button" class="shot" data-src="../employee-benefits.jpg" aria-label="Screenshot: Benefits: medical insurance and air tickets (2)">
+      <img src="../employee-benefits.jpg" alt="Screenshot: Benefits: medical insurance and air tickets (2)" width="1366" height="820" loading="lazy" decoding="async">
+      <span class="zoom"><span class="ar ">تكبير</span><span class="en ">Enlarge</span></span>
+    </button></div>
+  </article>
+  <article class="feature" id="history" data-who="hr adm">
+    <div class="copy">
+      <div class="who"><span class="tag t-hr"><span class="ar ">الموارد البشرية</span><span class="en ">HR</span></span><span class="tag t-adm"><span class="ar ">المسؤول</span><span class="en ">Admins</span></span></div>
+      <h3><span class="ar ">سجل التغييرات</span><span class="en ">Change log</span></h3>
+      <p class="where"><span class="where-label"><span class="ar ">المكان</span><span class="en ">Where</span></span><span class="path"><span class="ar ">ملف الموظف ← سجل التغييرات (المسؤول ومدير الموارد البشرية)</span><span class="en ">Employee profile → Change log (admin and HR manager)</span></span></p>
+      <p class="what"><span class="ar ">من غيّر أي حقل ومتى، والقيمة قبل وبعد: البيانات الشخصية، الراتب ومكوناته، والبنك (أرقام الحساب والآيبان مخفية إلا آخر 4 أرقام).</span><span class="en ">Who changed which field and when, with the value before and after: personal details, salary and its components, and bank details (account and IBAN masked except the last 4 digits).</span></p>
+      
+      <h4><span class="ar ">طريقة الاستخدام</span><span class="en ">How to use it</span></h4>
+      <ol class="steps ar"><li>افتح ملف الموظف واختر «سجل التغييرات».</li><li>الأحدث أولاً؛ كل سطر يذكر الشخص والتاريخ والحقل.</li><li>التغييرات تُسجَّل من الآن؛ ما قبل التحديث لا يظهر.</li></ol><ol class="steps en"><li>Open the profile and choose Change log.</li><li>Newest first; each line names the person, date and field.</li><li>Changes are recorded from now on; earlier edits are not shown.</li></ol>
+      
+      
+    </div>
+    <div class="figs"><button type="button" class="shot" data-src="../employee-change-log.jpg" aria-label="Screenshot: Change log">
+      <img src="../employee-change-log.jpg" alt="Screenshot: Change log" width="1366" height="820" loading="lazy" decoding="async">
+      <span class="zoom"><span class="ar ">تكبير</span><span class="en ">Enlarge</span></span>
+    </button></div>
+  </article>
+    </section>
+    <section class="group" id="admin">
+      <div class="group-head"><span class="ico" aria-hidden="true">⚙</span><div><h2><span class="ar ">إدارة النظام</span><span class="en ">System administration</span></h2><p><span class="ar ">الصلاحيات، التقارير المجدولة، والنسخ الاحتياطي. هذه الصفحات للمسؤول.</span><span class="en ">Permissions, scheduled reports and backups. These pages are for admins.</span></p></div></div>
+      
+  <article class="feature" id="roles" data-who="adm">
+    <div class="copy">
+      <div class="who"><span class="tag t-adm"><span class="ar ">المسؤول</span><span class="en ">Admins</span></span></div>
+      <h3><span class="ar ">الأدوار والصلاحيات</span><span class="en ">Roles and permissions</span></h3>
+      <p class="where"><span class="where-label"><span class="ar ">المكان</span><span class="en ">Where</span></span><span class="path"><span class="ar ">الإعدادات ← الأدوار والصلاحيات</span><span class="en ">Settings → Roles and permissions</span></span></p>
+      <p class="what"><span class="ar ">جدول يحدد الأقسام التي يفتحها كل دور. ما يمكن للدور تغييره داخل القسم (اعتماد، حذف، تعديل راتب) يبقى ثابتاً لكل إجراء. دور المسؤول له كل شيء دائماً.</span><span class="en ">A table of which sections each role can open. What a role may change inside a section (approve, delete, edit pay) stays fixed per action. The admin role always has everything.</span></p>
+      
+      <h4><span class="ar ">طريقة الاستخدام</span><span class="en ">How to use it</span></h4>
+      <ol class="steps ar"><li>ضع علامة على الأقسام المسموحة للدور، ثم «حفظ» في نفس السطر.</li><li>«استعادة الافتراضي» يلغي التعديل.</li><li>التغيير يُطبَّق عند تسجيل دخول المستخدم التالي أو تحديث الصفحة.</li><li>دور «أخصائي موارد بشرية» جديد: الموارد البشرية واللوحة والبوابة، دون الرواتب أو الإعدادات. يُعيَّن من «المستخدمون».</li></ol><ol class="steps en"><li>Tick the sections the role may open, then Save on that row.</li><li>Restore the default undoes it.</li><li>It applies at the user’s next sign-in or page reload.</li><li>The new HR Specialist role has HR, dashboard and portal, without payroll or settings. Assign it in Users.</li></ol>
+      
+      
+    </div>
+    <div class="figs"><button type="button" class="shot" data-src="../settings-roles.jpg" aria-label="Screenshot: Roles and permissions">
+      <img src="../settings-roles.jpg" alt="Screenshot: Roles and permissions" width="1366" height="820" loading="lazy" decoding="async">
+      <span class="zoom"><span class="ar ">تكبير</span><span class="en ">Enlarge</span></span>
+    </button></div>
+  </article>
+  <article class="feature" id="reports" data-who="adm hr">
+    <div class="copy">
+      <div class="who"><span class="tag t-adm"><span class="ar ">المسؤول</span><span class="en ">Admins</span></span><span class="tag t-hr"><span class="ar ">الموارد البشرية</span><span class="en ">HR</span></span></div>
+      <h3><span class="ar ">التقارير المجدولة</span><span class="en ">Scheduled reports</span></h3>
+      <p class="where"><span class="where-label"><span class="ar ">المكان</span><span class="en ">Where</span></span><span class="path"><span class="ar ">الإعدادات ← التقارير المجدولة</span><span class="en ">Settings → Scheduled reports</span></span></p>
+      <p class="what"><span class="ar ">تقرير يُرسل بالبريد كملف Excel يومياً أو أسبوعياً أو شهرياً: عدد الموظفين، المستندات المنتهية خلال 60 يوماً، الإجازات خلال 14 يوماً، أو غياب وتأخر الأمس.</span><span class="en ">A report emailed as Excel daily, weekly or monthly: headcount, documents expiring within 60 days, leave in the next 14 days, or yesterday’s absences and late arrivals.</span></p>
+      
+      <h4><span class="ar ">طريقة الاستخدام</span><span class="en ">How to use it</span></h4>
+      <ol class="steps ar"><li>اضغط «جدول جديد» واكتب اسماً واختر التقرير.</li><li>اختر التكرار واليوم والساعة (بتوقيت التطبيق).</li><li>اكتب عناوين البريد مفصولة بفواصل، واختر شركة الكيان الحالي أو «كل الشركات».</li><li>استخدم «أرسل الآن» لتجربة ما سيصل.</li></ol><ol class="steps en"><li>Click New schedule, name it and choose the report.</li><li>Choose how often, the day and the time (app time zone).</li><li>Type the email addresses separated by commas, and choose the current entity or All companies.</li><li>Use Send now to try what recipients will get.</li></ol>
+      
+      
+    </div>
+    <div class="figs"><button type="button" class="shot" data-src="../settings-report-schedules.jpg" aria-label="Screenshot: Scheduled reports">
+      <img src="../settings-report-schedules.jpg" alt="Screenshot: Scheduled reports" width="1366" height="820" loading="lazy" decoding="async">
+      <span class="zoom"><span class="ar ">تكبير</span><span class="en ">Enlarge</span></span>
+    </button></div>
+  </article>
+  <article class="feature" id="backups" data-who="adm">
+    <div class="copy">
+      <div class="who"><span class="tag t-adm"><span class="ar ">المسؤول</span><span class="en ">Admins</span></span></div>
+      <h3><span class="ar ">النسخ الاحتياطي الليلي</span><span class="en ">Nightly backup</span></h3>
+      <p class="where"><span class="where-label"><span class="ar ">المكان</span><span class="en ">Where</span></span><span class="path"><span class="ar ">الإعدادات ← النسخ الاحتياطية (مسؤول المنصة فقط)</span><span class="en ">Settings → Backups (platform admin only)</span></span></p>
+      <p class="what"><span class="ar ">كل ليلة الساعة 02:30 تُحفظ قاعدة البيانات كاملة على الخادم، ويُحتفظ بأحدث 14 نسخة. يمكن تشغيل نسخة الآن وتنزيل أي نسخة.</span><span class="en ">Every night at 02:30 the whole database is saved on the server, keeping the newest 14. You can run one now and download any copy.</span></p>
+      
+      <h4><span class="ar ">طريقة الاستخدام</span><span class="en ">How to use it</span></h4>
+      <ol class="steps ar"><li>«انسخ الآن» قبل أي تغيير كبير (استيراد، حذف جماعي).</li><li>نزّل النسخة واحفظها في مكان آمن خارج الخادم عند الحاجة.</li><li>النسخ تحتوي بيانات كل الشركات، لذا يراها مسؤول المنصة فقط.</li></ol><ol class="steps en"><li>Click Back up now before any big change (an import, a bulk delete).</li><li>Download a copy and keep it somewhere safe off the server when needed.</li><li>Copies hold every company’s data, so only the platform admin sees them.</li></ol>
+      
+      <p class="note"><span class="ar ">هذه النسخ على نفس الخادم. للحماية من فقدان الخادم يلزم نسخ خارجي (مثل S3) يُعدّ خارج النظام.</span><span class="en ">These copies sit on the same server. Protection against losing the server needs an off-site copy (such as S3) set up outside the app.</span></p>
+    </div>
+    <div class="figs"><button type="button" class="shot" data-src="../settings-backups.jpg" aria-label="Screenshot: Nightly backup">
+      <img src="../settings-backups.jpg" alt="Screenshot: Nightly backup" width="1366" height="820" loading="lazy" decoding="async">
+      <span class="zoom"><span class="ar ">تكبير</span><span class="en ">Enlarge</span></span>
+    </button></div>
+  </article>
+    </section>
+    <p class="empty" id="empty"><span class="ar ">لا توجد ميزات لهذه الفئة.</span><span class="en ">No features for this group.</span></p>
+  </main>
+
+  <footer class="wrap"><span class="ar ">للأسئلة أو ملاحظة خطأ في النظام، تواصلوا مع فريق الموارد البشرية. الأرقام النظامية (التوطين، المعاشات) يراجعها المسؤول دورياً من مركز الامتثال.</span><span class="en ">For questions or to report a problem, contact the HR team. Statutory figures (Emiratisation, pensions) are reviewed by an admin in the Compliance centre.</span></footer>
+</div>
+
+<script src="guide.js"></script>
+
+</body>
+</html>
