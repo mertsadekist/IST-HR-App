@@ -30,14 +30,15 @@ export const ROLE_MODULES = {
   // and with one page left there is nothing for a help centre to navigate.
   employee: [MODULES.PORTAL],
   accountant: [MODULES.PAYROLL, MODULES.ASSETS, MODULES.COMPLIANCE, MODULES.HR, MODULES.DASHBOARD, MODULES.PORTAL],
+  hr_specialist: [MODULES.HR, MODULES.DASHBOARD, MODULES.PORTAL],
 };
 
 /**
  * Where a role starts, and where it is sent when it lands somewhere it cannot
  * open. Must never return a path the role is denied, or the redirect loops.
  */
-export function landingPathFor(role) {
-  return canAccessModule(role, MODULES.DASHBOARD) ? '/dashboard' : '/portal/my-assets';
+export function landingPathFor(role, modules) {
+  return canAccessModule(role, MODULES.DASHBOARD, modules) ? '/dashboard' : '/portal/my-assets';
 }
 
 /**
@@ -91,7 +92,12 @@ const ROUTE_MODULES = [
   ['/settings', MODULES.OPERATIONS],
 ];
 
-export function canAccessModule(role, module) {
+/**
+ * `modules` is the list the server sent with the user (an admin may have
+ * changed it in Settings → Roles); the static list above is the fallback.
+ */
+export function canAccessModule(role, module, modules) {
+  if (role !== 'admin' && Array.isArray(modules)) return modules.includes(module);
   const allowed = ROLE_MODULES[role];
   if (!allowed) return false;
   if (allowed === '*') return true;
@@ -99,7 +105,7 @@ export function canAccessModule(role, module) {
 }
 
 /** @returns {boolean} whether this role may open this path at all. */
-export function canAccessPath(role, pathname) {
+export function canAccessPath(role, pathname, modules) {
   const hit = ROUTE_MODULES.find(([prefix]) => pathname === prefix || pathname.startsWith(`${prefix}/`));
-  return hit ? canAccessModule(role, hit[1]) : true;
+  return hit ? canAccessModule(role, hit[1], modules) : true;
 }

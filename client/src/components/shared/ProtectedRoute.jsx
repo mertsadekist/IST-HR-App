@@ -36,8 +36,8 @@ export default function ProtectedRoute() {
   // that renders and then fills with 403s. The API is still the real gate.
   // The target comes from landingPathFor, not a hardcoded /dashboard: a role
   // that cannot open the dashboard either would redirect to itself forever.
-  if (user?.role && !canAccessPath(user.role, location.pathname)) {
-    return <Navigate to={landingPathFor(user.role)} replace />;
+  if (user?.role && !canAccessPath(user.role, location.pathname, user.modules)) {
+    return <Navigate to={landingPathFor(user.role, user.modules)} replace />;
   }
 
   return <Outlet />;

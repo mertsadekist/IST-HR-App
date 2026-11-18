@@ -75,7 +75,8 @@
     "benefits": "Benefits",
     "my_benefits": "My Benefits",
     "clock_in": "Portal clock-in",
-    "payroll_exports": "Bank file and accounting"
+    "payroll_exports": "Bank file and accounting",
+    "roles": "Roles and permissions"
   },
   "topbar": {
     "search_placeholder": "Search across HR system...",
@@ -775,7 +776,8 @@
     "role_hint_hr_manager": "All HR, recruitment, payroll, assets and reporting. No user management.",
     "role_hint_recruiter": "Recruitment only: candidates, vacancies, applicants and CV scoring.",
     "role_hint_accountant": "Payroll and WPS, assets, subscriptions, domains and company documents. No recruitment, no reports, no deletes.",
-    "role_hint_employee": "Self-service only: their own assets, accounts and payslips."
+    "role_hint_employee": "Self-service only: their own assets, accounts and payslips.",
+    "role_hint_hr_specialist": "Day-to-day HR: employees, attendance, leave, documents, onboarding and offboarding checklists. No payroll, recruitment or settings."
   },
   "lifecycle": {
     "access_level": "Access Level",
@@ -4497,5 +4499,31 @@
     "net_total": "Net total",
     "create": "Create run",
     "created": "Off-cycle run created for {{count}} employee(s)"
+  },
+  "roles": {
+    "title": "Roles and permissions",
+    "desc": "Which parts of the system each role can open. What a role may change inside a part (approve, delete, edit pay) stays fixed per action. The admin role always has everything.",
+    "role": "Role",
+    "users": "{{count}} user(s)",
+    "customised": "Customised",
+    "reset": "Restore the default",
+    "fixed": "Always everything",
+    "saved": "Permissions saved; they apply at the user’s next sign-in or page reload.",
+    "admin_only": "Only an admin can change role permissions.",
+    "role_admin": "Admin",
+    "role_hr_manager": "HR Manager",
+    "role_recruiter": "Recruiter",
+    "role_employee": "Employee",
+    "role_accountant": "Accountant",
+    "role_hr_specialist": "HR Specialist",
+    "module_recruitment": "Recruitment",
+    "module_hr": "HR",
+    "module_payroll": "Payroll",
+    "module_assets": "Assets",
+    "module_compliance": "Compliance",
+    "module_analytics": "Reports",
+    "module_operations": "Users and settings",
+    "module_dashboard": "Dashboard",
+    "module_portal": "Self-service"
   }
 }

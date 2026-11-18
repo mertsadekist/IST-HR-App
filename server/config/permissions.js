@@ -59,10 +59,48 @@ export const ROLE_MODULES = Object.freeze({
   // candidate records and the reporting suite are not part of that job, and
   // the reports module reaches into the hiring pipeline.
   accountant: [MODULES.PAYROLL, MODULES.ASSETS, MODULES.COMPLIANCE, MODULES.HR, MODULES.DASHBOARD, MODULES.PORTAL],
+
+  // HR officer: the day-to-day HR work (attendance, documents, onboarding and
+  // offboarding checklists) without payroll, recruitment or settings. The
+  // routes that name 'hr_specialist' in authorize() are the writes it may make.
+  hr_specialist: [MODULES.HR, MODULES.DASHBOARD, MODULES.PORTAL],
 });
+
+export const ALL_MODULES = Object.freeze([...ALL]);
+
+/**
+ * Admin-edited module lists per role (Settings → Roles), kept in app_settings
+ * 'role_modules' and loaded at boot and on every change. A role with no entry
+ * keeps its default above. The admin role is never overridden, so nobody can
+ * lock the system out of its own settings.
+ */
+let overrides = {};
+
+/** @param {Record<string,string[]>|string|null} raw */
+export function setRoleOverrides(raw) {
+  let o = raw;
+  if (typeof o === 'string') { try { o = JSON.parse(o); } catch { o = {}; } }
+  const clean = {};
+  for (const [role, mods] of Object.entries(o && typeof o === 'object' ? o : {})) {
+    if (role === 'admin' || !ROLE_MODULES[role] || !Array.isArray(mods)) continue;
+    clean[role] = [...new Set(mods.filter((m) => ALL.includes(m)))];
+  }
+  overrides = clean;
+  return clean;
+}
+
+export const roleOverrides = () => ({ ...overrides });
+
+/** The default module list of a role, '*' expanded. */
+export function defaultModulesFor(role) {
+  const allowed = ROLE_MODULES[role];
+  if (!allowed) return [];
+  return allowed === '*' ? [...ALL] : [...allowed];
+}
 
 /** @returns {boolean} */
 export function canAccessModule(role, module) {
+  if (role !== 'admin' && overrides[role]) return overrides[role].includes(module);
   const allowed = ROLE_MODULES[role];
   if (!allowed) return false;        // an unknown role gets nothing
   if (allowed === '*') return true;
@@ -71,6 +109,7 @@ export function canAccessModule(role, module) {
 
 /** Every module a role can reach — used to describe the role, not to gate. */
 export function modulesFor(role) {
+  if (role !== 'admin' && overrides[role]) return [...overrides[role]];
   const allowed = ROLE_MODULES[role];
   if (!allowed) return [];
   return allowed === '*' ? [...ALL] : [...allowed];

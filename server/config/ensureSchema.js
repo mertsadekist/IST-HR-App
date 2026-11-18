@@ -1165,7 +1165,8 @@ const SEED_GUARDS = [
 // a deploy whose users.role enum predates `accountant` would reject every
 // attempt to create that user with a silent truncation error.
 const ENUM_GUARDS = [
-  { table: 'users', column: 'role', values: ['accountant'], suffix: " DEFAULT 'employee'" },
+  // hr_specialist was named in authorize() lists long before it could be assigned.
+  { table: 'users', column: 'role', values: ['accountant', 'hr_specialist'], suffix: " DEFAULT 'employee'" },
   // Rows written by the Hik Central sync. 'Drive Sync' stays in the list: those
   // rows are history and must not be orphaned by widening the column.
   { table: 'attendance', column: 'source', values: ['Hik Central', 'Self Service'], suffix: " NOT NULL DEFAULT 'Manual'" },

@@ -14,6 +14,7 @@ import { closeHikPool } from './services/hikClient.js';
 import { scheduleDailyAt } from './services/dailySchedule.js';
 import { checkTrainingExpiry } from './routes/training.js';
 import { runOnboardingReminders } from './services/onboardingReminders.js';
+import { setRoleOverrides } from './config/permissions.js';
 
 const PORT = process.env.PORT || 3001;
 
@@ -119,6 +120,8 @@ app.listen(PORT, async () => {
   console.log(`📋 Health check: http://localhost:${PORT}/api/health`);
   console.log(`🔑 Environment: ${process.env.NODE_ENV || 'development'}\n`);
   await ensureSchema(); // self-heal additive columns/tables (attendance_id, app_settings, salary_reviews…)
+  // Admin-edited role permissions (Settings → Roles) over the defaults in config/permissions.js.
+  setRoleOverrides(await getAppSetting('role_modules', null));
   // Operate in the configured timezone (UI setting → APP_TZ env → Asia/Dubai).
   const tz = await getAppSetting('timezone', process.env.APP_TZ || process.env.TZ || 'Asia/Dubai');
   if (tz) { process.env.TZ = tz; console.log(`🕒 App timezone: ${tz}`); }

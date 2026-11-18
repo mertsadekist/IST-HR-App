@@ -24,6 +24,7 @@ const roles = [
   { value: 'hr_manager', label: 'HR Manager' },
   { value: 'recruiter', label: 'Recruiter' },
   { value: 'accountant', label: 'Accountant' },
+  { value: 'hr_specialist', label: 'HR Specialist' },
   { value: 'employee', label: 'Employee' },
 ];
 
@@ -33,6 +34,7 @@ const roleHints = {
   hr_manager: 'user_management.role_hint_hr_manager',
   recruiter: 'user_management.role_hint_recruiter',
   accountant: 'user_management.role_hint_accountant',
+  hr_specialist: 'user_management.role_hint_hr_specialist',
   employee: 'user_management.role_hint_employee',
 };
 

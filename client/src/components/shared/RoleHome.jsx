@@ -9,5 +9,5 @@ import { landingPathFor } from '@/config/permissions';
  */
 export default function RoleHome() {
   const { user } = useSelector((s) => s.auth);
-  return <Navigate to={landingPathFor(user?.role)} replace />;
+  return <Navigate to={landingPathFor(user?.role, user?.modules)} replace />;
 }

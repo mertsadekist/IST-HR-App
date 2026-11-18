@@ -8,7 +8,7 @@ import { authorize } from '../middleware/rbac.js';
 import { addAudit } from '../services/auditService.js';
 import { tenantScope } from '../middleware/tenant.js';
 import { validate } from '../middleware/validate.js';
-import { ROLE_MODULES } from '../config/permissions.js';
+import { ROLE_MODULES, modulesFor } from '../config/permissions.js';
 
 const router = Router();
 router.use(auth, tenantScope);
@@ -281,6 +281,7 @@ router.post('/:id/impersonate', authorize('admin'), denyImpersonated, async (req
       user: {
         id: target.id, name: target.name, username: target.username,
         email: target.email, role: target.role, company_id: target.company_id,
+        modules: modulesFor(target.role),
       },
       impersonated_by: { id: req.user.id, name: impersonatorName },
       expires_in_minutes: 30,

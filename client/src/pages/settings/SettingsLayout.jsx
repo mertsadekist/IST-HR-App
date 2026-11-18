@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { Building2, Network, Wrench, Box, Settings2, Mail, FileText, CalendarClock, GitBranch, MapPinned, Landmark } from 'lucide-react';
+import { Building2, Network, Wrench, Box, Settings2, Mail, FileText, CalendarClock, GitBranch, MapPinned, Landmark, ShieldCheck } from 'lucide-react';
 import { cn } from '@utils/cn';
 import { useTranslation } from 'react-i18next';
 import { useSelector } from 'react-redux';
@@ -17,6 +17,7 @@ export default function SettingsLayout() {
     { path: '/settings/approvals', icon: GitBranch, label: t('nav.approval_chains') },
     { path: '/settings/clock-in', icon: MapPinned, label: t('nav.clock_in') },
     { path: '/settings/payroll-exports', icon: Landmark, label: t('nav.payroll_exports') },
+    { path: '/settings/roles', icon: ShieldCheck, label: t('nav.roles') },
     // Infrastructure / sensitive config — admin only.
     { path: '/settings/system', icon: Settings2, label: t('nav.system_config'), adminOnly: true },
     { path: '/settings/email', icon: Mail, label: t('nav.email_config', 'Email'), adminOnly: true },
