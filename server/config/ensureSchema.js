@@ -135,6 +135,22 @@ const COLUMN_GUARDS = [
   { table: 'audit_logs', column: 'entity_type', ddl: 'ALTER TABLE audit_logs ADD COLUMN entity_type VARCHAR(40) NULL, ADD COLUMN entity_id INT NULL, ADD COLUMN changes JSON NULL, ADD INDEX idx_audit_entity (entity_type, entity_id)' },
   { table: 'onboarding_visa_steps', column: 'overdue_notified_on', ddl: 'ALTER TABLE onboarding_visa_steps ADD COLUMN overdue_notified_on DATE NULL' },
   { table: 'leave_types', column: 'carry_forward_expiry_months', ddl: 'ALTER TABLE leave_types ADD COLUMN carry_forward_expiry_months TINYINT NULL' },
+  // GPSSA pension (services/pensionService.js): the scheme per employee
+  // ('auto' by nationality and start date, 'none', 'old', 'new'), and what each
+  // payslip contributed.
+  { table: 'employees', column: 'pension_scheme', ddl: 'ALTER TABLE employees ADD COLUMN pension_scheme VARCHAR(10) NULL' },
+  { table: 'payroll_items', column: 'pension_employer', ddl: 'ALTER TABLE payroll_items ADD COLUMN pension_scheme VARCHAR(10) NULL, ADD COLUMN pension_base DECIMAL(12,2) NULL, ADD COLUMN pension_employee DECIMAL(12,2) NULL, ADD COLUMN pension_employer DECIMAL(12,2) NULL' },
+  // Off-cycle runs: cycle 0 is the month's regular run, 1.. are extra runs
+  // (bonus, correction) in the same month. See INDEX_GUARDS for the key.
+  { table: 'payroll_runs', column: 'cycle', ddl: "ALTER TABLE payroll_runs ADD COLUMN cycle SMALLINT NOT NULL DEFAULT 0, ADD COLUMN run_type VARCHAR(12) NOT NULL DEFAULT 'Regular', ADD COLUMN title VARCHAR(150) NULL" },
+];
+
+// Indexes replaced after the columns they cover exist: { table, name, drop?, ddl }.
+// Skipped when `name` is already there; `drop` is removed first when present.
+const INDEX_GUARDS = [
+  // One regular run per company and month, any number of off-cycle runs.
+  { table: 'payroll_runs', name: 'uq_run_company_period_cycle', drop: 'uq_run_company_period',
+    ddl: 'ADD UNIQUE KEY uq_run_company_period_cycle (company_id, period, cycle)' },
 ];
 
 // Tiny key/value store for global app settings (e.g. timezone).
@@ -1089,6 +1105,19 @@ const TABLE_GUARDS = [
 // Rows the app needs, added once after the columns exist. Each is skipped when
 // a group-wide type of that name is already there, so HR's edits are kept.
 const SEED_GUARDS = [
+  // GPSSA pension for UAE nationals in the private sector. 'new' is Federal
+  // Decree-Law 57/2023 (insured from 31 Oct 2023), 'old' Federal Law 7/1999.
+  `INSERT IGNORE INTO law_values (\`key\`, year, value, note) VALUES
+     ('gpssa_new_employee_percent', 2023, 11, 'Decree-Law 57/2023: employee share'),
+     ('gpssa_new_employer_percent', 2023, 15, 'Decree-Law 57/2023: employer share, private sector'),
+     ('gpssa_new_government_percent', 2023, 2.5, 'Decree-Law 57/2023: paid by the government out of the employer share'),
+     ('gpssa_new_government_below', 2023, 20000, 'Government share applies while the contribution salary is below this'),
+     ('gpssa_new_min_salary', 2023, 3000, 'Decree-Law 57/2023: minimum contribution salary, private sector'),
+     ('gpssa_new_max_salary', 2023, 70000, 'Decree-Law 57/2023: maximum contribution salary, private sector'),
+     ('gpssa_old_employee_percent', 2008, 5, 'Federal Law 7/1999: employee share'),
+     ('gpssa_old_employer_percent', 2008, 12.5, 'Federal Law 7/1999: employer share (government 2.5% on top)'),
+     ('gpssa_old_min_salary', 2008, 1000, 'Federal Law 7/1999: minimum contribution salary'),
+     ('gpssa_old_max_salary', 2008, 50000, 'Federal Law 7/1999: maximum contribution salary')`,
   // Emiratisation (private companies with 50+ employees): +2 points of the
   // skilled workforce a year, and the yearly fine per national not hired.
   // To be verified with MOHRE before relying on them.
@@ -1162,6 +1191,21 @@ export async function ensureSchema() {
       }
     } catch (e) {
       console.error(`ensureSchema(${g.table}.${g.column}) failed:`, e.message);
+    }
+  }
+  for (const g of INDEX_GUARDS) {
+    try {
+      const [idx] = await pool.query(
+        'SELECT DISTINCT index_name n FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ?', [g.table]);
+      const names = idx.map((r) => r.n || r.N || r.INDEX_NAME);
+      if (names.includes(g.name)) continue;
+      const parts = [];
+      if (g.drop && names.includes(g.drop)) parts.push(`DROP INDEX ${g.drop}`);
+      parts.push(g.ddl);
+      await pool.query(`ALTER TABLE ${g.table} ${parts.join(', ')}`);
+      console.log(`🔧 ensureSchema: index ${g.table}.${g.name}`);
+    } catch (e) {
+      console.error(`ensureSchema(index ${g.table}.${g.name}) failed:`, e.message);
     }
   }
   for (const g of ENUM_GUARDS) {

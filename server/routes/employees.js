@@ -665,7 +665,7 @@ const EDITABLE_EMPLOYEE_FIELDS = [
   'department_id', 'job_title_id', 'job_title_text',
   'start_date', 'end_date', 'basic_salary', 'full_salary',
   'attendance_id', 'status', 'labour_contract_status', 'labour_contract_issued_at',
-  'work_permit_no', 'personal_no',
+  'work_permit_no', 'personal_no', 'pension_scheme',
 ];
 const EMPLOYEE_STATUSES = ['Onboarding', 'Active', 'Offboarding', 'Exited'];
 const LABOUR_CONTRACT_STATUSES = ['Not Issued', 'Issued'];
@@ -679,6 +679,11 @@ router.put('/:id', authorize('admin', 'hr_manager'), async (req, res) => {
     }
     if (data.status != null && !EMPLOYEE_STATUSES.includes(data.status)) {
       return res.status(422).json({ error: `status must be one of: ${EMPLOYEE_STATUSES.join(', ')}` });
+    }
+    // GPSSA: 'auto' (nationals by start date) is stored as NULL.
+    if (data.pension_scheme === 'auto') data.pension_scheme = null;
+    if (data.pension_scheme != null && !['none', 'old', 'new'].includes(data.pension_scheme)) {
+      return res.status(422).json({ error: 'pension_scheme must be one of: auto, none, old, new' });
     }
     if (data.labour_contract_status != null) {
       if (!LABOUR_CONTRACT_STATUSES.includes(data.labour_contract_status)) {

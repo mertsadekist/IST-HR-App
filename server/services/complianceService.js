@@ -11,7 +11,11 @@
  */
 
 export const SEVERITIES = ['critical', 'high', 'medium', 'low'];
-export const LAW_KEYS = ['emiratisation_target_percent', 'emiratisation_fine_per_year', 'emiratisation_min_headcount'];
+export const LAW_KEYS = ['emiratisation_target_percent', 'emiratisation_fine_per_year', 'emiratisation_min_headcount',
+  // GPSSA pension (services/pensionService.js).
+  'gpssa_new_employee_percent', 'gpssa_new_employer_percent', 'gpssa_new_government_percent',
+  'gpssa_new_government_below', 'gpssa_new_min_salary', 'gpssa_new_max_salary',
+  'gpssa_old_employee_percent', 'gpssa_old_employer_percent', 'gpssa_old_min_salary', 'gpssa_old_max_salary'];
 /** Days after the end of the month in which salaries count as late under WPS. */
 export const WPS_LATE_AFTER_DAYS = 15;
 
@@ -85,6 +89,6 @@ export function validateLawValue(b = {}) {
   if (!(year >= 2020 && year <= 2100)) return { error: 'Choose the year' };
   const value = Number(b.value);
   if (!Number.isFinite(value) || value < 0) return { error: 'Enter a value' };
-  if (b.key === 'emiratisation_target_percent' && value > 100) return { error: 'A percentage is at most 100' };
+  if (b.key.endsWith('_percent') && value > 100) return { error: 'A percentage is at most 100' };
   return { data: { key: b.key, year, value, note: String(b.note || '').trim().slice(0, 300) || null } };
 }

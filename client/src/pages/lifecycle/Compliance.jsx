@@ -20,6 +20,12 @@ const KIND_TONE = {
 };
 const money = (n) => Number(n || 0).toLocaleString();
 
+// Mirrors LAW_KEYS in server/services/complianceService.js.
+const LAW_KEYS = ['emiratisation_target_percent', 'emiratisation_fine_per_year', 'emiratisation_min_headcount',
+  'gpssa_new_employee_percent', 'gpssa_new_employer_percent', 'gpssa_new_government_percent', 'gpssa_new_government_below',
+  'gpssa_new_min_salary', 'gpssa_new_max_salary', 'gpssa_old_employee_percent', 'gpssa_old_employer_percent',
+  'gpssa_old_min_salary', 'gpssa_old_max_salary'];
+
 /**
  * Compliance: what needs attention, the month's deadlines in one list, and
  * Emiratisation per company against the year's target, with the statutory
@@ -186,7 +192,7 @@ function Emiratisation({ t, isAdmin }) {
           {isAdmin && (
             <div className="flex gap-2 flex-wrap items-center pt-2 border-t border-surface-100">
               <select value={edit.key} onChange={(e) => setEdit((p) => ({ ...p, key: e.target.value }))} className={input}>
-                {['emiratisation_target_percent', 'emiratisation_fine_per_year', 'emiratisation_min_headcount'].map((k) => <option key={k} value={k}>{t(`compliance.law.${k}`)}</option>)}
+                {LAW_KEYS.map((k) => <option key={k} value={k}>{t(`compliance.law.${k}`)}</option>)}
               </select>
               <input type="number" value={edit.year} onChange={(e) => setEdit((p) => ({ ...p, year: e.target.value }))} className={`${input} w-24`} />
               <input type="number" value={edit.value} onChange={(e) => setEdit((p) => ({ ...p, value: e.target.value }))} placeholder={t('compliance.law_value')} className={`${input} w-32`} />

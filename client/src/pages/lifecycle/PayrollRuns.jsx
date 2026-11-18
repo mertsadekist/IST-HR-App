@@ -13,6 +13,7 @@ import { confirmDelete, confirmAction } from '@utils/confirm';
 import { Banknote, Plus, RefreshCw, Loader2, CheckCircle2, Trash2, FileSpreadsheet, AlertTriangle, Send, FileText, ChevronDown, ChevronRight, XCircle, Mail, Undo2, Landmark, BookOpen } from 'lucide-react';
 import { lineLabel, money } from '@utils/payslipLines';
 import PayslipLines from '@components/payroll/PayslipLines';
+import OffCycleModal from '@components/payroll/OffCycleModal';
 import { downloadBlob } from '@utils/pdf';
 import dayjs from 'dayjs';
 
@@ -77,6 +78,7 @@ export default function PayrollRuns() {
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState(dayjs().format('YYYY-MM'));
   const [generating, setGenerating] = useState(false);
+  const [offCycleOpen, setOffCycleOpen] = useState(false);
   const [openRun, setOpenRun] = useState(null);
   const [detail, setDetail] = useState(null);
   const [myslips, setMyslips] = useState([]);
@@ -259,9 +261,15 @@ export default function PayrollRuns() {
         <div className="flex items-center gap-2">
           <input type="month" value={period} onChange={(e) => setPeriod(e.target.value)} className="text-sm border border-surface-200 rounded-lg px-3 py-2" />
           <Button onClick={generate} loading={generating}><Plus size={16} /> {t('payroll_runs.generate')}</Button>
+          <Button variant="secondary" onClick={() => (currentCompanyId ? setOffCycleOpen(true) : toast.error(t('payroll_runs.select_company')))}>
+            <Plus size={14} /> {t('off_cycle.button')}
+          </Button>
           <Button variant="secondary" onClick={load}><RefreshCw size={14} /></Button>
         </div>
       </div>
+
+      <OffCycleModal open={offCycleOpen} onClose={() => setOffCycleOpen(false)} period={period} companyId={currentCompanyId} t={t}
+        onCreated={() => { setOffCycleOpen(false); load(); }} />
 
       {loading ? (
         <div className="card p-6 animate-pulse"><div className="h-4 bg-surface-200 rounded w-1/3" /></div>
@@ -274,7 +282,7 @@ export default function PayrollRuns() {
               <div className="flex items-center gap-4 flex-wrap">
                 <div className="w-10 h-10 rounded-xl bg-brand-100 flex items-center justify-center text-brand-700"><Banknote size={18} /></div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2"><span className="font-semibold text-surface-900">{dayjs(r.period + '-01').format('MMMM YYYY')}</span><Badge variant={statusVariant(r.status)}>{stLabel(t, r.status)}</Badge></div>
+                  <div className="flex items-center gap-2"><span className="font-semibold text-surface-900">{dayjs(r.period + '-01').format('MMMM YYYY')}</span>{Number(r.cycle) > 0 && <Badge variant="pending">{t('off_cycle.badge')} · {r.title}</Badge>}<Badge variant={statusVariant(r.status)}>{stLabel(t, r.status)}</Badge></div>
                   <p className="text-xs text-surface-400 mt-0.5">{r.employee_count} {t('payroll_runs.employees')} · {t('payroll_runs.gross')} {r.total_gross} · {t('payroll_runs.deductions')} {r.total_deductions}</p>
                 </div>
                 <div className="text-right"><p className="text-xs text-surface-400">{t('payroll_runs.net_total')}</p><p className="font-bold text-brand-600">{r.total_net}</p></div>

@@ -210,14 +210,15 @@ export function computeVariance(items, prevItems, threshold = VARIANCE_THRESHOLD
  * @param {object} input.company { mol_id }
  * @param {object[]} [input.variance] rows from computeVariance
  */
-export function checkRun({ items, company, variance = [] }) {
+export function checkRun({ items, company, variance = [], offCycle = false }) {
   const errors = [], warnings = [];
   const add = (list, it, code, detail = null) =>
     list.push({ employee_id: it?.employee_id ?? null, name: it?.name ?? null, code, detail });
 
   let inWps = 0;
   for (const it of items || []) {
-    if (!(Number(it.gross) > 0)) add(errors, it, 'NO_SALARY');
+    // An off-cycle run pays only its own lines (a bonus, a correction), no salary.
+    if (!offCycle && !(Number(it.gross) > 0)) add(errors, it, 'NO_SALARY');
 
     const leaving = ['Offboarding', 'Exited'].includes(it.employment_status);
     // Same rule as the WPS file: only an issued labour contract is paid through

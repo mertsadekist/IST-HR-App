@@ -18,6 +18,8 @@ import {
   normalizeExportSettings, validateExportSettings, sifReadiness, buildSif, buildZohoJournal, employerFor,
 } from '../services/payrollExportService.js';
 import { setAppSetting } from '../services/appSettings.js';
+import { pensionSchemeFor, pensionRates, pensionContribution } from '../services/pensionService.js';
+import { validateOffCycle, offCycleItems } from '../services/offCycleService.js';
 import { notify, notifyRole } from '../services/notificationService.js';
 import {
   activeComponents, buildPayslipLines, groupLeaveByType, computeVariance, checkRun, loanInstalmentsFor,
@@ -40,7 +42,7 @@ router.get('/runs', authorize('admin', 'hr_manager', 'accountant'), async (req, 
   try {
     const co = companyClause(req, 'company_id');
     const [rows] = await pool.query(
-      'SELECT * FROM payroll_runs WHERE 1=1' + co.clause + ' ORDER BY period DESC', co.params);
+      'SELECT * FROM payroll_runs WHERE 1=1' + co.clause + ' ORDER BY period DESC, cycle ASC', co.params);
     res.json(rows);
   } catch (err) { console.error('GET /payroll/runs error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
@@ -151,9 +153,10 @@ async function loadRunReview(req, runId) {
 
   // Compared against what was actually paid: the latest earlier run that got
   // as far as approval.
-  const [[prevRun]] = await pool.query(
+  const offCycle = Number(run.cycle) > 0;
+  const [[prevRun]] = offCycle ? [[null]] : await pool.query(
     `SELECT id, period FROM payroll_runs
-      WHERE company_id = ? AND period < ? AND status IN ('Approved','Paid')
+      WHERE company_id = ? AND period < ? AND status IN ('Approved','Paid') AND cycle = 0
       ORDER BY period DESC LIMIT 1`, [run.company_id, run.period]);
   let prevItems = [];
   if (prevRun) {
@@ -166,7 +169,7 @@ async function loadRunReview(req, runId) {
   }
 
   const variance = computeVariance(items, prevItems);
-  const checks = checkRun({ items, company, variance });
+  const checks = checkRun({ items, company, variance, offCycle });
   return { run, company, items, variance, checks, previous: prevRun || null };
 }
 
@@ -262,7 +265,7 @@ router.post('/runs/generate', authorize('admin', 'hr_manager', 'accountant'), va
     if (companyId == null) return res.status(400).json({ error: 'A specific company is required to generate payroll' });
 
     // One run per company+period; regenerate only allowed while Draft.
-    const [[existing]] = await conn.query('SELECT id, status FROM payroll_runs WHERE company_id = ? AND period = ?', [companyId, period]);
+    const [[existing]] = await conn.query('SELECT id, status FROM payroll_runs WHERE company_id = ? AND period = ? AND cycle = 0', [companyId, period]);
     if (existing && existing.status !== 'Draft') {
       // Released once, by the finally below.
       return res.status(409).json({ error: `A ${existing.status} payroll run already exists for ${period}` });
@@ -285,7 +288,7 @@ router.post('/runs/generate', authorize('admin', 'hr_manager', 'accountant'), va
     // already left. Their earned final period is a settlement matter, not a
     // monthly-payroll one — see the note in offboarding.
     const [employees] = await conn.query(
-      "SELECT id, first_name, last_name, basic_salary, full_salary, is_owner, "
+      "SELECT id, first_name, last_name, basic_salary, full_salary, is_owner, nationality, pension_scheme, "
       + "DATE_FORMAT(start_date, '%Y-%m-%d') start_date "
       + "FROM employees WHERE company_id = ? AND status IN ('Active','Onboarding')",
       [companyId]
@@ -296,6 +299,8 @@ router.post('/runs/generate', authorize('admin', 'hr_manager', 'accountant'), va
     const year = Number(period.slice(0, 4));
     const [[{ last_day: periodEndDate }]] = await conn.query(
       "SELECT DATE_FORMAT(LAST_DAY(?), '%Y-%m-%d') last_day", [periodStart]);
+    // GPSSA rates for the year (law values, editable in Compliance).
+    const [lawRows] = await conn.query('SELECT `key`, year, value FROM law_values');
 
     // The pay tiers, the pools types draw on, and the yearly caps — loaded once
     // for the whole run rather than per employee.
@@ -462,6 +467,16 @@ router.post('/runs/generate', authorize('admin', 'hr_manager', 'accountant'), va
             explanation: `${ot.length} day(s), ${otHours} h at ${ot[0].hourly_rate.toFixed(2)}/h (basic / 30 / 8) x ${otRates.normal} normal, ${otRates.night} night, ${otRates.rest} rest day` });
         }
       }
+      // GPSSA pension for UAE nationals: the employee's share comes off pay, the
+      // employer's is kept on the item for the cost reports and the journal.
+      const scheme = pensionSchemeFor(emp);
+      const pension = scheme ? pensionContribution({
+        salary: Number(emp.full_salary) || Number(emp.basic_salary), scheme, rates: pensionRates(lawRows, scheme, year),
+      }) : null;
+      if (pension?.employee > 0) {
+        extras.push({ kind: 'deduction', code: 'PENSION', label: `GPSSA pension (${pension.employee_percent}%)`, amount: pension.employee,
+          explanation: `${pension.employee_percent}% of the contribution salary ${pension.base.toFixed(2)} (${scheme === 'new' ? 'Decree-Law 57/2023' : 'Law 7/1999'}); employer share ${pension.employer.toFixed(2)}` });
+      }
       const sumOf = (kind) => extras.filter((x) => x.kind === kind).reduce((s, x) => s + x.amount, 0);
 
       const calc = computePayrollItem({
@@ -478,6 +493,8 @@ router.post('/runs/generate', authorize('admin', 'hr_manager', 'accountant'), va
         basic_salary: calc.basic_salary, allowances: calc.allowances, gross: calc.gross, additions: calc.additions,
         unpaid_leave_days: calc.unpaid_leave_days, absence_days: calc.absence_days,
         deductions: calc.deductions, net: calc.net,
+        pension_scheme: pension?.scheme || null, pension_base: pension?.base ?? null,
+        pension_employee: pension?.employee ?? null, pension_employer: pension?.employer ?? null,
       });
 
       // Record what this item took and paid, so the loan balance and the
@@ -525,6 +542,57 @@ router.post('/runs/generate', authorize('admin', 'hr_manager', 'accountant'), va
   } catch (err) {
     await conn.rollback();
     console.error('POST /payroll/runs/generate error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  } finally { conn.release(); }
+});
+
+// POST /api/payroll/runs/off-cycle — an extra run in a month (bonus, commission,
+// correction), next to the regular one. Only the lines entered are paid; it then
+// follows the same submit → approve → pay steps as any run.
+router.post('/runs/off-cycle', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
+  const v = validateOffCycle(req.body);
+  if (v.error) return res.status(422).json({ error: v.error });
+  const companyId = req.companyId;
+  if (companyId == null) return res.status(400).json({ error: 'A specific company is required to create a payroll run' });
+  const built = offCycleItems(v.data.lines);
+  if (built.error) return res.status(422).json(built);
+
+  const ids = built.items.map((i) => i.employee_id);
+  const [emps] = await pool.query(
+    "SELECT id FROM employees WHERE id IN (?) AND company_id = ? AND status IN ('Active','Onboarding','Offboarding')", [ids, companyId]);
+  if (emps.length !== new Set(ids).size) return res.status(422).json({ error: 'Every employee must be current and belong to the selected company' });
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [[{ next }]] = await conn.query(
+      'SELECT COALESCE(MAX(cycle), 0) + 1 AS next FROM payroll_runs WHERE company_id = ? AND period = ? FOR UPDATE', [companyId, v.data.period]);
+    const [r] = await conn.query('INSERT INTO payroll_runs SET ?', {
+      company_id: companyId, period: v.data.period, status: 'Draft', created_by: req.user.id,
+      cycle: next, run_type: 'Off-cycle', title: v.data.title,
+    });
+    let totalAdd = 0, totalDed = 0, totalNet = 0;
+    for (const it of built.items) {
+      const [ir] = await conn.query('INSERT INTO payroll_items SET ?', {
+        run_id: r.insertId, company_id: companyId, employee_id: it.employee_id,
+        basic_salary: 0, allowances: 0, gross: 0, additions: it.additions,
+        unpaid_leave_days: 0, absence_days: 0, deductions: it.deductions, net: it.net,
+      });
+      await conn.query(
+        `INSERT INTO payroll_item_lines (item_id, run_id, employee_id, kind, code, label, quantity, rate, amount, explanation, sort_order) VALUES ?`,
+        [it.lines.map((l, i) => [ir.insertId, r.insertId, it.employee_id, l.kind, l.code, l.label, null, null, l.amount, null, i])]);
+      totalAdd += it.additions; totalDed += it.deductions; totalNet += it.net;
+    }
+    await conn.query(
+      'UPDATE payroll_runs SET employee_count = ?, total_gross = ?, total_deductions = ?, total_net = ? WHERE id = ?',
+      [built.items.length, totalAdd, totalDed, totalNet, r.insertId]);
+    await conn.commit();
+    await addAudit(pool, req.user, 'Payroll', 'Off-cycle Created',
+      `Off-cycle run "${v.data.title}" ${v.data.period} #${next}: ${built.items.length} employee(s), net ${totalNet.toFixed(2)}`);
+    res.status(201).json({ id: r.insertId, period: v.data.period, cycle: next, employee_count: built.items.length, total_net: totalNet });
+  } catch (err) {
+    await conn.rollback();
+    console.error('POST /payroll/runs/off-cycle error:', err);
     res.status(500).json({ error: 'Internal server error' });
   } finally { conn.release(); }
 });
@@ -1036,7 +1104,7 @@ router.get('/runs/:id/zoho-journal', authorize('admin', 'hr_manager', 'accountan
          LEFT JOIN departments d ON d.id = e.department_id WHERE l.run_id = ?`, [run.id]);
     // Runs from before itemised payslips: one earning line and one deduction line each.
     const [items] = await pool.query(
-      `SELECT pi.id, pi.employee_id, pi.gross, pi.additions, pi.net, d.name AS department
+      `SELECT pi.id, pi.employee_id, pi.gross, pi.additions, pi.net, pi.pension_employer, d.name AS department
          FROM payroll_items pi JOIN employees e ON e.id = pi.employee_id
          LEFT JOIN departments d ON d.id = e.department_id WHERE pi.run_id = ?`, [run.id]);
     const itemised = new Set(lines.map((l) => l.item_id));
@@ -1044,6 +1112,10 @@ router.get('/runs/:id/zoho-journal', authorize('admin', 'hr_manager', 'accountan
       const earned = Number(it.gross || 0) + Number(it.additions || 0);
       lines.push({ employee_id: it.employee_id, kind: 'earning', code: 'GROSS', amount: earned, department: it.department });
       lines.push({ employee_id: it.employee_id, kind: 'deduction', code: 'DEDUCTIONS', amount: earned - Number(it.net || 0), department: it.department });
+    }
+    // The employer's GPSSA share: a cost to the company, owed to the GPSSA.
+    for (const it of items) {
+      if (Number(it.pension_employer) > 0) lines.push({ employee_id: it.employee_id, kind: 'employer', code: 'PENSION_EMPLOYER', amount: Number(it.pension_employer), department: it.department });
     }
     if (!lines.length) return res.status(409).json({ error: 'This payroll run has no employees' });
 
@@ -1070,12 +1142,12 @@ router.get('/payslips/my', async (req, res) => {
     // No company filter: this is always the caller's own payslips, and a run
     // processed under another entity is still their pay. See ownRecordsClause().
     const co = ownRecordsClause();
-    let sql = `SELECT pi.*, pr.period, pr.status as run_status
+    let sql = `SELECT pi.*, pr.period, pr.status as run_status, pr.title AS run_title, pr.run_type
                FROM payroll_items pi JOIN payroll_runs pr ON pi.run_id = pr.id
                WHERE pi.employee_id = ? AND pr.status IN ('Approved','Paid')` + co.clause;
     const params = [empId, ...co.params];
     if (req.query.period) { sql += ' AND pr.period = ?'; params.push(req.query.period); }
-    sql += ' ORDER BY pr.period DESC';
+    sql += ' ORDER BY pr.period DESC, pr.cycle DESC';
     const [rows] = await pool.query(sql, params);
     // With its lines, so the employee can see how each figure was worked out.
     res.json(await attachLines(rows));
@@ -1087,9 +1159,9 @@ router.get('/payslips/:employeeId', authorize('admin', 'hr_manager', 'accountant
   try {
     const co = companyClause(req, 'pi.company_id');
     const [rows] = await pool.query(
-      `SELECT pi.*, pr.period, pr.status as run_status
+      `SELECT pi.*, pr.period, pr.status as run_status, pr.title AS run_title, pr.run_type
        FROM payroll_items pi JOIN payroll_runs pr ON pi.run_id = pr.id
-       WHERE pi.employee_id = ?` + co.clause + ' ORDER BY pr.period DESC',
+       WHERE pi.employee_id = ?` + co.clause + ' ORDER BY pr.period DESC, pr.cycle DESC',
       [req.params.employeeId, ...co.params]);
     res.json(await attachLines(rows));
   } catch (err) { console.error('GET /payroll/payslips/:employeeId error:', err); res.status(500).json({ error: 'Internal server error' }); }
