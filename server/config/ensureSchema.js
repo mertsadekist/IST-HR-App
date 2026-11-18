@@ -155,6 +155,23 @@ const INDEX_GUARDS = [
 
 // Tiny key/value store for global app settings (e.g. timezone).
 const TABLE_GUARDS = [
+  // Reports emailed on a schedule (services/reportScheduleService.js). company_id NULL = every company.
+  `CREATE TABLE IF NOT EXISTS report_schedules (
+     id           INT AUTO_INCREMENT PRIMARY KEY,
+     company_id   INT NULL,
+     name         VARCHAR(120) NOT NULL,
+     report_key   VARCHAR(40) NOT NULL,
+     frequency    VARCHAR(10) NOT NULL DEFAULT 'weekly',
+     weekday      TINYINT NULL,
+     month_day    TINYINT NULL,
+     send_hour    TINYINT NOT NULL DEFAULT 8,
+     recipients   VARCHAR(1000) NOT NULL,
+     active       TINYINT(1) NOT NULL DEFAULT 1,
+     last_sent_on DATE NULL,
+     created_by   INT NULL,
+     created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     INDEX idx_rs_company (company_id)
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   // Digital / portal / social access registry — see server/apply_digital_access.mjs
   // for the field-coverage note against the assets PRD.
   `CREATE TABLE IF NOT EXISTS digital_access (
