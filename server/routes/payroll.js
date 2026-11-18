@@ -13,7 +13,11 @@ import {
 import { ledgerTotals, capsWithLedger } from '../services/leaveBalanceStore.js';
 import { buildPayrollExplanation } from '../services/payrollExplainerService.js';
 import { renderPayrollExplanationWorkbook } from '../services/payrollExplainerWorkbook.js';
-import { buildWpsWorkbook, wpsReadiness } from '../services/wpsService.js';
+import { buildWpsWorkbook, wpsReadiness, splitWpsItems } from '../services/wpsService.js';
+import {
+  normalizeExportSettings, validateExportSettings, sifReadiness, buildSif, buildZohoJournal, employerFor,
+} from '../services/payrollExportService.js';
+import { setAppSetting } from '../services/appSettings.js';
 import { notify, notifyRole } from '../services/notificationService.js';
 import {
   activeComponents, buildPayslipLines, groupLeaveByType, computeVariance, checkRun, loanInstalmentsFor,
@@ -951,6 +955,110 @@ router.post('/runs/:id/wps-send', authorize('admin', 'hr_manager', 'accountant')
 
     res.json({ success: true, messageId: result.messageId, file_name: fileName, count, total: grandTotal, draft });
   } catch (err) { console.error('POST /payroll/runs/:id/wps-send error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// ─── Bank SIF and accounting journal ─────────────────────────────────────────
+const loadExportSettings = async () => normalizeExportSettings(await getAppSetting('payroll_exports', null));
+
+// Routing codes, the employer's WPS identity per company, and the Zoho accounts.
+router.get('/export-settings', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
+  try {
+    const settings = await loadExportSettings();
+    const co = companyClause(req, 'id');
+    const [companies] = await pool.query('SELECT id, name, mol_id FROM companies WHERE 1=1' + co.clause + ' ORDER BY name', co.params);
+    res.json({ settings, companies });
+  } catch (err) { console.error('GET /payroll/export-settings error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+router.put('/export-settings', authorize('admin'), async (req, res) => {
+  try {
+    const before = await loadExportSettings();
+    const settings = normalizeExportSettings(req.body || {});
+    const problem = validateExportSettings(settings);
+    if (problem) return res.status(422).json({ error: problem });
+    await setAppSetting('payroll_exports', JSON.stringify(settings));
+    const changed = ['routing_codes', 'companies', 'zoho'].filter((k) => JSON.stringify(before[k]) !== JSON.stringify(settings[k]));
+    await addAudit(pool, req.user, 'Payroll', 'Export Settings', `Payroll export settings updated (${changed.join(', ') || 'no change'})`);
+    res.json(settings);
+  } catch (err) { console.error('PUT /payroll/export-settings error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// The bank's Salary Information File. Unlike the review workbook there is no
+// draft: a SIF with a blank routing code or personal number is rejected by the
+// bank, so the problems are returned instead of a file.
+router.get('/runs/:id/wps-sif', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
+  try {
+    const data = await loadWpsData(req, req.params.id);
+    if (!data) return res.status(404).json({ error: 'Payroll run not found' });
+    if (data.run.status === 'Draft') return res.status(409).json({ error: 'Approve the run before producing the bank file', code: 'NOT_APPROVED' });
+    const settings = await loadExportSettings();
+    const { included, excluded } = splitWpsItems(data.items);
+    const check = sifReadiness({ company: data.company, items: included, settings });
+    if (!check.ready) return res.status(422).json({ error: 'The bank file cannot be produced yet', code: 'SIF_INCOMPLETE', ...check });
+
+    const sif = buildSif({ company: data.company, period: data.run.period, items: included, settings, reference: `Payroll ${data.run.period}` });
+    await addAudit(pool, req.user, 'Payroll', 'WPS SIF',
+      `SIF ${sif.fileName} for run #${data.run.id} (${data.run.period}): ${sif.count} employee(s), total AED ${sif.total.toFixed(2)}`
+      + (excluded.length ? `; ${excluded.length} excluded — labour contract not issued` : '')
+      + (data.offboarding?.length ? `; ${data.offboarding.length} excluded — offboarding` : ''));
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${sif.fileName}"`);
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+    res.send(sif.content);
+  } catch (err) { console.error('GET /payroll/runs/:id/wps-sif error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// What the SIF still needs, shown in the WPS panel next to the workbook checks.
+router.get('/runs/:id/sif-readiness', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
+  try {
+    const data = await loadWpsData(req, req.params.id);
+    if (!data) return res.status(404).json({ error: 'Payroll run not found' });
+    const settings = await loadExportSettings();
+    const { included } = splitWpsItems(data.items);
+    res.json({ ...sifReadiness({ company: data.company, items: included, settings }), ...employerFor(data.company, settings) });
+  } catch (err) { console.error('GET /payroll/runs/:id/sif-readiness error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// The run as a Zoho Books manual journal (Accountant → Manual Journals → Import).
+// Built from the payslip lines, so each pay component lands on its own account.
+router.get('/runs/:id/zoho-journal', authorize('admin', 'hr_manager', 'accountant'), async (req, res) => {
+  try {
+    const co = companyClause(req, 'r.company_id');
+    const [[run]] = await pool.query(
+      `SELECT r.id, r.period, r.status, r.company_id, c.name AS company_name
+         FROM payroll_runs r JOIN companies c ON c.id = r.company_id WHERE r.id = ?` + co.clause, [req.params.id, ...co.params]);
+    if (!run) return res.status(404).json({ error: 'Payroll run not found' });
+    if (!['Approved', 'Paid'].includes(run.status)) return res.status(409).json({ error: 'Approve the run before posting it to the books', code: 'NOT_APPROVED' });
+
+    const [lines] = await pool.query(
+      `SELECT l.item_id, l.employee_id, l.kind, l.code, l.amount, d.name AS department
+         FROM payroll_item_lines l JOIN employees e ON e.id = l.employee_id
+         LEFT JOIN departments d ON d.id = e.department_id WHERE l.run_id = ?`, [run.id]);
+    // Runs from before itemised payslips: one earning line and one deduction line each.
+    const [items] = await pool.query(
+      `SELECT pi.id, pi.employee_id, pi.gross, pi.additions, pi.net, d.name AS department
+         FROM payroll_items pi JOIN employees e ON e.id = pi.employee_id
+         LEFT JOIN departments d ON d.id = e.department_id WHERE pi.run_id = ?`, [run.id]);
+    const itemised = new Set(lines.map((l) => l.item_id));
+    for (const it of items.filter((i) => !itemised.has(i.id))) {
+      const earned = Number(it.gross || 0) + Number(it.additions || 0);
+      lines.push({ employee_id: it.employee_id, kind: 'earning', code: 'GROSS', amount: earned, department: it.department });
+      lines.push({ employee_id: it.employee_id, kind: 'deduction', code: 'DEDUCTIONS', amount: earned - Number(it.net || 0), department: it.department });
+    }
+    if (!lines.length) return res.status(409).json({ error: 'This payroll run has no employees' });
+
+    const [y, m] = run.period.split('-').map(Number);
+    const journalDate = `${y}-${String(m).padStart(2, '0')}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, '0')}`;
+    const settings = await loadExportSettings();
+    const j = buildZohoJournal({ run, company: { name: run.company_name }, lines, settings, journalDate });
+    if (!j.balanced) return res.status(500).json({ error: 'The journal does not balance', debit: j.totalDebit, credit: j.totalCredit });
+    await addAudit(pool, req.user, 'Payroll', 'Zoho Journal',
+      `Zoho Books journal ${j.reference} for run #${run.id}: ${j.rows.length} line(s), AED ${j.totalDebit.toFixed(2)}`);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${j.fileName}"`);
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+    res.send(j.content);
+  } catch (err) { console.error('GET /payroll/runs/:id/zoho-journal error:', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
 // ─── Payslips ────────────────────────────────────────────────────────────────
