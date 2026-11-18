@@ -15,6 +15,8 @@ import { scheduleDailyAt } from './services/dailySchedule.js';
 import { checkTrainingExpiry } from './routes/training.js';
 import { runOnboardingReminders } from './services/onboardingReminders.js';
 import { setRoleOverrides } from './config/permissions.js';
+import { runDueReports } from './services/reportScheduler.js';
+import { runBackup } from './services/nightlyBackup.js';
 
 const PORT = process.env.PORT || 3001;
 
@@ -134,6 +136,23 @@ app.listen(PORT, async () => {
 
   await runDocumentExpiryCheck();
   setInterval(runDocumentExpiryCheck, 6 * 60 * 60 * 1000); // every 6 hours
+
+  // Scheduled reports (Settings → Scheduled reports): checked every ten minutes.
+  const reportTick = () => runDueReports(pool).then((n) => { if (n) console.log(`📊 Scheduled reports: ${n} sent`); })
+    .catch((err) => console.error('Scheduled reports failed:', err.message));
+  setInterval(reportTick, 10 * 60 * 1000).unref?.();
+  reportTick();
+
+  // Nightly database backup to the persistent volume (NIGHTLY_BACKUP=off to stop it).
+  if (process.env.NIGHTLY_BACKUP !== 'off') {
+    scheduleDailyAt({
+      hour: 2, minute: 30, name: 'Nightly backup',
+      onTick: async () => {
+        const out = await runBackup(pool);
+        console.log(`💾 Nightly backup: ${out.name} (${Math.round(out.size / 1024)} KB, ${out.rows} rows)${out.removed.length ? `, removed ${out.removed.length} old` : ''}`);
+      },
+    });
+  }
 
   // Overdue onboarding visa/document steps: one reminder a day to whoever is responsible.
   scheduleDailyAt({

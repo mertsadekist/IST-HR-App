@@ -79,6 +79,8 @@ const MyBenefits = lazy(() => import('@pages/portal/MyBenefits'));
 const ClockInSettings = lazy(() => import('@pages/settings/ClockInSettings'));
 const PayrollExportsSettings = lazy(() => import('@pages/settings/PayrollExportsSettings'));
 const RolePermissions = lazy(() => import('@pages/settings/RolePermissions'));
+const ReportSchedules = lazy(() => import('@pages/settings/ReportSchedules'));
+const Backups = lazy(() => import('@pages/settings/Backups'));
 const OvertimePage = lazy(() => import('@pages/lifecycle/Overtime'));
 const PayrollRunsPage = lazy(() => import('@pages/lifecycle/PayrollRuns'));
 const PayrollItemsPage = lazy(() => import('@pages/lifecycle/PayrollItems'));
@@ -216,6 +218,8 @@ export default function App() {
                   <Route path="clock-in" element={<ClockInSettings />} />
                   <Route path="payroll-exports" element={<PayrollExportsSettings />} />
                   <Route path="roles" element={<RolePermissions />} />
+                  <Route path="report-schedules" element={<ReportSchedules />} />
+                  <Route path="backups" element={<Backups />} />
                   <Route path="system" element={<SystemConfig />} />
                   <Route path="email" element={<EmailSettings />} />
                   <Route path="templates" element={<TemplateManager />} />

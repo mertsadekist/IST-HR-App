@@ -3,6 +3,9 @@ import pool from '../config/db.js';
 import { auth } from '../middleware/auth.js';
 import { authorize } from '../middleware/rbac.js';
 import { isPlatformAdmin } from '../middleware/tenant.js';
+import path from 'path';
+import { addAudit } from '../services/auditService.js';
+import { listBackups, runBackup, backupDir, BACKUP_FILE_RE } from '../services/nightlyBackup.js';
 
 const router = Router();
 
@@ -22,6 +25,32 @@ const BACKUP_TABLES = [
   'cv_scorer_profiles',
 ];
 const BACKUP_TABLE_SET = new Set(BACKUP_TABLES);
+
+// ─── Nightly backups on the server volume (services/nightlyBackup.js) ─────────
+// Every company's data, password hashes included: a platform admin only.
+const platformOnly = (req, res, next) => (isPlatformAdmin(req.user) ? next() : res.status(403).json({ error: 'Only a platform admin can reach the full backups' }));
+
+router.get('/nightly', auth, authorize('admin'), platformOnly, (req, res) => {
+  try { res.json({ backups: listBackups(), keep: Number(process.env.BACKUP_KEEP) || 14, enabled: process.env.NIGHTLY_BACKUP !== 'off' }); }
+  catch (err) { console.error('GET /backup/nightly error:', err); res.status(500).json({ error: 'Internal server error' }); }
+});
+
+router.post('/nightly/run', auth, authorize('admin'), platformOnly, async (req, res) => {
+  try {
+    const out = await runBackup(pool);
+    await addAudit(pool, req.user, 'Backup', 'Backup Run', `${out.name}: ${out.tables} tables, ${out.rows} rows`);
+    res.json(out);
+  } catch (err) { console.error('POST /backup/nightly/run error:', err); res.status(500).json({ error: 'Backup failed' }); }
+});
+
+router.get('/nightly/:name', auth, authorize('admin'), platformOnly, async (req, res) => {
+  const { name } = req.params;
+  if (!BACKUP_FILE_RE.test(name)) return res.status(400).json({ error: 'Not a backup file' });
+  await addAudit(pool, req.user, 'Backup', 'Backup Downloaded', name);
+  res.download(path.join(backupDir(), name), name, (err) => {
+    if (err && !res.headersSent) res.status(404).json({ error: 'Backup not found' });
+  });
+});
 
 // GET /api/backup/export — Export all data as JSON backup
 router.get('/export', auth, authorize('admin'), async (req, res) => {
