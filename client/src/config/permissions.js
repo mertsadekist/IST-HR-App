@@ -70,6 +70,8 @@ const ROUTE_MODULES = [
   ['/performance', MODULES.HR],
   ['/reviews', MODULES.HR],
   ['/training', MODULES.HR],
+  ['/communications', MODULES.HR],
+  ['/disciplinary', MODULES.HR],
   ['/offboarding', MODULES.HR],
   ['/org-chart', MODULES.HR],
   ['/payroll', MODULES.PAYROLL],

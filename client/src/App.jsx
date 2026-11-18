@@ -70,6 +70,10 @@ const MyReviews = lazy(() => import('@pages/portal/MyReviews'));
 const Requisitions = lazy(() => import('@pages/recruitment/Requisitions'));
 const TrainingPage = lazy(() => import('@pages/lifecycle/Training'));
 const CompliancePage = lazy(() => import('@pages/lifecycle/Compliance'));
+const CommunicationsPage = lazy(() => import('@pages/lifecycle/Communications'));
+const DisciplinaryPage = lazy(() => import('@pages/lifecycle/Disciplinary'));
+const MyAnnouncements = lazy(() => import('@pages/portal/MyAnnouncements'));
+const MyPolicies = lazy(() => import('@pages/portal/MyPolicies'));
 const OvertimePage = lazy(() => import('@pages/lifecycle/Overtime'));
 const PayrollRunsPage = lazy(() => import('@pages/lifecycle/PayrollRuns'));
 const PayrollItemsPage = lazy(() => import('@pages/lifecycle/PayrollItems'));
@@ -154,6 +158,8 @@ export default function App() {
                 <Route path="/reviews" element={<ReviewsPage />} />
                 <Route path="/training" element={<TrainingPage />} />
                 <Route path="/compliance" element={<CompliancePage />} />
+                <Route path="/communications" element={<CommunicationsPage />} />
+                <Route path="/disciplinary" element={<DisciplinaryPage />} />
                 <Route path="/overtime" element={<OvertimePage />} />
                 <Route path="/requests" element={<EmployeeRequestsPage />} />
                 <Route path="/payroll-runs" element={<PayrollRunsPage />} />
@@ -176,6 +182,8 @@ export default function App() {
                 <Route path="/portal/approvals" element={<MyApprovals />} />
                 <Route path="/portal/requests" element={<MyRequests />} />
                 <Route path="/portal/reviews" element={<MyReviews />} />
+                <Route path="/portal/announcements" element={<MyAnnouncements />} />
+                <Route path="/portal/policies" element={<MyPolicies />} />
 
                 {/* Legal */}
                 <Route path="/legal-letters" element={<LegalLetters />} />

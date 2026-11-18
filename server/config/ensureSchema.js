@@ -732,6 +732,76 @@ const TABLE_GUARDS = [
      INDEX idx_osl_offboarding (offboarding_id),
      FOREIGN KEY (offboarding_id) REFERENCES offboarding_records(id) ON DELETE CASCADE
    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  // HR services (services/hrServicesService.js). company_id NULL = every company.
+  `CREATE TABLE IF NOT EXISTS announcements (
+     id           INT AUTO_INCREMENT PRIMARY KEY,
+     company_id   INT NULL,
+     title        VARCHAR(200) NOT NULL,
+     body         TEXT NOT NULL,
+     priority     ENUM('normal','important') NOT NULL DEFAULT 'normal',
+     published_at TIMESTAMP NULL,
+     expires_on   DATE NULL,
+     created_by   INT NULL,
+     created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     INDEX idx_ann_company (company_id, published_at)
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  `CREATE TABLE IF NOT EXISTS announcement_reads (
+     announcement_id INT NOT NULL,
+     user_id         INT NOT NULL,
+     read_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     PRIMARY KEY (announcement_id, user_id),
+     FOREIGN KEY (announcement_id) REFERENCES announcements(id) ON DELETE CASCADE
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  `CREATE TABLE IF NOT EXISTS policies (
+     id             INT AUTO_INCREMENT PRIMARY KEY,
+     company_id     INT NULL,
+     title          VARCHAR(200) NOT NULL,
+     category       VARCHAR(40) NOT NULL DEFAULT 'Other',
+     body           MEDIUMTEXT NULL,
+     file_name      VARCHAR(255) NULL,
+     file_type      VARCHAR(120) NULL,
+     file_size      INT NULL,
+     storage_key    VARCHAR(255) NULL,
+     version        SMALLINT NOT NULL DEFAULT 1,
+     requires_ack   BOOLEAN NOT NULL DEFAULT TRUE,
+     ack_due        DATE NULL,
+     status         ENUM('Draft','Published','Retired') NOT NULL DEFAULT 'Draft',
+     published_at   TIMESTAMP NULL,
+     created_by     INT NULL,
+     created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     updated_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+     INDEX idx_pol_company (company_id, status)
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  `CREATE TABLE IF NOT EXISTS policy_acknowledgements (
+     id              INT AUTO_INCREMENT PRIMARY KEY,
+     policy_id       INT NOT NULL,
+     version         SMALLINT NOT NULL,
+     employee_id     INT NOT NULL,
+     user_id         INT NULL,
+     acknowledged_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     UNIQUE KEY uq_pol_ack (policy_id, version, employee_id),
+     FOREIGN KEY (policy_id) REFERENCES policies(id) ON DELETE CASCADE,
+     FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  `CREATE TABLE IF NOT EXISTS disciplinary_cases (
+     id                INT AUTO_INCREMENT PRIMARY KEY,
+     company_id        INT NOT NULL,
+     employee_id       INT NOT NULL,
+     category          VARCHAR(40) NOT NULL,
+     action            VARCHAR(40) NOT NULL,
+     incident_date     DATE NOT NULL,
+     description       TEXT NOT NULL,
+     employee_response TEXT NULL,
+     letter_id         INT NULL,
+     status            ENUM('Open','Closed') NOT NULL DEFAULT 'Open',
+     issued_by         INT NULL,
+     created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     closed_at         TIMESTAMP NULL,
+     close_note        VARCHAR(500) NULL,
+     INDEX idx_dc_employee (employee_id),
+     INDEX idx_dc_company (company_id, status),
+     FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   // Statutory figures by year (services/complianceService.js): Emiratisation
   // targets and fines. Seeded below as a starting point; an admin updates them
   // once checked with MOHRE.
