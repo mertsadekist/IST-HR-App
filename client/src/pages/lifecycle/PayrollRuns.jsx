@@ -10,12 +10,28 @@ import Input from '@components/ui/Input';
 import EmptyState from '@components/ui/EmptyState';
 import { toast } from 'react-toastify';
 import { confirmDelete, confirmAction } from '@utils/confirm';
-import { Banknote, Plus, RefreshCw, Loader2, CheckCircle2, Trash2, FileSpreadsheet, AlertTriangle, Send, FileText, ChevronDown, ChevronRight, XCircle, Mail, Undo2 } from 'lucide-react';
+import { Banknote, Plus, RefreshCw, Loader2, CheckCircle2, Trash2, FileSpreadsheet, AlertTriangle, Send, FileText, ChevronDown, ChevronRight, XCircle, Mail, Undo2, Landmark, BookOpen } from 'lucide-react';
 import { lineLabel, money } from '@utils/payslipLines';
 import PayslipLines from '@components/payroll/PayslipLines';
 import { downloadBlob } from '@utils/pdf';
 import dayjs from 'dayjs';
 
+// A blob request's JSON error arrives as a Blob; read it back into an object.
+const blobErr = async (e) => {
+  const d = e?.response?.data;
+  if (d instanceof Blob) { try { return JSON.parse(await d.text()); } catch { return null; } }
+  return d;
+};
+// Why the bank file cannot be produced, in a single readable line.
+function sifIssues(t, d) {
+  const parts = (d.companyIssues || []).map((c) => t(`payroll_exports.issue_${c.toLowerCase()}`));
+  for (const e of (d.employeeIssues || []).slice(0, 5)) {
+    parts.push(`${e.name}: ${e.missing.map((m) => t(`payroll_exports.issue_${m.toLowerCase()}`)).join(', ')}`);
+  }
+  if ((d.employeeIssues || []).length > 5) parts.push(t('payroll_exports.and_more', { count: d.employeeIssues.length - 5 }));
+  if (d.unknown_bank_codes?.length) parts.push(t('payroll_exports.unknown_banks', { codes: d.unknown_bank_codes.join(', ') }));
+  return `${t('payroll_exports.sif_blocked')} ${parts.join(' · ')}`;
+}
 const apiErr = (e, f) => e?.response?.data?.error || (e?.response?.data?.errors?.[0]?.message) || f;
 const statusVariant = (s) => ({ Draft: 'info', 'Pending Approval': 'pending', Approved: 'brand', Paid: 'success', Cancelled: 'danger' }[s] || 'info');
 const stLabel = (t, s) => t(`payroll_runs.st_${String(s || '').toLowerCase().replace(/\s+/g, '_')}`, s);
@@ -185,6 +201,22 @@ export default function PayrollRuns() {
     finally { setExplainBusy(false); }
   };
 
+  // The bank's SIF and the Zoho Books journal, once the run is approved.
+  const [exportBusy, setExportBusy] = useState(null);
+  const downloadExport = async (kind) => {
+    setExportBusy(kind);
+    try {
+      const res = kind === 'sif' ? await payApi.sifExport(detail.id) : await payApi.zohoJournal(detail.id);
+      const match = /filename="([^"]+)"/.exec(res.headers['content-disposition'] || '');
+      downloadBlob(res.data, match?.[1] || (kind === 'sif' ? `WPS-${detail.period}.SIF` : `Zoho-Journal-${detail.period}.csv`));
+      toast.success(t(kind === 'sif' ? 'payroll_exports.sif_downloaded' : 'payroll_exports.journal_downloaded'));
+    } catch (e) {
+      const d = await blobErr(e);
+      if (d?.code === 'SIF_INCOMPLETE') toast.error(sifIssues(t, d), { autoClose: 15000 });
+      else toast.error(d?.error || t('common.operation_failed'));
+    } finally { setExportBusy(null); }
+  };
+
   const downloadWps = async (force) => {
     setWpsBusy(true);
     try {
@@ -290,6 +322,16 @@ export default function PayrollRuns() {
                     {(detail.submitted_by !== user?.id || isAdmin) && (
                       <Button size="sm" onClick={approve} loading={actionBusy}><CheckCircle2 size={14} /> {t('payroll_runs.approve')}</Button>
                     )}
+                  </>
+                )}
+                {['Approved', 'Paid'].includes(detail.status) && (
+                  <>
+                    <Button size="sm" variant="secondary" onClick={() => downloadExport('sif')} loading={exportBusy === 'sif'} title={t('payroll_exports.sif_hint')}>
+                      <Landmark size={14} /> {t('payroll_exports.sif_button')}
+                    </Button>
+                    <Button size="sm" variant="secondary" onClick={() => downloadExport('journal')} loading={exportBusy === 'journal'} title={t('payroll_exports.journal_hint')}>
+                      <BookOpen size={14} /> {t('payroll_exports.journal_button')}
+                    </Button>
                   </>
                 )}
                 {['Approved', 'Paid'].includes(detail.status) && (

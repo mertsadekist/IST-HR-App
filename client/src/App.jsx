@@ -77,6 +77,7 @@ const MyPolicies = lazy(() => import('@pages/portal/MyPolicies'));
 const BenefitsPage = lazy(() => import('@pages/lifecycle/Benefits'));
 const MyBenefits = lazy(() => import('@pages/portal/MyBenefits'));
 const ClockInSettings = lazy(() => import('@pages/settings/ClockInSettings'));
+const PayrollExportsSettings = lazy(() => import('@pages/settings/PayrollExportsSettings'));
 const OvertimePage = lazy(() => import('@pages/lifecycle/Overtime'));
 const PayrollRunsPage = lazy(() => import('@pages/lifecycle/PayrollRuns'));
 const PayrollItemsPage = lazy(() => import('@pages/lifecycle/PayrollItems'));
@@ -212,6 +213,7 @@ export default function App() {
                   <Route path="work-schedules" element={<WorkSchedules />} />
                   <Route path="approvals" element={<ApprovalChains />} />
                   <Route path="clock-in" element={<ClockInSettings />} />
+                  <Route path="payroll-exports" element={<PayrollExportsSettings />} />
                   <Route path="system" element={<SystemConfig />} />
                   <Route path="email" element={<EmailSettings />} />
                   <Route path="templates" element={<TemplateManager />} />
