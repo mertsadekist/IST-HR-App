@@ -31,4 +31,7 @@ export function articleIdForRoute(pathname) {
 }
 
 /** Distinct group ids in display order. */
-export const GROUP_ORDER = ['start', 'recruitment', 'lifecycle', 'compliance', 'analytics', 'operations', 'portal'];
+export const GROUP_ORDER = ['start', 'recruitment', 'lifecycle', 'time', 'payroll', 'talent', 'services', 'assets', 'compliance', 'analytics', 'operations', 'portal'];
+
+/** The illustrated updates guide (static page in /public/kb/guide). */
+export const GUIDE_URL = '/kb/guide/index.html';

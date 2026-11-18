@@ -4,19 +4,25 @@ import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import Card from '@components/ui/Card';
 import EmptyState from '@components/ui/EmptyState';
-import { getArticles, GROUP_ORDER } from '@/data/kb';
+import { getArticles, GROUP_ORDER, GUIDE_URL } from '@/data/kb';
 import FlowDiagram from './diagrams/FlowDiagram';
 import {
   Lock, LayoutDashboard, Building2, ShieldCheck, Send, Kanban, Users, FileText, Inbox, Target, Globe,
   UserCheck, CalendarDays, Clock, Banknote, Laptop, Package, TrendingUp, DoorOpen, Scale, FileArchive,
   Calculator, BarChart3, Trophy, ClipboardList, Mail, Network, UserCog, Settings, Box, Shield, Wrench,
   HelpCircle, Search, ChevronRight, BookOpen, Lightbulb, MessageCircleQuestion, Image as ImageIcon, X, ZoomIn,
+  Sparkles, Radar, Fingerprint, Activity, CalendarRange, ScanEye, Timer, MapPinned, Plus, Landmark, HandCoins,
+  ClipboardCheck, GraduationCap, GitBranch, Megaphone, Gavel, HeartHandshake, ScrollText, KeyRound, Share2,
+  CalendarClock, DatabaseBackup, CheckSquare, ExternalLink,
 } from 'lucide-react';
 
 const ICONS = {
   Lock, LayoutDashboard, Building2, ShieldCheck, Send, Kanban, Users, FileText, Inbox, Target, Globe,
   UserCheck, CalendarDays, Clock, Banknote, Laptop, Package, TrendingUp, DoorOpen, Scale, FileArchive,
   Calculator, BarChart3, Trophy, ClipboardList, Mail, Network, UserCog, Settings, Box, Shield, Wrench, BookOpen,
+  Sparkles, Radar, Fingerprint, Activity, CalendarRange, ScanEye, Timer, MapPinned, Plus, Landmark, HandCoins,
+  ClipboardCheck, GraduationCap, GitBranch, Megaphone, Gavel, HeartHandshake, ScrollText, KeyRound, Share2,
+  CalendarClock, DatabaseBackup, CheckSquare,
 };
 const Icon = ({ name, ...p }) => { const C = ICONS[name] || FileText; return <C {...p} />; };
 
@@ -73,6 +79,17 @@ export default function KnowledgeBase() {
         </div>
       </div>
 
+      {/* The illustrated guide to what changed in this version (opens as its own page). */}
+      <a href={GUIDE_URL} target="_blank" rel="noreferrer"
+        className="flex items-center gap-4 rounded-2xl border border-brand-100 bg-brand-50/60 px-4 py-3 hover:bg-brand-50 transition-colors">
+        <div className="w-10 h-10 rounded-xl bg-brand-gradient text-white flex items-center justify-center shrink-0"><Sparkles size={18} /></div>
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold text-surface-900">{t('kb.guide_title')}</p>
+          <p className="text-xs text-surface-600">{t('kb.guide_text')}</p>
+        </div>
+        <span className="hidden sm:inline-flex items-center gap-1.5 text-sm font-medium text-brand-700 shrink-0">{t('kb.guide_open')} <ExternalLink size={14} /></span>
+      </a>
+
       <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-5 items-start">
         {/* Left: search + grouped list */}
         <Card className="!p-3 lg:sticky lg:top-4">
@@ -118,6 +135,13 @@ export default function KnowledgeBase() {
               <div className="p-3 rounded-xl bg-amber-50 border border-amber-100 text-sm text-amber-800">
                 <span className="font-semibold">{t('kb.when_to_use', 'When to use')}: </span>{active.whenToUse}
               </div>
+            )}
+
+            {active.link?.href && (
+              <a href={active.link.href} target="_blank" rel="noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-gradient text-white text-sm font-medium shadow-sm hover:opacity-95">
+                <ExternalLink size={15} /> {active.link.label}
+              </a>
             )}
 
             {active.diagram?.type === 'flow' && <FlowDiagram steps={active.diagram.steps} />}
