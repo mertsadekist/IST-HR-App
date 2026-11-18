@@ -3701,7 +3701,10 @@
       "on_leave": "On leave",
       "holiday": "Holiday"
     },
-    "legend_attendance": "P present · L late · H half day · A absent · V leave (faded: pending) · PH public holiday · ? no record on a working day · dot: rest day",
+    "excused_by": "Excused by {{type}}",
+    "cover_pending": "{{type}} awaiting approval",
+    "leave_on_day": "Request on this day: {{type}}",
+    "legend_attendance": "P present · L late · H half day · A absent · V leave (faded: pending) · PH public holiday · ? no record on a working day · dot: rest day · violet frame: covered by an approved request (dashed: still pending)",
     "legend_shifts": "Faded: the weekly schedule · solid: a shift or day off set for that date · moon: ends the next day · dashed: not saved yet. Pick a shift, click or drag over days, then save. Days already over are re-checked against the new shift."
   },
   "reviews": {

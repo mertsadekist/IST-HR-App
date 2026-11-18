@@ -14,6 +14,8 @@ const ATT_TONE = {
   'Half Day': 'bg-amber-100 text-amber-800', Absent: 'bg-red-100 text-red-700', 'On Leave': 'bg-violet-100 text-violet-800',
   Holiday: 'bg-rose-50 text-rose-700',
 };
+// Statuses where something is missing from the day, so a request explains it.
+const SHORTFALL = new Set(['Late', 'Half Day', 'Absent']);
 const attKey = (s) => String(s || '').toLowerCase().replace(/\s+/g, '_');
 
 /**
@@ -115,9 +117,22 @@ export default function Roster() {
     else if (c.holiday) { cls = 'bg-rose-50 text-rose-600'; label = t('roster.abbr.holiday'); }
     else if (c.shift && !c.shift.working) { cls = 'bg-surface-50 text-surface-300'; label = '·'; }
     else if (!future && c.shift?.working) { cls = 'bg-surface-50 text-surface-400'; label = '?'; }
-    const tip = c.att ? `${t(`roster.status.${attKey(c.att.status)}`)}${c.att.check_in ? ` ${c.att.check_in}–${c.att.check_out || ''}` : ''}${c.att.late ? ` (+${c.att.late})` : ''}`
+    // A request on a day that was also attended does not replace what happened —
+    // the day stays Late — but it does explain it, so the cell says so.
+    const covered = c.att && c.leave;
+    const coverPending = covered && c.leave.status === 'Pending';
+    const coverNote = !covered ? ''
+      : coverPending ? t('roster.cover_pending', { type: c.leave.type })
+        : SHORTFALL.has(c.att.status) ? t('roster.excused_by', { type: c.leave.type })
+          : t('roster.leave_on_day', { type: c.leave.type });
+    const tip = c.att ? `${t(`roster.status.${attKey(c.att.status)}`)}${c.att.check_in ? ` ${c.att.check_in}–${c.att.check_out || ''}` : ''}${c.att.late ? ` (+${c.att.late})` : ''}${coverNote ? ` · ${coverNote}` : ''}`
       : c.leave ? `${c.leave.type}${c.leave.status === 'Pending' ? ` (${t('roster.pending')})` : ''}` : c.holiday || undefined;
-    return <div title={tip} className={`h-7 rounded flex items-center justify-center text-[10px] font-semibold ${cls}`}>{label}</div>;
+    return (
+      <div title={tip} className={`relative h-7 rounded flex items-center justify-center text-[10px] font-semibold ${cls} ${covered ? `outline outline-2 -outline-offset-2 outline-violet-500 ${coverPending ? 'outline-dashed' : ''}` : ''}`}>
+        {label}
+        {covered && !coverPending && <span className="absolute top-0.5 end-0.5 w-1.5 h-1.5 rounded-full bg-violet-600" />}
+      </div>
+    );
   };
 
   return (
