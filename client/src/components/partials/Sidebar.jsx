@@ -13,6 +13,10 @@ import {
 } from 'lucide-react';
 import { cn } from '@utils/cn';
 import * as portalApi from '@api/portalApi';
+import { canAccessPath } from '@/config/permissions';
+
+// The HR specialist sees the HR manager's menu, narrowed by its modules.
+const roleSees = (roles, role) => !roles || roles.includes(role) || (role === 'hr_specialist' && roles.includes('hr_manager'));
 
 // Audiences, named so the intent survives the next role that gets added.
 // These mirror server/config/permissions.js — the menu only decides what is
@@ -279,9 +283,9 @@ export default function Sidebar({ isOpen, onClose }) {
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
           {localizedMenuGroups
-            .filter(group => !group.roles || group.roles.includes(user?.role))
+            .filter(group => roleSees(group.roles, user?.role))
             .map((group, gi) => {
-            const items = group.items.filter(item => (!item.roles || item.roles.includes(user?.role))
+            const items = group.items.filter(item => (roleSees(item.roles, user?.role) && canAccessPath(user?.role, item.path, user?.modules))
               && (!item.requiresTeam || hasTeam)
               && (!item.requiresApprover || hasTeam || pendingApprovals > 0));
             if (!items.length) return null;

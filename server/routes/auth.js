@@ -5,6 +5,7 @@ import pool from '../config/db.js';
 import { auth } from '../middleware/auth.js';
 import { addAudit } from '../services/auditService.js';
 import { validate } from '../middleware/validate.js';
+import { modulesFor } from '../config/permissions.js';
 
 const router = Router();
 
@@ -51,6 +52,7 @@ router.post('/login', validate({
         email: user.email,
         role: user.role,
         company_id: user.company_id,
+        modules: modulesFor(user.role),
       },
     });
   } catch (err) {
@@ -76,6 +78,7 @@ router.get('/me', auth, async (req, res) => {
     // acting in, and it is rebuilt from here.
     res.json({
       ...users[0],
+      modules: modulesFor(users[0].role),
       impersonated_by: req.user.imp ? { id: req.user.imp.by, name: req.user.imp.by_name } : null,
     });
   } catch (err) {
@@ -120,6 +123,7 @@ router.post('/stop-impersonation', auth, async (req, res) => {
       user: {
         id: admin.id, name: admin.name, username: admin.username,
         email: admin.email, role: admin.role, company_id: admin.company_id,
+        modules: modulesFor(admin.role),
       },
     });
   } catch (err) {
