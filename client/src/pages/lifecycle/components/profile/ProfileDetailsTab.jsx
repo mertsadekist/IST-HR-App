@@ -76,6 +76,7 @@ export default function ProfileDetailsTab({ employee, onChange, t, isAdmin }) {
       start_date: employee.start_date ? dayjs(employee.start_date).format('YYYY-MM-DD') : '',
       status: employee.status || 'Active',
       labour_contract_status: employee.labour_contract_status || 'Not Issued',
+      pension_scheme: employee.pension_scheme || 'auto',
       manager_employee_id: employee.manager_employee_id ? String(employee.manager_employee_id) : '',
     });
     try {
@@ -259,6 +260,13 @@ export default function ProfileDetailsTab({ employee, onChange, t, isAdmin }) {
                   </select>
                 </div>
               </div>
+              <div>
+                <label className={fieldLabel}>{t('pension.scheme')}</label>
+                <select value={editForm.pension_scheme} onChange={set('pension_scheme')} className={field}>
+                  {['auto', 'new', 'old', 'none'].map((s) => <option key={s} value={s}>{t(`pension.scheme_${s}`)}</option>)}
+                </select>
+                <p className="text-[11px] text-surface-400 mt-0.5">{t('pension.scheme_hint')}</p>
+              </div>
               <div className="grid grid-cols-2 gap-2">
                 <div><label className={fieldLabel}>{t('employees.basic_salary')}</label><input value={editForm.basic_salary} onChange={set('basic_salary')} type="number" className={field} /></div>
                 <div><label className={fieldLabel}>{t('employees.full_salary')}</label><input value={editForm.full_salary} onChange={set('full_salary')} type="number" className={field} /></div>
@@ -277,6 +285,7 @@ export default function ProfileDetailsTab({ employee, onChange, t, isAdmin }) {
                   {t(employee.labour_contract_status === 'Issued' ? 'employees.lc_issued' : 'employees.lc_not_issued')}
                 </Badge>
               </Row>
+              <Row label={t('pension.scheme')}>{t(`pension.scheme_${employee.pension_scheme || 'auto'}`)}</Row>
               <Row label={t('employees.basic_salary')}><span className="text-emerald-600">{money(employee.basic_salary)}</span></Row>
               <Row label={t('employees.full_salary')}><span className="text-emerald-700">{money(employee.full_salary)}</span></Row>
               <Row label={t('empProfile.f_join')}>{employee.start_date ? dayjs(employee.start_date).format('MMM D, YYYY') : na}</Row>

@@ -105,6 +105,10 @@ export default function PayrollExportsSettings() {
             <input disabled={ro} value={s.zoho.payable_account} onChange={(e) => setZoho({ payable_account: e.target.value })} className={`${input} mt-1`} /></div>
           <div><span className={label}>{t('payroll_exports.deduction_account')}</span>
             <input disabled={ro} value={s.zoho.deduction_account} onChange={(e) => setZoho({ deduction_account: e.target.value })} className={`${input} mt-1`} /></div>
+          <div><span className={label}>{t('payroll_exports.pension_payable_account')}</span>
+            <input disabled={ro} value={s.zoho.pension_payable_account} onChange={(e) => setZoho({ pension_payable_account: e.target.value })} className={`${input} mt-1`} /></div>
+          <div><span className={label}>{t('payroll_exports.pension_expense_account')}</span>
+            <input disabled={ro} value={s.zoho.pension_expense_account} onChange={(e) => setZoho({ pension_expense_account: e.target.value })} className={`${input} mt-1`} /></div>
           <div><span className={label}>{t('payroll_exports.cost_centre')}</span>
             <select disabled={ro} value={s.zoho.cost_centre} onChange={(e) => setZoho({ cost_centre: e.target.value })} className={`${input} mt-1`}>
               <option value="department">{t('payroll_exports.cc_department')}</option>

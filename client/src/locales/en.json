@@ -3954,7 +3954,17 @@
     "law": {
       "emiratisation_target_percent": "Emiratisation target (%)",
       "emiratisation_fine_per_year": "Fine per missing national (a year)",
-      "emiratisation_min_headcount": "Applies from (employees)"
+      "emiratisation_min_headcount": "Applies from (employees)",
+      "gpssa_new_employee_percent": "GPSSA new law: employee %",
+      "gpssa_new_employer_percent": "GPSSA new law: employer %",
+      "gpssa_new_government_percent": "GPSSA new law: government % (from the employer share)",
+      "gpssa_new_government_below": "GPSSA new law: government share below salary",
+      "gpssa_new_min_salary": "GPSSA new law: minimum contribution salary",
+      "gpssa_new_max_salary": "GPSSA new law: maximum contribution salary",
+      "gpssa_old_employee_percent": "GPSSA old law: employee %",
+      "gpssa_old_employer_percent": "GPSSA old law: employer %",
+      "gpssa_old_min_salary": "GPSSA old law: minimum contribution salary",
+      "gpssa_old_max_salary": "GPSSA old law: maximum contribution salary"
     }
   },
   "empProfile": {
@@ -4456,6 +4466,36 @@
     "issue_iban": "valid IBAN",
     "issue_routing": "bank routing code",
     "and_more": "and {{count}} more",
-    "unknown_banks": "add routing codes for bank codes {{codes}} in Settings → Bank file and accounting"
+    "unknown_banks": "add routing codes for bank codes {{codes}} in Settings → Bank file and accounting",
+    "pension_payable_account": "GPSSA payable account",
+    "pension_expense_account": "Employer pension expense account"
+  },
+  "pension": {
+    "scheme": "GPSSA pension",
+    "scheme_auto": "Automatic (UAE nationals)",
+    "scheme_new": "New law (from 31 Oct 2023)",
+    "scheme_old": "Old law (insured before 31 Oct 2023)",
+    "scheme_none": "Not covered",
+    "scheme_hint": "Automatic covers UAE nationals: the new law if they joined from 31 Oct 2023, otherwise the old one. Set it by hand when the GPSSA registration date says otherwise, or Not covered for GCC nationals and the Abu Dhabi fund."
+  },
+  "off_cycle": {
+    "button": "Off-cycle run",
+    "title": "New off-cycle run",
+    "badge": "Off-cycle",
+    "desc": "An extra run in the month for a bonus, commission or correction. Only the lines below are paid, with no salary, leave, loans or pension. It then goes through submit and approval like any run.",
+    "run_title": "Title, e.g. Q2 bonus",
+    "employee": "Employee…",
+    "earning": "Payment",
+    "deduction": "Deduction",
+    "cat_bonus": "Bonus",
+    "cat_commission": "Commission",
+    "cat_correction": "Correction",
+    "cat_other": "Other",
+    "label": "Description (optional)",
+    "amount": "Amount",
+    "add_line": "Add line",
+    "net_total": "Net total",
+    "create": "Create run",
+    "created": "Off-cycle run created for {{count}} employee(s)"
   }
 }

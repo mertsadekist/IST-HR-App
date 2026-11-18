@@ -21,6 +21,8 @@ export const DEFAULT_EXPORT_SETTINGS = Object.freeze({
     payable_account: 'Salaries Payable',
     expense_account: 'Salaries and Employee Wages',
     deduction_account: 'Employee Advances',
+    pension_payable_account: 'GPSSA Payable',
+    pension_expense_account: 'Employer Pension Contributions',
     // Line code → account, overriding the defaults above (BASIC, HOUSING, OVERTIME_PAY, LOAN, ...).
     accounts: {},
     cost_centre: 'department', // 'department' | 'none'
@@ -169,6 +171,7 @@ export function buildZohoJournal({ run, company, lines, settings, journalDate })
   const accountFor = (l) => {
     if (z.accounts[l.code]) return z.accounts[l.code];
     if (l.kind === 'earning') return z.expense_account;
+    if (l.code === 'PENSION') return z.pension_payable_account;
     return ['LEAVE', 'ABSENCE'].includes(l.code) ? z.expense_account : z.deduction_account;
   };
   const bucket = new Map();
@@ -183,7 +186,9 @@ export function buildZohoJournal({ run, company, lines, settings, journalDate })
     const amt = money(l.amount);
     if (!amt) continue;
     const centre = z.cost_centre === 'department' ? (l.department || '') : '';
-    if (l.kind === 'earning') { add(accountFor(l), centre, amt, 0); payable = money(payable + amt); }
+    // The employer's pension share: an expense, owed to the GPSSA, not to the employee.
+    if (l.kind === 'employer') { add(z.accounts[l.code] || z.pension_expense_account, centre, amt, 0); add(z.pension_payable_account, '', 0, amt); }
+    else if (l.kind === 'earning') { add(accountFor(l), centre, amt, 0); payable = money(payable + amt); }
     else { add(accountFor(l), centre, 0, amt); payable = money(payable - amt); }
   }
   add(z.payable_account, '', 0, payable);

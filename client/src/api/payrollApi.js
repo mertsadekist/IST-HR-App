@@ -3,6 +3,8 @@ import api from './axios';
 export const getRuns = (params) => api.get('/payroll/runs', { params });
 export const getRun = (id) => api.get(`/payroll/runs/${id}`);
 export const generateRun = (data) => api.post('/payroll/runs/generate', data);
+// An extra run in a month (bonus, commission, correction) with its own lines.
+export const createOffCycle = (data) => api.post('/payroll/runs/off-cycle', data);
 export const approveRun = (id) => api.put(`/payroll/runs/${id}/approve`);
 export const markPaid = (id) => api.put(`/payroll/runs/${id}/mark-paid`);
 export const deleteRun = (id) => api.delete(`/payroll/runs/${id}`);
